@@ -145,9 +145,15 @@ land; update `NEXT.md` alongside every session's progress.
 
 No dependency on CNA graphics — pure math/data types. Blocks almost every later phase.
 
-- [ ] Marker interfaces: `IMovable`, `IRotatable`, `IScalable`, `ISizable`,
-      `IRectangular`, `IColorable`, `IEquatableByRef`
-- [ ] `Transform` (2D transform component)
+- [x] Marker interfaces: `IMovable`, `IRotatable`, `IScalable`, `ISizable`,
+      `IRectangular`, `IColorable`, `IEquatableByRef` (2026-07-12)
+- [x] `TransformFlags` + `BaseTransform<TMatrix>` + `Transform3` (2026-07-12) — see §6 for
+      the `MulticastAction` extension this required.
+- [ ] `Transform2` (`BaseTransform<Matrix3x2>`) — **deferred until `Matrix3x2` is ported**
+      (a few items below in this same phase); its `RecalculateLocalMatrix`/
+      `RecalculateWorldMatrix` bodies need `Matrix3x2::CreateScale`/`CreateRotationZ`/
+      `CreateTranslation`/`Multiply`/`Decompose`. Do this as the immediate follow-up to
+      the `Matrix3x2` task, not standalone.
 - [ ] Bounding volumes: `BoundingBox2D`, `BoundingCircle2D`, `BoundingCapsule2D`,
       `BoundingPolygon2D`, `OrientedBoundingBox2D`
 - [ ] `Line2D`, `LineSegment2D`, `Ray2D`
@@ -304,6 +310,23 @@ implementations — confirm and reuse rather than re-rolling).
   uppercase convention), alias `CNA::Extended` (matches the C++ namespace, gives a clean
   namespaced import target). Root `CMakeLists.txt` written using easy-3d's three-tier
   `TARGET CNA` / opt-in build / headers-only pattern for both `cna` and `sharp-runtime`.
+- 2026-07-12 — Standard local build/verify command for this project is
+  `cmake -S . -B build -DCNA_EXTENDED_LINK_CNA=ON` (then build + `ctest`). Discovered while
+  testing the marker interfaces: CNA's XNA types (`Vector2`, `Color`, `Rectangle`, ...) are
+  declared in headers but only *defined* in CNA's compiled `.cpp` files, so a test that
+  constructs one needs CNA actually linked to run, not just compiled. `tests/CMakeLists.txt`
+  now follows easy-3d's `CNA_EXTENDED_CNA_LINKED`-gated pattern (real gtest executable when
+  linked, `OBJECT`-library compile-check otherwise) for the whole suite.
+- 2026-07-12 — Extended `sharp-runtime`'s `System::MulticastAction<Args...>` with a
+  token-based `Add()`/`Remove()` (identity-based unsubscription), approved by the user
+  (this is normally disallowed by `CLAUDE.md`'s "don't modify sibling repos" rule without
+  explicit permission). Needed because `Transform.cs`'s `BaseTransform<TMatrix>`
+  resubscribes to every ancestor's `TransformBecameDirty` event on reparenting, unsubscribing
+  the old chain by identity — something C# delegate equality supports natively but
+  `std::function` does not. `operator+=` is unchanged (purely additive change); all 11562
+  sharp-runtime tests plus 12 new `MulticastAction` tests pass. Expect this same need to
+  recur elsewhere in the port (any C# `event Action` with a `-=`) — reach for
+  `Add`/`Remove` first before inventing another local workaround.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
