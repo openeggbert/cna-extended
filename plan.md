@@ -154,8 +154,24 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       `RecalculateWorldMatrix` bodies need `Matrix3x2::CreateScale`/`CreateRotationZ`/
       `CreateTranslation`/`Multiply`/`Decompose`. Do this as the immediate follow-up to
       the `Matrix3x2` task, not standalone.
-- [ ] Bounding volumes: `BoundingBox2D`, `BoundingCircle2D`, `BoundingCapsule2D`,
-      `BoundingPolygon2D`, `OrientedBoundingBox2D`
+- [x] Bounding volumes: `BoundingBox2D`, `BoundingCircle2D`, `BoundingCapsule2D`,
+      `BoundingPolygon2D`, `OrientedBoundingBox2D` (2026-07-12) — data/geometry API fully
+      ported (fields, properties, factory methods, `Transform`/`Translate`/`Deconstruct`,
+      `Equals`/`GetHashCode`/`ToString`/operators). Two deferrals, both documented in the
+      relevant header's top comment, not silently dropped:
+      - All 16 `Contains(...)`/`Intersects(...)`/`TryGetCollision(...)` overloads across
+        the 5 types — every one delegates to `Collision2D` (Phase 2), not this phase.
+      - `BoundingCapsule2D::CreateFromSegment(LineSegment2D, float)` and `CreateMerged`
+        need `LineSegment2D::DistanceToPoint` — add both once `LineSegment2D` lands (next
+        task in this phase).
+      Known gap vs. this phase's "port tests faithfully" bar: upstream has ~130 test
+      methods across these 5 types' test files, but ~20-27% per file exercise the
+      deferred `Collision2D`-dependent methods. Rather than port the ~100 portable
+      upstream tests now and revisit them again once `Collision2D` lands, wrote fresh
+      (not upstream-1:1) tests covering everything that's ported (92 total project tests
+      passing). **Follow-up task, do at the start of Phase 2**: port the full upstream
+      `tests/MonoGame.Extended.Tests/Primitives`/`Shapes` suites for these 5 types 1:1,
+      in one pass, once `Collision2D` makes the currently-deferred methods portable too.
 - [ ] `Line2D`, `LineSegment2D`, `Ray2D`
 - [ ] `Camera` + `OrthographicCamera`
 - [ ] Color helpers: `ColorExtensions`, `ColorHelper`, `HslColor`
@@ -327,6 +343,20 @@ implementations — confirm and reuse rather than re-rolling).
   sharp-runtime tests plus 12 new `MulticastAction` tests pass. Expect this same need to
   recur elsewhere in the port (any C# `event Action` with a `-=`) — reach for
   `Add`/`Remove` first before inventing another local workaround.
+- 2026-07-12 — Bounding volumes ported via a forked sub-agent (to keep ~3200 lines of C#
+  source-reading out of the orchestrating session's context), then reviewed and corrected
+  by the orchestrating session before commit: the fork's port had silently dropped
+  `GetHashCode()` from all 5 types (a real fidelity gap — C#'s equality-override
+  convention pairs `Equals`/`GetHashCode`). Fixed by adding it to all 5 types, following
+  `sharp-runtime`'s `ArraySegment<T>::GetHashCode()` convention (`int GetHashCode() const`,
+  XOR-combining member hashes) for 4 of them, and `sharp-runtime`'s `System::HashCode` for
+  `BoundingPolygon2D` (matches upstream's `HashCode.Add`/`ToHashCode()` loop over
+  vertices) — note `System::HashCode::Add<T>` needs `std::hash<T>`, which doesn't exist
+  for `Vector2`, so it's fed `vertex.GetHashCode()` (an `int`) rather than the `Vector2`
+  itself. Lesson for future forked porting tasks: explicitly review for dropped
+  `Equals`/`GetHashCode`/operator-overload triads, not just "does it build and pass its
+  own tests" — a fork's self-reported build/test success does not by itself guarantee
+  nothing was silently omitted.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

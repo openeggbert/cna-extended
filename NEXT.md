@@ -6,6 +6,71 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-12 (4) — Bounding volumes ported (Phase 1 task 3), via a forked sub-agent + review pass
+
+Continued from session (3) after the user said "pokracuj" (continue).
+
+**What happened:** Delegated the 5-type bounding-volume port (`BoundingBox2D`,
+`BoundingCircle2D`, `BoundingCapsule2D`, `BoundingPolygon2D`, `OrientedBoundingBox2D` —
+~3200 lines of C# source across the 5 `.cs` files) to a forked sub-agent, specifically to
+keep that much source-reading out of the orchestrating session's context. Gave it the
+established conventions (reference files, property naming, SPDX headers, build/test
+commands, the "defer + document, don't half-declare" pattern from the Transform2 case)
+and told it not to commit — orchestrator reviews and commits.
+
+**Fork's output** (all 15 files: 5 headers, 5 sources, 5 tests, ~2289 lines):
+- Fully ported: all fields, properties, factory methods, `Transform`/`Translate`/
+  `Deconstruct`, `Equals`/`ToString`/operators for all 5 types.
+- Correctly deferred (documented in each header's top comment): all 16
+  `Contains`/`Intersects`/`TryGetCollision` overloads (need `Collision2D`, Phase 2, not
+  this phase) and `BoundingCapsule2D::CreateFromSegment`/`CreateMerged` (need
+  `LineSegment2D::DistanceToPoint`, the *next* task in this phase — do these two as a
+  follow-up once `LineSegment2D` lands, don't forget).
+- Build/test: reported clean build (both `-DCNA_EXTENDED_LINK_CNA=ON` and headers-only)
+  and 100% tests passed (86/86 at that point).
+
+**What the orchestrating-session review pass caught and fixed** — this is the important
+part, read it before trusting a forked port's self-report next time: **`GetHashCode()`
+was silently dropped from all 5 types.** The fork's own report didn't mention this; it
+only surfaced by cross-checking the actual upstream `.cs` files' full public member list
+(`grep -n "public "` against each file) against what got ported, not by reading the
+fork's summary. C# pairs `Equals`/`GetHashCode` by convention (equal objects must hash
+equal); dropping it silently would have been a real fidelity gap. Fixed by adding
+`int GetHashCode() const` to all 5 types — see `plan.md`'s decisions log for the exact
+approach (reused `sharp-runtime`'s `ArraySegment<T>` XOR-combine convention for 4 types,
+`sharp-runtime`'s `System::HashCode` for `BoundingPolygon2D` to match upstream's
+`HashCode.Add`/`ToHashCode()` loop). Added a `GetHashCode` round-trip test to all 5 test
+files too (the fork's tests predated this fix, so they didn't cover it).
+
+**Lesson for the next forked porting task**: don't just trust "it builds and its own
+tests pass." Cross-check the ported member list against upstream's actual public API
+(`grep -n "public "` on the `.cs` file is fast and cheap) before committing. Do this for
+every forked task from here on, not just this one.
+
+**Also flagged, accepted as a deliberate deferral (not silently dropped)**: upstream has
+~130 test methods across these 5 types' own test files, but the fork wrote its own
+(smaller, non-upstream-1:1) test set rather than porting the ~100 portable-now upstream
+tests faithfully, since ~20-27% per file need the deferred `Collision2D` methods anyway.
+Decided to revisit this as one pass at the start of Phase 2 (port the full upstream
+`Primitives`/`Shapes` test suites 1:1 once `Collision2D` makes everything portable), not
+now. Recorded in `plan.md`.
+
+**Verification after the fix:** `cmake --build build -j"$(nproc)"` clean (both
+`-DCNA_EXTENDED_LINK_CNA=ON` and default headers-only), `ctest` → **100% passed, 92/92**.
+
+**Committed as one commit** (task-granular, per the agreed workflow) covering the fork's
+15 files plus the `GetHashCode` fix and its tests together — the fix was found during
+review of the same task, before anything was committed, so it's one logical unit, not a
+separate task.
+
+**State / next step:** Phase 1 is 3 of ~20 tasks in. Next: `Line2D`, `LineSegment2D`,
+`Ray2D` (`plan.md` §5 Phase 1) — and remember `BoundingCapsule2D::CreateFromSegment`/
+`CreateMerged` are waiting on `LineSegment2D::DistanceToPoint` specifically, so check
+whether to fold that follow-up into the same commit as `LineSegment2D` itself once it's
+ported.
+
+---
+
 ## 2026-07-12 (3) — Phase 1 started: marker interfaces + Transform3 ported, MulticastAction extended
 
 Continued directly from session (2) in the same sitting. User confirmed (in response to
