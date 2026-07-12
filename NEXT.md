@@ -6,6 +6,91 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-12 (3) — Phase 1 started: marker interfaces + Transform3 ported, MulticastAction extended
+
+Continued directly from session (2) in the same sitting. User confirmed (in response to
+"any questions before we start?"): port faithfully, 1:1 wherever C#/C++ differences allow,
+no simplification — and commit after every completed `plan.md` task (already the agreed
+workflow, reconfirmed).
+
+**Completed this session (each its own commit — see `git log`):**
+1. Task "Marker interfaces" (`plan.md` Phase 1): `IMovable`, `IRotatable`, `IScalable`,
+   `ISizable`, `IRectangular`/`IRectangularF`, `IColorable`, `IEquatableByRef<T>` — all
+   ported as abstract classes with `getX/setXProperty()` accessors. `ISizable`/
+   `IRectangularF` forward-declare `SizeF`/`RectangleF` (not yet ported — see below).
+   Tests in `tests/CNA/Extended/InterfaceTests.cpp`.
+2. **Discovered and fixed a real infra gap while testing task 1**: CNA's XNA types
+   (`Vector2`, `Color`, `Rectangle`, ...) are declared in headers but only *defined* in
+   CNA's compiled `.cpp` files (same caveat `easy-3d` documents). A test that constructs
+   one needs CNA actually linked to run. `tests/CMakeLists.txt` now follows `easy-3d`'s
+   `CNA_EXTENDED_CNA_LINKED`-gated pattern for the whole suite (real gtest executable when
+   linked, `OBJECT`-library compile-check otherwise). **Standard build/verify command for
+   this project going forward:**
+   ```
+   cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=ON
+   cmake --build build -j"$(nproc)"
+   cd build && ctest --output-on-failure
+   ```
+   This actually builds CNA itself (EASY_GL backend) alongside cna-extended — takes a few
+   minutes the first time, incremental after. Confirmed working in this environment. The
+   plain headers-only default build (`cmake -S . -B build`, no `-DCNA_EXTENDED_LINK_CNA`)
+   still compile-checks cleanly — verified both paths after every subsequent change so far.
+3. Task "Transform" (`plan.md` Phase 1) — **partially complete, intentionally split**:
+   `TransformFlags`, `BaseTransform<TMatrix>`, and `Transform3` are fully ported and
+   tested (`include/CNA/Extended/Transform.hpp`, `src/.../Transform.cpp`,
+   `tests/.../TransformTests.cpp`). **`Transform2` (`BaseTransform<Matrix3x2>`) is
+   explicitly deferred** — its `RecalculateLocalMatrix`/`RecalculateWorldMatrix` bodies
+   need `Matrix3x2::CreateScale/CreateRotationZ/CreateTranslation/Multiply/Decompose`,
+   and `Matrix3x2` itself (1037-line C# source) is a later task in this same phase. Do
+   not leave `Transform2` half-declared — port it as the immediate follow-up once
+   `Matrix3x2` lands, not standalone. This is recorded in `plan.md`'s Phase 1 checklist,
+   not just here.
+4. **Cross-repo change, user-approved**: `Transform.cs`'s `BaseTransform<TMatrix>`
+   resubscribes to *every* ancestor's `TransformBecameDirty` C# event whenever `Parent`
+   changes, unsubscribing the entire old ancestor chain by delegate identity first.
+   `sharp-runtime`'s `System::MulticastAction<Args...>` only supported `+=`/replace/clear
+   — no way to remove one specific handler (C++ lambdas/`std::function` have no identity
+   equality the way C# delegates do). Asked the user how to resolve this (extend
+   `sharp-runtime`, add a local workaround, or diverge from the exact mechanism); **user
+   chose extending `sharp-runtime`** (normally off-limits per `CLAUDE.md` without explicit
+   permission — this was explicit permission for this specific need). Added
+   `Token Add(HandlerType)` / `bool Remove(Token)` to `MulticastAction`
+   (`sharp-runtime/include/System/MulticastAction.hpp`), purely additive — `operator+=`
+   unchanged, existing behavior unchanged. Added 5 new tests
+   (`sharp-runtime/tests/System/MulticastActionTests.cpp`); **all 11562 sharp-runtime
+   tests pass** (ran the full suite, not just the new ones). Committed separately in
+   `sharp-runtime`'s own repo (branch `develop`) — that commit is **not** part of
+   `cna-extended`'s history; if resuming on a machine without that sharp-runtime commit,
+   `Transform.hpp`'s use of `MulticastAction::Add/Remove` will fail to compile.
+   **Expect this same need (a C# `event Action` with `-=`) to recur elsewhere in the
+   port — reach for `Add`/`Remove` first before inventing another local workaround.**
+
+**Verification status:** All local tests pass as of the last commit —
+`cd build && ctest --output-on-failure` → 16/16 (`MarkerInterfaces.*` ×6,
+`Transform3Tests.*` ×7 incl. a reparenting/dirty-propagation test that specifically
+exercises the new `MulticastAction::Remove`, `Version.*` ×2). Headers-only default build
+also compile-checks clean.
+
+**State / next step:** Phase 1 is 2 of ~20 tasks in (see `plan.md` §5 Phase 1 checklist
+for the authoritative live list — check it, not this prose, for exact remaining items).
+Next up in list order: bounding volumes (`BoundingBox2D`, `BoundingCircle2D`,
+`BoundingCapsule2D`, `BoundingPolygon2D`, `OrientedBoundingBox2D`). **Before starting
+each new task, check its actual C# dependencies against what's already ported** — two
+ordering surprises already turned up this session (`Transform2`→`Matrix3x2`,
+`ISizable`/`IRectangularF`→`SizeF`/`RectangleF`) that weren't visible from `plan.md`'s
+flat task list alone; forward-declare-and-defer is the established pattern when a
+same-phase dependency isn't ready yet (see `ISizable.hpp`/`IRectangular.hpp` for the
+forward-declaration style, and `InterfaceTests.cpp`'s header comment for how the deferred
+tests get appended later). Do not silently skip or simplify the blocked piece — defer it
+explicitly, in both the code comment and `plan.md`.
+
+This is a genuinely large effort (Phase 1 alone has ~18 remaining tasks; 10 phases total,
+likely several hundred source files by the end). Pace accordingly across sessions —
+prefer several fully-tested, fully-committed tasks over rushing ahead into a half-checked
+state.
+
+---
+
 ## 2026-07-12 (2) — Plan approved; Phase 0 scaffolding complete and green
 
 The user approved `plan.md` and confirmed two things explicitly:
