@@ -296,12 +296,16 @@ implementations — confirm and reuse rather than re-rolling).
   `CnaExtended::`).
 - 2026-07-12 — XNB-based `ContentTypeReader` classes excluded (dead code without the
   excluded Content Pipeline).
+- 2026-07-12 — User approved `plan.md`; confirmed strict fidelity (1:1 port as far as
+  C#/C++ differences allow, no simplification) and per-task git commits during the
+  unattended porting session.
+- 2026-07-12 — Phase 0 CMake target name: `CNA_EXTENDED` (matches `CNA`/`SHARP_RUNTIME`
+  uppercase convention), alias `CNA::Extended` (matches the C++ namespace, gives a clean
+  namespaced import target). Root `CMakeLists.txt` written using easy-3d's three-tier
+  `TARGET CNA` / opt-in build / headers-only pattern for both `cna` and `sharp-runtime`.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
-- Exact target/alias name for the CMake library (`CNA_EXTENDED` vs `CnaExtended` vs
-  something else) — finalize in Phase 0, following the mixed precedent of `CNA`/
-  `SHARP_RUNTIME` (uppercase) vs `easy3d` (lowercase).
 - `Graphics/Effects` shader resources: whether CNA's graphics backend(s)
   (`SDL_RENDERER`/`EASYGL`/`BGFX`/`VULKAN`) can consume a ported `DefaultEffect` as-is or
   need a backend-specific re-authoring — investigate at the start of Phase 5 and raise
