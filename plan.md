@@ -1,7 +1,8 @@
 # cna-extended — Porting Plan
 
-Status: **DRAFT — awaiting user approval. No porting/implementation work may start until
-this plan is approved by Robert Vokáč. See `NEXT.md` for session history.**
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phase 0 complete, Phase 1 underway.
+Fidelity requirement: port 1:1 wherever C#/C++ differences allow — no simplification.
+See `NEXT.md` for session history.**
 
 ## 1. What this project is
 
@@ -125,20 +126,20 @@ Reference source (full clone, kept up to date, **read-only, never edited**):
 Ordered by dependency — later phases build on earlier ones. Check off tasks as they
 land; update `NEXT.md` alongside every session's progress.
 
-### Phase 0 — Repository scaffolding
+### Phase 0 — Repository scaffolding — ✅ complete (2026-07-12)
 
-- [ ] `LICENSE` (MIT, Robert Vokáč, matching `easy-3d`'s `LICENSE`)
-- [ ] `NOTICE.md` (MonoGame.Extended MIT attribution, see §3)
-- [ ] `README.md` (purpose, relationship to `cna`/`sharp-runtime`, scope summary, link to
+- [x] `LICENSE` (MIT, Robert Vokáč, matching `easy-3d`'s `LICENSE`)
+- [x] `NOTICE.md` (MonoGame.Extended MIT attribution, see §3)
+- [x] `README.md` (purpose, relationship to `cna`/`sharp-runtime`, scope summary, link to
       this plan)
-- [ ] Root `CMakeLists.txt` (see §4 CMake pattern) — options, target, alias, sibling
+- [x] Root `CMakeLists.txt` (see §4 CMake pattern) — options, target, alias, sibling
       dependency resolution for `cna` and `sharp-runtime`
-- [ ] `include/CNA/Extended/` and `src/CNA/Extended/` skeleton directories
-- [ ] `vendor/googletest` submodule + `tests/CMakeLists.txt`
-- [ ] `examples/minimal/` smoke-test example (mirroring `easy-3d`'s `examples/minimal`)
-- [ ] `.gitignore`, `Doxyfile`
-- [ ] Verify the whole scaffold builds green (empty lib, empty test binary) before Phase 1
-      starts
+- [x] `include/CNA/Extended/` and `src/CNA/Extended/` skeleton directories
+- [x] `vendor/googletest` submodule + `tests/CMakeLists.txt`
+- [x] `examples/minimal/` smoke-test example (mirroring `easy-3d`'s `examples/minimal`)
+- [x] `.gitignore`, `Doxyfile`
+- [x] Verify the whole scaffold builds green (empty lib, empty test binary) before Phase 1
+      starts — see `NEXT.md` for the exact command/output.
 
 ### Phase 1 — Foundation: Math, Shapes, Interfaces & Collections
 

@@ -6,7 +6,63 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
-## 2026-07-12 — Repository bootstrap: research, scope Q&A, planning docs
+## 2026-07-12 (2) — Plan approved; Phase 0 scaffolding complete and green
+
+The user approved `plan.md` and confirmed two things explicitly:
+1. **Strict fidelity**: port 1:1 wherever C#/C++ language differences allow — no
+   simplifying, no dropping edge cases, no "cleaning up" while porting. `plan.md`'s
+   Status line now records this; `CLAUDE.md`'s "Working rules" section already matches it
+   (reuse `sharp-runtime` types, don't re-roll, keep the full task list) but treat this as
+   the standing bar for every phase, not just something said once.
+2. **Git workflow for this long unattended session**: commit after every completed task
+   (granular, one task from `plan.md` = one commit), never push without explicit
+   permission (unchanged baseline rule — nothing here overrides it). Applied from Phase 0
+   onward.
+
+**Phase 0 executed in full this session**, one task per commit (see `git log` — 9 commits
+from `LICENSE` through the final build-verification pass, each following the
+`plan.md`-task → commit pattern the user asked for). All Phase 0 checkboxes in `plan.md`
+are now checked. Key decisions made while executing (not asked as separate questions —
+these were mechanical/low-stakes, following existing house convention):
+- CMake target `CNA_EXTENDED`, alias `CNA::Extended` (matches `CNA`/`SHARP_RUNTIME`
+  uppercase convention + the `CNA::Extended` C++ namespace).
+- Root `CMakeLists.txt` follows `easy-3d`'s exact three-tier sibling-dependency pattern
+  (`if(TARGET CNA)` / opt-in `CNA_EXTENDED_LINK_CNA` standalone build / headers-only
+  fallback), applied to **both** `cna` and `sharp-runtime`.
+- Doxyfile generated via `doxygen -g` then hand-edited for the same fields
+  `sharp-runtime` customizes (`PROJECT_NAME`, `OUTPUT_DIRECTORY=docs/generated`,
+  `EXTRACT_ALL=YES`, `RECURSIVE=YES`, `GENERATE_LATEX=NO`,
+  `INPUT=include README.md`) rather than hand-writing one from scratch.
+- `.gitignore` merged `easy-3d`'s broader build/IDE/OS coverage with `sharp-runtime`'s
+  `docs/generated/` entry.
+
+**Build verification (Phase 0 exit criterion — met):**
+```
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j"$(nproc)"
+./build/examples/minimal/cna_extended_minimal   # -> "cna-extended 0.1.0"
+cd build && ctest --output-on-failure            # -> 100% tests passed, 2/2
+```
+Default build (no `-DCNA_EXTENDED_LINK_CNA=ON`, so CNA/sharp-runtime are header-only-
+resolved, not actually linked — Phase 0's only code, `Version`, doesn't need them
+compiled in anyway) configures, builds, and tests clean with zero errors/warnings. Both
+`../cna/include` and `../sharp-runtime/include` were found automatically at their default
+relative paths, so the sibling-repo layout assumption in `plan.md` §4 holds in this
+environment.
+
+**State**: Phase 0 done and committed. **Phase 1 (Math, Shapes, Interfaces &
+Collections) starts next** — no blockers. Read `plan.md` §5 Phase 1 for the exact task
+list; work through it in the same one-task-one-commit rhythm.
+
+**Not yet exercised**: `-DCNA_EXTENDED_LINK_CNA=ON` (building CNA itself alongside
+cna-extended) hasn't been tried yet — Phase 1 doesn't need it either (pure math/data
+types, no `GraphicsDevice`/`SpriteBatch`). First real need will be Phase 5 (Graphics) or
+earlier if a Phase 1-4 test wants to construct a real XNA type that only compiles cleanly
+against CNA's actual headers (should be fine headers-only, but worth watching for).
+
+---
+
+## 2026-07-12 (1) — Repository bootstrap: research, scope Q&A, planning docs
 
 **State at session start:** `cna-extended` contained nothing but an empty `.git` — a
 genuinely greenfield repository. The user's ask: port
