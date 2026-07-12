@@ -172,7 +172,19 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       passing). **Follow-up task, do at the start of Phase 2**: port the full upstream
       `tests/MonoGame.Extended.Tests/Primitives`/`Shapes` suites for these 5 types 1:1,
       in one pass, once `Collision2D` makes the currently-deferred methods portable too.
-- [ ] `Line2D`, `LineSegment2D`, `Ray2D`
+- [x] `Line2D`, `LineSegment2D`, `Ray2D` (2026-07-12) — construction/factory methods,
+      geometry (`DistanceToPoint`/`ClosestPoint`/`GetPoint`/`GetBounds`/`Normalize`/etc.),
+      `Equals`/`GetHashCode`/`ToString`/operators/`Deconstruct` fully ported for all 3
+      types. All `Intersects(...)` overloads across all 3 types, plus
+      `LineSegment2D::DistanceSquaredToPoint`/`DistanceToPoint`/`DistanceSquaredToSegment`/
+      `DistanceToSegment`, deferred until `Collision2D` (Phase 2) — documented in each
+      header. **Correction to the `BoundingCapsule2D.hpp` deferral note** (written before
+      `LineSegment2D` existed): porting `LineSegment2D` does **not** unblock
+      `BoundingCapsule2D::CreateFromSegment`/`CreateMerged` after all —
+      `LineSegment2D::DistanceSquaredToPoint`'s own body needs `Collision2D`, so those two
+      `BoundingCapsule2D` members are still blocked on Phase 2, same as its
+      `Contains`/`Intersects`/`TryGetCollision` overloads. `BoundingCapsule2D.hpp`'s
+      comment has been corrected accordingly.
 - [ ] `Camera` + `OrthographicCamera`
 - [ ] Color helpers: `ColorExtensions`, `ColorHelper`, `HslColor`
 - [ ] `MathExtended`, `FloatHelper`, `Angle`
@@ -357,6 +369,14 @@ implementations — confirm and reuse rather than re-rolling).
   `Equals`/`GetHashCode`/operator-overload triads, not just "does it build and pass its
   own tests" — a fork's self-reported build/test success does not by itself guarantee
   nothing was silently omitted.
+- 2026-07-12 — `Line2D`/`LineSegment2D`/`Ray2D` ported via a forked sub-agent, this time
+  explicitly instructed to self-check the `Equals`/`GetHashCode`/`ToString`/operators/
+  `Deconstruct` checklist per type before reporting back (the lesson from the bounding
+  volumes task) — independently re-verified via `grep -n "public "` against the upstream
+  `.cs` files regardless, and the self-check held up. The fork also caught and reported a
+  real mistake in `BoundingCapsule2D.hpp`'s existing deferral comment (see the Phase 1
+  checklist entry above) rather than silently working around it or ignoring it — a good
+  outcome from asking forks to state deferral *reasons*, not just deferral *lists*.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

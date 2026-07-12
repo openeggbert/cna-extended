@@ -6,6 +6,61 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-12 (5) — Line2D, LineSegment2D, Ray2D ported (Phase 1 task 4), fork lesson applied
+
+Continued from session (4) after another "pokracuj" (continue). Same forked-sub-agent
+pattern (~2166 lines of C# across the 3 files), but this time explicitly told the fork
+about the `GetHashCode` omission from the previous task and asked it to self-check an
+`Equals`/`GetHashCode`/`ToString`/operators/`Deconstruct` checklist per type before
+reporting back. Independently re-verified with `grep -n "public "` against the 3 upstream
+`.cs` files anyway (per the standing rule from session (4): don't just trust a fork's
+self-report) — this time the self-check held up, `GetHashCode` is present in all 3 types.
+
+**Ported**: all fields, constructors, factory methods, self-contained geometry
+(`DistanceToPoint`/`ClosestPoint`/`GetPoint`/`GetBounds`/`Midpoint`/`Length`/`Normalize`
+etc.), `Equals`/`GetHashCode`/`ToString`/operators/`Deconstruct` for all 3 types.
+**Deferred** (documented per-header): every `Intersects(...)` overload across all 3
+types, plus `LineSegment2D::DistanceSquaredToPoint`/`DistanceToPoint`/
+`DistanceSquaredToSegment`/`DistanceToSegment` — all need real `Collision2D` algorithms
+(`SolveParametricIntersectionWithImplicitLine`, `ClipLineToAabb`,
+`ClipLineToConvexPolygon`, `DistanceSquaredPointSegment`, `DistanceSquaredSegmentSegment`),
+Phase 2.
+
+**Important correction the fork caught and reported** (did not silently paper over):
+`BoundingCapsule2D.hpp`'s deferral comment, written during the previous task before
+`LineSegment2D` existed, assumed `LineSegment2D` landing would unblock
+`CreateFromSegment`/`CreateMerged`. Wrong — `LineSegment2D::DistanceSquaredToPoint`'s own
+body needs `Collision2D`, so those two `BoundingCapsule2D` members are still blocked on
+Phase 2, not on `LineSegment2D`. **Fixed `BoundingCapsule2D.hpp`'s comment** to say this
+correctly (own edit, not the fork's — the fork was told not to touch already-ported
+files). Lesson: a deferred-dependency note written *before* the blocking type exists is a
+guess, not a fact — re-verify it once the type actually lands, don't assume the original
+note was right.
+
+**Verification**: `cmake --build build -j"$(nproc)"` clean (both `-DCNA_EXTENDED_LINK_CNA=ON`
+and headers-only), `ctest` → **100% passed, 137/137** (was 92 before this task). Rebuilt
+again after the `BoundingCapsule2D.hpp` comment fix to confirm nothing broke (it's a
+comment-only change, but it touches a header several files transitively include).
+
+**Test coverage note** (same tradeoff as bounding volumes, see `plan.md`): upstream has
+48 test methods across the 3 types but most exercise the deferred `Intersects`/`Distance*`
+methods; wrote 43 fresh tests covering what's actually ported rather than porting
+upstream 1:1. Bundled into the same "port the full upstream test suites once Collision2D
+lands" Phase-2-start follow-up already noted for the bounding volumes.
+
+**Committed as one commit** (task-granular): the fork's 9 files + the
+`BoundingCapsule2D.hpp` correction together, since the correction was found during this
+same task's review, before anything was committed.
+
+**State / next step:** Phase 1 is 4 of ~20 tasks in. Next per `plan.md` §5 Phase 1: `Camera`
++ `OrthographicCamera`. **Before starting, check its actual dependencies** the same way —
+two of the last three tasks turned up a dependency surprise plan.md's flat list didn't
+show. The forked-sub-agent + independent-grep-verify + build/test-before-commit pattern
+established over the last two tasks is working well; keep using it for large tasks (roughly:
+anything reading and porting more than ~1 file or ~300 lines of upstream C# at once).
+
+---
+
 ## 2026-07-12 (4) — Bounding volumes ported (Phase 1 task 3), via a forked sub-agent + review pass
 
 Continued from session (3) after the user said "pokracuj" (continue).

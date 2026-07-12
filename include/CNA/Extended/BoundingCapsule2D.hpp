@@ -7,12 +7,13 @@
 // header comment in BoundingBox2D.hpp for the full rationale, which applies identically here.
 //
 // Two additional members are deferred for a second reason: `CreateFromSegment(LineSegment2D, float)`
-// takes a LineSegment2D parameter, and `CreateMerged` calls LineSegment2D::DistanceToPoint
-// internally -- LineSegment2D is ported later in this same phase (plan.md Phase 1, "Line2D,
-// LineSegment2D, Ray2D"). Unlike the Collision2D::Epsilon constant (trivial enough to duplicate
-// locally, see BoundingCircle2D.cpp), point-to-segment distance is a real algorithm that should
-// come from LineSegment2D itself once it exists, not be re-derived here. Add both back as a
-// follow-up once LineSegment2D lands.
+// takes a LineSegment2D parameter, and `CreateMerged` calls LineSegment2D.DistanceSquaredToPoint
+// internally. CORRECTION (found once LineSegment2D was actually ported): this is NOT unblocked by
+// LineSegment2D landing -- LineSegment2D::DistanceSquaredToPoint's own body delegates to
+// Collision2D.DistanceSquaredPointSegment, a real algorithm, so it is itself deferred until
+// Collision2D exists (see LineSegment2D.hpp). Both of these BoundingCapsule2D members are
+// therefore still blocked on Collision2D (Phase 2), same as the Contains/Intersects/
+// TryGetCollision overloads above -- add all of it back together once Collision2D lands.
 #pragma once
 
 #include "Microsoft/Xna/Framework/Matrix.hpp"
