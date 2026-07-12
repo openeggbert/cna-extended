@@ -6,6 +6,55 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (1) — Camera<T> ported, OrthographicCamera deferred to Phase 3 (Phase 1 task 5)
+
+Continued from session (5) after another "pokracuj". Small enough (144-line `Camera.cs`)
+to port directly without a fork this time; `OrthographicCamera.cs` (512 lines) turned out
+to need a full deferral, not a partial one.
+
+**`Camera<T>` fully ported** (`include/CNA/Extended/Camera.hpp`, header-only — it's fully
+abstract, no `.cpp` needed): all members pure virtual, templated on position type
+(`Vector2` for 2D, `Vector3` for 3D, matching upstream's generic `Camera<T>`).
+`getBoundingRectangleProperty()` returns `RectangleF`, forward-declared (not yet ported —
+a pure virtual declaration doesn't need the complete type). No upstream tests exist for
+this abstract type (nothing instantiates `Camera<T>` directly upstream either — only
+`OrthographicCamera` does). Added a compile-only smoke test
+(`tests/CNA/Extended/CameraTests.cpp`); **real instantiation-based tests are deferred
+until `RectangleF` lands** — a concrete override of `getBoundingRectangleProperty()`
+needs a complete `RectangleF` to construct/return one, so no concrete `Camera<T>`
+subclass can exist yet, even for testing purposes.
+
+**`OrthographicCamera` deferred in full to Phase 3** — this is a different situation from
+every previous deferral this session (`Transform2`, the bounding-volume
+`Contains`/`Intersects`, `LineSegment2D`'s distance methods), which were all narrow: port
+everything else in the type/file, defer just the blocked members. `OrthographicCamera`
+stores a `ViewportAdapter` as a **required** field, takes one as a **required**
+constructor parameter, and calls into it from multiple methods throughout the class —
+not a couple of peripheral helpers. `ViewportAdapters` is a whole separate module
+scheduled for **Phase 3** ("Input, Timers, Tweening, ViewportAdapters, VectorDraw"), not
+this phase. There is no meaningful partial port here; the whole type waits. Recorded in
+`plan.md`'s Phase 1 checklist with this reasoning, so a future session doesn't
+mis-scope it as "just forward-declare `ViewportAdapter` and defer a couple of methods"
+the way `Transform2` was handled — that pattern doesn't fit here.
+
+**Verification:** `cmake --build build -j"$(nproc)"` clean (both `-DCNA_EXTENDED_LINK_CNA=ON`
+and headers-only), `ctest` → **100% passed, 138/138** (was 137 before this task — only
++1 since `Camera<T>` only got a compile-smoke test, not real coverage yet).
+
+**State / next step:** Phase 1 is 5 of ~20 tasks in (task 5, "Camera + OrthographicCamera",
+is really only half-done — `Camera<T>` shipped, `OrthographicCamera` is a Phase 3 item
+now, tracked separately in `plan.md`). Next per `plan.md` §5 Phase 1: color helpers
+(`ColorExtensions`, `ColorHelper`, `HslColor`). Keep checking each new task's actual C#
+dependencies before starting — this is now the 4th task in a row that turned up an
+ordering surprise not visible from `plan.md`'s flat list (`Transform2`→`Matrix3x2`,
+`ISizable`/`IRectangularF`→`SizeF`/`RectangleF`, `BoundingCapsule2D`→`LineSegment2D`→
+(really)→`Collision2D`, `OrthographicCamera`→`ViewportAdapters`/Phase 3). This is a
+structural property of MonoGame.Extended's codebase (it's not layered as cleanly as
+`plan.md`'s phase grouping implies), not bad luck — keep budgeting time for it on every
+remaining task, not just the first few.
+
+---
+
 ## 2026-07-12 (5) — Line2D, LineSegment2D, Ray2D ported (Phase 1 task 4), fork lesson applied
 
 Continued from session (4) after another "pokracuj" (continue). Same forked-sub-agent

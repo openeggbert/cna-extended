@@ -185,7 +185,20 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       `BoundingCapsule2D` members are still blocked on Phase 2, same as its
       `Contains`/`Intersects`/`TryGetCollision` overloads. `BoundingCapsule2D.hpp`'s
       comment has been corrected accordingly.
-- [ ] `Camera` + `OrthographicCamera`
+- [x] `Camera<T>` (2026-07-12) — fully abstract (all members pure virtual), header-only,
+      ported in full. `getBoundingRectangleProperty()` returns `RectangleF`, forward-declared
+      (not yet ported — a pure virtual declaration doesn't need a complete type). No upstream
+      tests exist for this abstract type; a compile-only smoke test was added, with real
+      instantiation-based tests deferred until `RectangleF` lands (a concrete override
+      returning `RectangleF` by value needs the complete type).
+- [ ] `OrthographicCamera` — **deferred, not just its `RectangleF` bits**: unlike the
+      `Transform2`/`Matrix3x2` case, this is a deep structural dependency, not a narrow one.
+      `OrthographicCamera` stores a `ViewportAdapter` as a required field, takes one as a
+      required constructor parameter, and calls into it from multiple methods (not a couple
+      of peripheral helpers) — `ViewportAdapters` is a whole separate module scheduled for
+      **Phase 3** ("Input, Timers, Tweening, ViewportAdapters, VectorDraw"), not this phase.
+      Port `OrthographicCamera` immediately after `ViewportAdapters` lands in Phase 3, not
+      standalone.
 - [ ] Color helpers: `ColorExtensions`, `ColorHelper`, `HslColor`
 - [ ] `MathExtended`, `FloatHelper`, `Angle`
 - [ ] `RectangleF`, `Rectangle.Extensions`, `RectangleF.Extensions`, `BoundingRectangle`,
