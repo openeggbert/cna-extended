@@ -5,6 +5,88 @@
 
 namespace CNA::Extended
 {
+    Transform2::Transform2(const std::optional<Vector2>& position, const float rotation, const std::optional<Vector2>& scale)
+        : position_(position.value_or(Vector2::Zero)), rotation_(rotation), scale_(scale.value_or(Vector2::One))
+    {
+    }
+
+    Transform2::Transform2(const float x, const float y, const float rotation, const float scaleX, const float scaleY)
+        : Transform2(Vector2(x, y), rotation, Vector2(scaleX, scaleY))
+    {
+    }
+
+    Vector2 Transform2::getWorldPositionProperty()
+    {
+        Vector2 translation;
+        float unusedRotation = 0.0f;
+        Vector2 unusedScale;
+        getWorldMatrixProperty().Decompose(translation, unusedRotation, unusedScale);
+        return translation;
+    }
+
+    Vector2 Transform2::getWorldScaleProperty()
+    {
+        Vector2 unusedTranslation;
+        float unusedRotation = 0.0f;
+        Vector2 scale;
+        getWorldMatrixProperty().Decompose(unusedTranslation, unusedRotation, scale);
+        return scale;
+    }
+
+    float Transform2::getWorldRotationProperty()
+    {
+        Vector2 unusedTranslation;
+        float rotation = 0.0f;
+        Vector2 unusedScale;
+        getWorldMatrixProperty().Decompose(unusedTranslation, rotation, unusedScale);
+        return rotation;
+    }
+
+    void Transform2::setPositionProperty(const Vector2& value)
+    {
+        position_ = value;
+        LocalMatrixBecameDirty();
+        WorldMatrixBecameDirty();
+    }
+
+    void Transform2::setRotationProperty(const float value)
+    {
+        rotation_ = value;
+        LocalMatrixBecameDirty();
+        WorldMatrixBecameDirty();
+    }
+
+    void Transform2::setScaleProperty(const Vector2& value)
+    {
+        scale_ = value;
+        LocalMatrixBecameDirty();
+        WorldMatrixBecameDirty();
+    }
+
+    void Transform2::RecalculateWorldMatrix(Matrix3x2& localMatrix, Matrix3x2& matrix)
+    {
+        if (getParentProperty() != nullptr)
+        {
+            getParentProperty()->GetWorldMatrix(matrix);
+            Matrix3x2::Multiply(localMatrix, matrix, matrix);
+        }
+        else
+        {
+            matrix = localMatrix;
+        }
+    }
+
+    void Transform2::RecalculateLocalMatrix(Matrix3x2& matrix)
+    {
+        matrix = Matrix3x2::CreateScale(scale_) * Matrix3x2::CreateRotationZ(rotation_) * Matrix3x2::CreateTranslation(position_);
+    }
+
+    std::string Transform2::ToString() const
+    {
+        return "Position: " + getPositionProperty().ToString() + ", Rotation: " + std::to_string(getRotationProperty()) +
+               ", Scale: " + getScaleProperty().ToString();
+    }
+
     Transform3::Transform3(const Vector3& position, const Quaternion& rotation, const Vector3& scale)
         : position_(position), rotation_(rotation), scale_(scale)
     {

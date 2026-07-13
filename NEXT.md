@@ -6,6 +6,65 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (7) — Matrix3x2 ported (Phase 1 task 11); Transform2 landed as a bonus; second bug found
+
+Continued straight through, no check-in pause.
+
+**Forked** (~1375 lines of C# — Matrix3x2 alone is 1037). **Ported**: `Matrix3x2` (fully
+self-contained, no deferrals), `MatrixExtensions`, `Vector2Extensions` — ~1300 lines
+across 9 new files.
+
+**Bonus follow-up landed in the same pass: `Transform2` is now fully implemented**
+(`Transform.hpp`/`.cpp`) — this was deferred all the way back at task 2 of this phase,
+specifically waiting on `Matrix3x2::CreateScale/CreateRotationZ/CreateTranslation/
+Multiply/Decompose`. Both constructors, `IMovable`/`IRotatable`/`IScalable`
+implementation (an asymmetry vs. `Transform3`, which implements none of those — preserved
+faithfully, not "fixed" for consistency), the two `RecalculateLocalMatrix`/
+`RecalculateWorldMatrix` overrides, `ToString`. 8 new tests in `TransformTests.cpp`
+(`Transform2Tests.*`), including one specifically exercising the `IMovable`/`IRotatable`/
+`IScalable` interface implementation.
+
+**Other follow-up spots — precise findings, not guesses**:
+- `RectangleF`/`BoundingRectangle`'s `Transform(...)`: confirmed **still blocked** —
+  needs `PrimitivesHelper.TransformRectangle`, Matrix3x2 alone isn't enough.
+- `CircleF`/`Segment2`'s remaining deferrals: confirmed unrelated to Matrix3x2
+  (`PrimitivesHelper`-only).
+- **`OrientedRectangle` — blocker status changed, worth flagging clearly**: its
+  constructor and `Orientation` field only need `SizeF`+`Matrix3x2`, both now available.
+  Only its `Transform` method still needs `PrimitivesHelper.TransformOrientedRectangle`.
+  **Good candidate for a small near-term follow-up task**: port everything except
+  `Transform` (narrow deferral, matching the pattern used everywhere else in this phase),
+  rather than leaving it as a whole-type deferral with zero files. Not done this pass —
+  explicitly flagged for the next session/task rather than attempted under time pressure.
+
+**Second confirmed bug this session — this one is cna-extended's own, not upstream's**:
+`Matrix3x2::Identity` was built as `Matrix3x2(Vector2::UnitX, Vector2::UnitY,
+Vector2::Zero)` — a classic C++ static-initialization-order fiasco, since those are
+static objects in a *different* translation unit (`Vector2.cpp`) with unspecified
+init-order relative to `Matrix3x2.cpp`. `Identity` was silently all-zero at runtime.
+Caught by 2 failing tests after an otherwise-green build (`IdentityHasNoEffectOnTransform`,
+`MultiplyByIdentityIsUnchanged`) — a good reminder that "the build is green" and "the
+tests pass" are different checkpoints, both matter. Fixed with literal float values
+(`1,0,0,1,0,0`) instead, removing the cross-TU dependency entirely. The fork proactively
+checked the other 4 similar `static const X::Empty`-style members already in the tree
+(`RectangleF`, `BoundingRectangle`, `SizeF`, `Size`) and confirmed none has this pattern —
+worth re-checking this specific hazard on any *future* `static const Type X = Type(other
+statics...)` declaration, not just this one.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 380/380** (was 343
+before this task).
+
+**State / next step:** Phase 1 is 11 of ~20 tasks in. Next per `plan.md` §5 Phase 1:
+`FastRandom`, `RandomExtensions`. Before that, or as its own quick task, **consider
+picking up the `OrientedRectangle` (minus `Transform`) follow-up flagged above** — it's
+now small and well-scoped, and closes out a loose end from several tasks ago rather than
+letting it linger. Continue without pausing for a status update, per the standing
+correction, unless a genuine blocker requiring the user's judgment comes up. **Commit AND
+push to `develop`** after every task (per the user's mid-session instruction — this is
+now the standing workflow, not just for this task).
+
+---
+
 ## 2026-07-13 (6) — Size/SizeF/Interval/Thickness ported (Phase 1 task 10); pushing to GitHub, new `develop` branch
 
 Continued straight through, no check-in pause.

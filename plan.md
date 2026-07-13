@@ -308,7 +308,37 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       `Collision2D` dependency this time); `Primitives/Size2Tests.cs` entirely commented
       out upstream (0 portable, wrote fresh); no upstream `ThicknessTests.cs` exists at
       all (wrote fresh).
-- [ ] `Matrix3x2`, `MatrixExtensions`, `Vector2Extensions`
+- [x] `Matrix3x2`, `MatrixExtensions`, `Vector2Extensions` (2026-07-13, via forked
+      sub-agent) — ~1300 lines across 9 files. `Matrix3x2` fully self-contained, no
+      deferrals. **Bonus follow-up landed in the same pass: `Transform2` fully
+      implemented** in `Transform.hpp`/`.cpp` (deferred since task 2 of this phase,
+      pending exactly this dependency) — both constructors, `IMovable`/`IRotatable`/
+      `IScalable` implementation (Transform2 implements these upstream, Transform3 does
+      not — asymmetry preserved faithfully), `RecalculateLocalMatrix`/
+      `RecalculateWorldMatrix`, `ToString`; 8 new tests in `TransformTests.cpp`.
+      Other follow-up spots checked precisely (not guessed):
+      - `RectangleF`/`BoundingRectangle`'s `Transform(...)` overloads: confirmed **still
+        blocked** on `PrimitivesHelper.TransformRectangle`, Matrix3x2 alone wasn't enough.
+      - `CircleF`/`Segment2`'s existing deferrals: confirmed `PrimitivesHelper`-only,
+        unaffected by Matrix3x2 landing.
+      - **`OrientedRectangle`: still not ported**, but its blocker changed — its
+        constructor and `Orientation` field only need `SizeF`+`Matrix3x2`, both now
+        available. Only its `Transform` method needs the still-missing
+        `PrimitivesHelper.TransformOrientedRectangle`. **Follow-up task**: port
+        `OrientedRectangle` minus `Transform` (narrow deferral, same pattern used
+        elsewhere), rather than continuing the current whole-type deferral. Not done in
+        this pass — flagged as the natural next small task.
+      **Bug found — this session's own, not upstream's**: `Matrix3x2::Identity` was
+      initially built from `Vector2::UnitX`/`UnitY`/`Zero` (CNA statics in a different
+      translation unit) — a static-initialization-order fiasco that silently zeroed
+      `Identity` at runtime, caught by 2 failing tests. Fixed with literal float values
+      instead. Checked the other 4 similar `static const X::Empty`-style members already
+      in the tree (RectangleF, BoundingRectangle, SizeF, Size) — all safe, none has this
+      cross-TU pattern. **Watch for this specific pattern in any future
+      `static const Type X = Type(other statics...)` declaration.**
+      Test coverage: `Math/Matrix3x2.cs`'s 2 tests + `Vector2ExtensionsTests.cs`'s 10
+      tests ported 1:1; `MatrixExtensions` has no upstream test file; wrote ~19 fresh
+      tests for the rest of `Matrix3x2`'s large, mostly-untested-upstream surface.
 - [ ] `FastRandom`, `RandomExtensions`
 - [ ] `PrimitivesHelper`, `ShapeExtensions`
 - [ ] `Math/Triangulation/*` (polygon triangulation helpers)
@@ -518,6 +548,21 @@ implementations — confirm and reuse rather than re-rolling).
   push work so far to GitHub, and to create + push a new `develop` branch; both done
   (`master` and `develop` both exist on `origin` as of this session; ongoing work commits
   to `develop` going forward per the user's instruction).
+- 2026-07-13 — `Matrix3x2`/`MatrixExtensions`/`Vector2Extensions` ported via a forked
+  sub-agent, with an explicit heads-up about `Matrix3x2` being the single most-referenced
+  blocker so far. Landed `Transform2` as a verified bonus follow-up in the same pass (see
+  Phase 1 checklist). Precisely distinguished "unblocked" from "partially unblocked" for
+  the other flagged spots — `RectangleF`/`BoundingRectangle`'s `Transform` and `CircleF`/
+  `Segment2`'s remaining deferrals are still blocked on `PrimitivesHelper` specifically,
+  not Matrix3x2; `OrientedRectangle` is now *partially* unblocked (constructor + field
+  only need `SizeF`+`Matrix3x2`, both available) but its `Transform` method still needs
+  `PrimitivesHelper` — flagged as a good near-term small follow-up task rather than
+  guessed at. This session's second confirmed bug, this time in cna-extended's own new
+  code (not upstream): a static-initialization-order fiasco in `Matrix3x2::Identity`
+  (built from another translation unit's static `Vector2` constants), caught by 2 failing
+  tests and fixed with literal values. Worth remembering as a general C++ hazard for any
+  future `static const Type X = Type(other-class's-statics...)` pattern, not just this
+  one instance.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

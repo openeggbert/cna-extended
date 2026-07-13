@@ -4,13 +4,15 @@
 //
 // Ported from MonoGame.Extended's Transform.cs. Upstream defines three related types in one
 // file (TransformFlags, BaseTransform<TMatrix>, Transform2, Transform3); this header mirrors
-// that grouping. Transform2 (BaseTransform<Matrix3x2>) is NOT yet ported here: its
-// RecalculateLocalMatrix/RecalculateWorldMatrix bodies need Matrix3x2::CreateScale/
-// CreateRotationZ/CreateTranslation/Multiply and Matrix3x2::Decompose, and Matrix3x2 itself is
-// ported later in Phase 1 (see plan.md). Transform3 (BaseTransform<Matrix>) needs only CNA's
-// existing Matrix/Quaternion/Vector3, so it is fully ported here.
+// that grouping. Transform2 (BaseTransform<Matrix3x2>) is now fully ported (Matrix3x2 landed in
+// Phase 1, "Matrix3x2, MatrixExtensions, Vector2Extensions"). Transform3 (BaseTransform<Matrix>)
+// needs only CNA's existing Matrix/Quaternion/Vector3.
 #pragma once
 
+#include "CNA/Extended/IMovable.hpp"
+#include "CNA/Extended/IRotatable.hpp"
+#include "CNA/Extended/IScalable.hpp"
+#include "CNA/Extended/Matrix3x2.hpp"
 #include "Microsoft/Xna/Framework/Matrix.hpp"
 #include "Microsoft/Xna/Framework/Quaternion.hpp"
 #include "Microsoft/Xna/Framework/Vector3.hpp"
@@ -18,6 +20,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,6 +29,7 @@ namespace CNA::Extended
 {
     using Microsoft::Xna::Framework::Matrix;
     using Microsoft::Xna::Framework::Quaternion;
+    using Microsoft::Xna::Framework::Vector2;
     using Microsoft::Xna::Framework::Vector3;
 
     /**
@@ -240,6 +244,57 @@ namespace CNA::Extended
         TMatrix worldMatrix_{};                      // local space to world space
         BaseTransform* parent_ = nullptr;
         std::vector<AncestorSubscription> ancestorSubscriptions_;
+    };
+
+    /**
+     * @brief Represents the position, rotation, and scale of a two-dimensional game object.
+     *
+     * Every game object has a transform which is used to store and manipulate the position,
+     * rotation and scale of the object. Every transform can have a parent, which allows applying
+     * position, rotation and scale to game objects hierarchically.
+     */
+    class Transform2 final : public BaseTransform<Matrix3x2>, public IMovable, public IRotatable, public IScalable
+    {
+    public:
+        explicit Transform2(const std::optional<Vector2>& position = std::nullopt, float rotation = 0.0f,
+            const std::optional<Vector2>& scale = std::nullopt);
+
+        Transform2(float x, float y, float rotation = 0.0f, float scaleX = 1.0f, float scaleY = 1.0f);
+
+        /** @brief Gets the world position. */
+        [[nodiscard]] Vector2 getWorldPositionProperty();
+
+        /** @brief Gets the world scale. */
+        [[nodiscard]] Vector2 getWorldScaleProperty();
+
+        /** @brief Gets the world rotation angle in radians. */
+        [[nodiscard]] float getWorldRotationProperty();
+
+        /** @brief Gets the local position. */
+        [[nodiscard]] Vector2 getPositionProperty() const override { return position_; }
+        /** @brief Sets the local position. */
+        void setPositionProperty(const Vector2& value) override;
+
+        /** @brief Gets the local rotation angle in radians. */
+        [[nodiscard]] float getRotationProperty() const override { return rotation_; }
+        /** @brief Sets the local rotation angle in radians. */
+        void setRotationProperty(float value) override;
+
+        /** @brief Gets the local scale. */
+        [[nodiscard]] Vector2 getScaleProperty() const override { return scale_; }
+        /** @brief Sets the local scale. */
+        void setScaleProperty(const Vector2& value) override;
+
+        [[nodiscard]] std::string ToString() const;
+
+    protected:
+        void RecalculateWorldMatrix(Matrix3x2& localMatrix, Matrix3x2& matrix) override;
+        void RecalculateLocalMatrix(Matrix3x2& matrix) override;
+
+    private:
+        Vector2 position_;
+        float rotation_ = 0.0f;
+        Vector2 scale_ = Vector2::One;
     };
 
     /**
