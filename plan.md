@@ -492,7 +492,18 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       `LineSegment`/`Triangle`/the two cyclical collection types). Both build
       configurations verified clean, zero warnings, independently confirmed
       (503/503 `ctest`).
-- [ ] `GameTimeExtensions`, `GameComponentCollectionExtensions`
+- [x] `GameTimeExtensions`, `GameComponentCollectionExtensions` (2026-07-13, ported
+      directly, no fork) — both fully ported, no deferrals; small (two files, ~36 lines
+      of C# total). `GetElapsedSeconds` -> a free function taking `const GameTime&`.
+      `GameComponentCollectionExtensions`'s two `Add<T>` overloads -> free function
+      templates taking `GameComponentCollection&`, returning `T*` (matches
+      `GameComponentCollection`'s own non-owning `IGameComponent*`-based design in CNA;
+      confirmed by reading `GameComponentCollection.cpp` that it never `delete`s its
+      items — caller owns component lifetime, same as C#'s GC ownership model
+      translated to explicit pointers). C#'s `Func<T> createGameComponent` ->
+      `std::function<T*()>`, matching this project's established `Func<T>` convention
+      (see `HslColor.hpp`'s `Match`/`Map`). No upstream tests for either file — wrote
+      fresh tests. Both build modes clean, `ctest` → 507/507 (was 503).
 - [ ] `FramesPerSecondCounter` + `FramesPerSecondCounterComponent`
 - [ ] `SimpleGameComponent` + `SimpleDrawableGameComponent`
 - [ ] Collections: `Bag<T>`, `Deque<T>`

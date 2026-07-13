@@ -6,6 +6,33 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (12) — GameTimeExtensions, GameComponentCollectionExtensions ported (Phase 1 task 24)
+
+Continued straight through, no check-in pause.
+
+**Ported directly** (no fork; tiny, ~36 lines of C# total). `GameTimeExtensions.GetElapsedSeconds`
+→ a free function taking `const GameTime&`. `GameComponentCollectionExtensions`'s two
+`Add<T>` overloads → free function templates taking `GameComponentCollection&`,
+returning `T*` — matches `GameComponentCollection`'s own design in CNA (confirmed by
+reading its `.cpp`: it never `delete`s its stored `IGameComponent*` items, a non-owning
+collection; caller owns component lifetime, the natural translation of C#'s GC-owned
+reference-type semantics into explicit pointers). `Func<T>` → `std::function<T*()>`,
+matching this project's established convention (`HslColor.hpp`'s `Match`/`Map`).
+
+**Test coverage**: no upstream tests for either file — wrote fresh tests (elapsed-seconds
+conversion + zero case; both `Add<T>` overloads, checking collection membership and
+count).
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 507/507** (was 503).
+
+**State / next step:** Phase 1 is 24 of ~30 tasks in. Next per `plan.md` §5 Phase 1: task
+25, `FramesPerSecondCounter` + `FramesPerSecondCounterComponent`. No known blockers.
+Continue without pausing for a status update, per the standing correction, unless a
+genuine blocker requiring the user's judgment comes up. **Commit AND push to `develop`**
+after this task.
+
+---
+
 ## 2026-07-13 (11) — Math/Triangulation ported (Phase 1 task 23)
 
 Continued straight through, no check-in pause.
