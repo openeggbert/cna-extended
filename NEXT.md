@@ -6,6 +6,63 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (3) — MathExtended, FloatHelper, Angle ported (Phase 1 task 7)
+
+Continued straight through per the correction in session (2) — no check-in pause this
+time.
+
+**Ported directly (~315 lines)**: `MathExtended` (`MachineEpsilon` constant +
+`CalculateMinimum/MaximumVector2`), `FloatHelper` (`Swap`, header-only), `Angle` (full
+radian/degree/gradian/revolution angle type).
+
+**Attribution finding**: `Angle.cs`'s own file header credits the **SlimMath** project
+(Copyright (c) 2007-2010 SlimDX Group, MIT License) as the origin of this code — not just
+Craftwork Games. Added a new "Code directly derived from other MIT-licensed projects"
+section to `NOTICE.md` with SlimMath's full license text, distinct from the existing
+inspiration-only "courtesy attribution" list (Mercury Particle Engine, 2D XNA Primitives,
+LibGDX) — those aren't code actually carried into this repo, SlimMath's is. **If a future
+ported file's upstream header credits another project by name the same way, add it to
+that same NOTICE.md section, not the courtesy list.**
+
+**Fidelity subtlety worth remembering**: `Angle::Equals`/`CompareTo` in upstream are NOT
+`readonly` — they call `WrapPositive()` on `this` (mutating in place) and on a by-value
+copy of the `other` parameter, so calling `Equals`/`CompareTo`/`==`/`!=` on an `Angle` has
+the side effect of wrapping it into `[0, tau)`. Ported this exactly: `Equals`/`CompareTo`
+are non-const, take `other` by value (not `const&`), and `operator==`/`!=` take both
+operands by value for the same reason. `GetHashCode()` deliberately does *not* wrap first
+— an apparent equality/hashing contract inconsistency in upstream itself — preserved as-is
+rather than "fixed", since a faithful port isn't the place to correct upstream's own bugs
+silently. This is exactly the kind of easy-to-miss-by-skimming detail worth specifically
+grep'ing for in future tasks: check whether C# methods are `readonly` before assuming a
+C++ `const` method is a safe translation.
+
+**Small follow-up applied to a previous task's file**: `HslColor.cpp` referenced
+`std::numeric_limits<float>::epsilon()` as a stand-in for `MathExtended.MachineEpsilon`
+(not yet ported when that task ran). Now that `MathExtended` is real, swapped it in
+directly — same value, but now the actual named constant matching upstream, not a
+workaround. Worth checking for this pattern going forward: when a task lands, grep for
+prior "not yet ported, using X as a stand-in" comments elsewhere in the tree and follow up.
+
+**Test coverage**: both upstream test files ported 1:1 (`MathExtendedTests.cs`,
+`AngleTest.cs`) — no `Collision2D` dependency to work around this time either.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 189/189** (was 180
+before this task).
+
+**State / next step:** Phase 1 is 7 of ~20 tasks in. Next per `plan.md` §5 Phase 1:
+`RectangleF`, `Rectangle.Extensions`, `RectangleF.Extensions`, `BoundingRectangle`,
+`OrientedRectangle` — a bigger task (this is the family that `ISizable`, `IRectangular.
+IRectangularF`, `Camera<T>`, and several bounding-volume factory methods have all been
+forward-declaring/deferring against). Landing this should let several earlier deferred
+pieces get finished as natural follow-ups — check `plan.md`'s decisions log and each
+affected file's header comment for what's waiting on `RectangleF` specifically before
+starting, and fold in whichever of those follow-ups make sense in the same pass rather
+than opening a new task for each. **Continue without pausing for a status update per the
+standing correction from session (2), unless a genuine blocker requiring the user's
+judgment comes up.**
+
+---
+
 ## 2026-07-13 (2) — Color helpers ported (Phase 1 task 6); user corrected the check-in cadence
 
 The user asked "proč jsi se zastavil a autonomně nepokracoval" (why did you stop instead of

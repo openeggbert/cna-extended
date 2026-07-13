@@ -216,7 +216,22 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       `Color(UInt32)` constructor (private in CNA, unlike upstream's public one) — reworked
       to decompose into R/G/B/A components and use the public 4-int constructor instead,
       same resulting color.
-- [ ] `MathExtended`, `FloatHelper`, `Angle`
+- [x] `MathExtended`, `FloatHelper`, `Angle` (2026-07-13) — ported directly (~315 lines).
+      `Angle.cs` carries its own upstream attribution to the **SlimMath** project
+      (Copyright (c) 2007-2010 SlimDX Group, MIT) in its file header — not just Craftwork
+      Games; added a proper "code directly derived from other MIT-licensed projects"
+      section to `NOTICE.md` (with SlimMath's full license text) rather than folding it
+      into the existing inspiration-only "courtesy attribution" list. Fidelity note:
+      `Angle::Equals`/`CompareTo` are intentionally **non-const**, taking `other` **by
+      value** — upstream's versions aren't `readonly` and call `WrapPositive()` on both
+      `this` and a by-value copy of `other`, so calling `Equals`/`CompareTo`/`==`/`!=` has
+      the side effect of wrapping the angle into `[0, tau)`. `GetHashCode()` deliberately
+      does **not** wrap first, unlike `Equals` — an apparent equality/hashing contract
+      inconsistency in upstream itself, preserved as-is rather than fixed. All upstream
+      tests ported 1:1 (`MathExtendedTests.cs`, `AngleTest.cs`). Also updated `HslColor.cpp`
+      (from the previous task) to use the now-real `MathExtended::MachineEpsilon` instead
+      of the `std::numeric_limits<float>::epsilon()` placeholder — same value, now the
+      actual named constant matching upstream exactly.
 - [ ] `RectangleF`, `Rectangle.Extensions`, `RectangleF.Extensions`, `BoundingRectangle`,
       `OrientedRectangle`
 - [ ] `CircleF`, `EllipseF`, `Segment2`

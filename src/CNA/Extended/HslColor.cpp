@@ -3,6 +3,8 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/HslColor.hpp"
 
+#include "CNA/Extended/MathExtended.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -161,9 +163,7 @@ namespace CNA::Extended
         const float s = hsl.s_;
         const float l = hsl.l_;
 
-        // MonoGame.Extended.MathExtended.MachineEpsilon (not yet ported; Phase 1, "MathExtended,
-        // FloatHelper, Angle") is exactly the standard IEEE-754 float epsilon.
-        const float machineEpsilon = std::numeric_limits<float>::epsilon();
+        const float machineEpsilon = MathExtended::MachineEpsilon;
 
         if (s < machineEpsilon)
         {
