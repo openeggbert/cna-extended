@@ -10,8 +10,10 @@
 
 #include "CNA/Extended/BoundingBox2D.hpp"
 #include "CNA/Extended/BoundingCapsule2D.hpp"
+#include "Microsoft/Xna/Framework/MathHelper.hpp"
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 #include <cmath>
 #include <numbers>
@@ -61,6 +63,81 @@ namespace CNA::Extended
             const float dist = std::sqrt(d.X * d.X + d.Y * d.Y);
             EXPECT_LE(dist, circle.Radius + 1e-3f);
         }
+    }
+
+    TEST(BoundingCircle2DTests, CreateFromPointsTwoPoints)
+    {
+        const std::vector<Vector2> points = {Vector2(0, 0), Vector2(10, 0)};
+        const BoundingCircle2D circle = BoundingCircle2D::CreateFromPoints(points);
+
+        EXPECT_EQ(circle.Center, Vector2(5, 0));
+        EXPECT_NEAR(circle.Radius, 5.0f, 1e-4f);
+    }
+
+    TEST(BoundingCircle2DTests, CreateFromPointsMultiplePointsUpstreamSquare)
+    {
+        const std::vector<Vector2> points = {Vector2(0, 0), Vector2(10, 0), Vector2(0, 10), Vector2(10, 10)};
+        const BoundingCircle2D circle = BoundingCircle2D::CreateFromPoints(points);
+
+        for (const Vector2& p : points)
+        {
+            EXPECT_LE(Vector2::Distance(circle.Center, p), circle.Radius + 1e-3f);
+        }
+    }
+
+    TEST(BoundingCircle2DTests, CreateFromPointsThrowsOnEmpty)
+    {
+        EXPECT_THROW((void)BoundingCircle2D::CreateFromPoints({}), std::invalid_argument);
+    }
+
+    TEST(BoundingCircle2DTests, CreateFromBoundingCapsule2DDegenerateCapsule)
+    {
+        const BoundingCapsule2D capsule(Vector2(5, 5), Vector2(5, 5), 3.0f);
+        const BoundingCircle2D circle = BoundingCircle2D::CreateFromBoundingCapsule2D(capsule);
+
+        EXPECT_EQ(circle.Center, Vector2(5, 5));
+        EXPECT_NEAR(circle.Radius, 3.0f, 1e-4f);
+    }
+
+    TEST(BoundingCircle2DTests, TransformTranslation)
+    {
+        const BoundingCircle2D circle(Vector2(0, 0), 5.0f);
+        const Matrix matrix = Matrix::CreateTranslation(10, 20, 0);
+        const BoundingCircle2D transformed = circle.Transform(matrix);
+
+        EXPECT_EQ(transformed.Center, Vector2(10, 20));
+        EXPECT_NEAR(transformed.Radius, 5.0f, 1e-4f);
+    }
+
+    TEST(BoundingCircle2DTests, TransformUniformScale)
+    {
+        const BoundingCircle2D circle(Vector2(0, 0), 5.0f);
+        const Matrix matrix = Matrix::CreateScale(2.0f);
+        const BoundingCircle2D transformed = circle.Transform(matrix);
+
+        EXPECT_EQ(transformed.Center, Vector2(0, 0));
+        EXPECT_NEAR(transformed.Radius, 10.0f, 1e-4f);
+    }
+
+    TEST(BoundingCircle2DTests, TransformNonUniformScale)
+    {
+        const BoundingCircle2D circle(Vector2(0, 0), 5.0f);
+        const Matrix matrix = Matrix::CreateScale(2.0f, 3.0f, 1.0f);
+        const BoundingCircle2D transformed = circle.Transform(matrix);
+
+        EXPECT_GE(transformed.Radius, 10.0f);
+    }
+
+    TEST(BoundingCircle2DTests, TransformRotation)
+    {
+        const BoundingCircle2D circle(Vector2(5, 0), 3.0f);
+        const Matrix matrix = Matrix::CreateRotationZ(Microsoft::Xna::Framework::MathHelper::PiOver2);
+        const BoundingCircle2D transformed = circle.Transform(matrix);
+
+        constexpr float tolerance = 1e-4f;
+        EXPECT_NEAR(transformed.Center.X, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.Center.Y, 5.0f, tolerance);
+        EXPECT_NEAR(transformed.Radius, 3.0f, tolerance);
     }
 
     TEST(BoundingCircle2DTests, CreateFromBoundingBox2DEnclosesBox)

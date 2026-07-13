@@ -8,7 +8,9 @@
 #include "CNA/Extended/BoundingPolygon2D.hpp"
 
 #include "CNA/Extended/BoundingBox2D.hpp"
+#include "Microsoft/Xna/Framework/MathHelper.hpp"
 
+#include <cmath>
 #include <gtest/gtest.h>
 #include <numbers>
 
@@ -39,16 +41,42 @@ namespace CNA::Extended
         EXPECT_THROW(BoundingPolygon2D(Square(), std::vector<Vector2>{Vector2(0, 1)}), std::invalid_argument);
     }
 
+    TEST(BoundingPolygon2DTests, ConstructorWithExplicitNormals)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(10, 10)};
+        const std::vector<Vector2> normals = {Vector2(0, -1), Vector2(1, 0), Vector2(-0.707f, 0.707f)};
+        const BoundingPolygon2D polygon(vertices, normals);
+
+        EXPECT_EQ(polygon.getVertexCountProperty(), 3);
+    }
+
     TEST(BoundingPolygon2DTests, VertexCount)
     {
         const BoundingPolygon2D polygon(Square());
         EXPECT_EQ(polygon.getVertexCountProperty(), 4);
     }
 
+    TEST(BoundingPolygon2DTests, CentroidOfTriangle)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(5, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        const Vector2 centroid = polygon.getCentroidProperty();
+
+        EXPECT_NEAR(centroid.X, 5.0f, 1e-4f);
+        EXPECT_NEAR(centroid.Y, 10.0f / 3.0f, 1e-4f);
+    }
+
     TEST(BoundingPolygon2DTests, CentroidOfSquareIsCenter)
     {
         const BoundingPolygon2D polygon(Square());
         EXPECT_EQ(polygon.getCentroidProperty(), Vector2(2, 2));
+    }
+
+    TEST(BoundingPolygon2DTests, AreaOfTriangle)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(5, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        EXPECT_NEAR(polygon.getAreaProperty(), 50.0f, 1e-4f);
     }
 
     TEST(BoundingPolygon2DTests, AreaOfSquare)
@@ -63,6 +91,25 @@ namespace CNA::Extended
         EXPECT_EQ(polygon.getVertexCountProperty(), 4);
     }
 
+    TEST(BoundingPolygon2DTests, CreateRegularTriangleVertexDistancesMatchRadius)
+    {
+        const Vector2 center(5, 5);
+        const float radius = 10.0f;
+        const BoundingPolygon2D polygon = BoundingPolygon2D::CreateRegular(center, radius, 3);
+
+        EXPECT_EQ(polygon.getVertexCountProperty(), 3);
+        for (const Vector2& v : polygon.Vertices)
+        {
+            EXPECT_NEAR(Vector2::Distance(center, v), radius, 1e-3f);
+        }
+    }
+
+    TEST(BoundingPolygon2DTests, CreateRegularSquareHasFourVertices)
+    {
+        const BoundingPolygon2D polygon = BoundingPolygon2D::CreateRegular(Vector2::Zero, 10.0f, 4);
+        EXPECT_EQ(polygon.getVertexCountProperty(), 4);
+    }
+
     TEST(BoundingPolygon2DTests, CreateRegularProducesCorrectSideCount)
     {
         const BoundingPolygon2D polygon = BoundingPolygon2D::CreateRegular(Vector2::Zero, 5.0f, 6);
@@ -72,6 +119,20 @@ namespace CNA::Extended
         {
             EXPECT_NEAR(v.Length(), 5.0f, 1e-3f);
         }
+    }
+
+    TEST(BoundingPolygon2DTests, CreateRegularWithRotation)
+    {
+        const float radius = 10.0f;
+        const float rotation = Microsoft::Xna::Framework::MathHelper::PiOver4;
+        const BoundingPolygon2D polygon = BoundingPolygon2D::CreateRegular(Vector2::Zero, radius, 4, rotation);
+
+        EXPECT_EQ(polygon.getVertexCountProperty(), 4);
+
+        const float expectedX = radius * std::cos(rotation);
+        const float expectedY = radius * std::sin(rotation);
+        EXPECT_NEAR(polygon.Vertices[0].X, expectedX, 1e-4f);
+        EXPECT_NEAR(polygon.Vertices[0].Y, expectedY, 1e-4f);
     }
 
     TEST(BoundingPolygon2DTests, CreateRegularThrowsOnFewerThanThreeSides)
@@ -86,6 +147,46 @@ namespace CNA::Extended
 
         EXPECT_EQ(polygon.getVertexCountProperty(), 4);
         EXPECT_FLOAT_EQ(polygon.getAreaProperty(), 16.0f);
+    }
+
+    TEST(BoundingPolygon2DTests, TransformTranslation)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(10, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        const Matrix matrix = Matrix::CreateTranslation(5, 10, 0);
+        const BoundingPolygon2D transformed = polygon.Transform(matrix);
+
+        EXPECT_EQ(transformed.Vertices[0], Vector2(5, 10));
+        EXPECT_EQ(transformed.Vertices[1], Vector2(15, 10));
+        EXPECT_EQ(transformed.Vertices[2], Vector2(15, 20));
+    }
+
+    TEST(BoundingPolygon2DTests, TransformUniformScale)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(10, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        const Matrix matrix = Matrix::CreateScale(2.0f);
+        const BoundingPolygon2D transformed = polygon.Transform(matrix);
+
+        EXPECT_EQ(transformed.Vertices[0], Vector2(0, 0));
+        EXPECT_EQ(transformed.Vertices[1], Vector2(20, 0));
+        EXPECT_EQ(transformed.Vertices[2], Vector2(20, 20));
+    }
+
+    TEST(BoundingPolygon2DTests, TransformRotation)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(0, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        const Matrix matrix = Matrix::CreateRotationZ(Microsoft::Xna::Framework::MathHelper::PiOver2);
+        const BoundingPolygon2D transformed = polygon.Transform(matrix);
+
+        constexpr float tolerance = 1e-4f;
+        EXPECT_NEAR(transformed.Vertices[0].X, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.Vertices[0].Y, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.Vertices[1].X, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.Vertices[1].Y, 10.0f, tolerance);
+        EXPECT_NEAR(transformed.Vertices[2].X, -10.0f, tolerance);
+        EXPECT_NEAR(transformed.Vertices[2].Y, 0.0f, tolerance);
     }
 
     TEST(BoundingPolygon2DTests, CreateMergedEnclosesBothPolygons)

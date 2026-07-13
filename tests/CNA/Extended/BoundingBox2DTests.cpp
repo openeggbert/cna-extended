@@ -9,6 +9,8 @@
 // Collision2D in Phase 2.
 #include "CNA/Extended/BoundingBox2D.hpp"
 
+#include "Microsoft/Xna/Framework/MathHelper.hpp"
+
 #include <gtest/gtest.h>
 
 namespace CNA::Extended
@@ -107,6 +109,16 @@ namespace CNA::Extended
         EXPECT_EQ(merged.Max, Vector2(10, 10));
     }
 
+    TEST(BoundingBox2DTests, CreateMergedOneBoxContainsOther)
+    {
+        const BoundingBox2D box1(Vector2(0, 0), Vector2(20, 20));
+        const BoundingBox2D box2(Vector2(5, 5), Vector2(15, 15));
+        const BoundingBox2D merged = BoundingBox2D::CreateMerged(box1, box2);
+
+        EXPECT_EQ(merged.Min, box1.Min);
+        EXPECT_EQ(merged.Max, box1.Max);
+    }
+
     TEST(BoundingBox2DTests, GetCornersReturnsFourCornersCounterClockwise)
     {
         const BoundingBox2D box(Vector2(0, 0), Vector2(10, 20));
@@ -130,6 +142,39 @@ namespace CNA::Extended
         {
             EXPECT_EQ(corners[i], expected[static_cast<std::size_t>(i)]);
         }
+    }
+
+    TEST(BoundingBox2DTests, TransformTranslation)
+    {
+        const BoundingBox2D box(Vector2(0, 0), Vector2(10, 10));
+        const Matrix matrix = Matrix::CreateTranslation(5, 10, 0);
+        const BoundingBox2D transformed = box.Transform(matrix);
+
+        EXPECT_EQ(transformed.Min, Vector2(5, 10));
+        EXPECT_EQ(transformed.Max, Vector2(15, 20));
+    }
+
+    TEST(BoundingBox2DTests, TransformScale)
+    {
+        const BoundingBox2D box(Vector2(0, 0), Vector2(10, 10));
+        const Matrix matrix = Matrix::CreateScale(2.0f);
+        const BoundingBox2D transformed = box.Transform(matrix);
+
+        EXPECT_EQ(transformed.Min, Vector2(0, 0));
+        EXPECT_EQ(transformed.Max, Vector2(20, 20));
+    }
+
+    TEST(BoundingBox2DTests, TransformRotation)
+    {
+        const BoundingBox2D box(Vector2(0, 0), Vector2(10, 0));
+        const Matrix matrix = Matrix::CreateRotationZ(Microsoft::Xna::Framework::MathHelper::PiOver2);
+        const BoundingBox2D transformed = box.Transform(matrix);
+
+        constexpr float tolerance = 1e-5f;
+        EXPECT_NEAR(transformed.Min.X, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.Min.Y, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.Max.X, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.Max.Y, 10.0f, tolerance);
     }
 
     TEST(BoundingBox2DTests, TranslateMovesBothCorners)

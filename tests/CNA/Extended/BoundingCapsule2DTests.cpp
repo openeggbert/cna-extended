@@ -7,6 +7,8 @@
 // both deferred -- see BoundingCapsule2D.hpp.
 #include "CNA/Extended/BoundingCapsule2D.hpp"
 
+#include "Microsoft/Xna/Framework/MathHelper.hpp"
+
 #include <gtest/gtest.h>
 
 namespace CNA::Extended
@@ -61,6 +63,59 @@ namespace CNA::Extended
         EXPECT_EQ(capsule.PointA, Vector2(-2, 0));
         EXPECT_EQ(capsule.PointB, Vector2(2, 0));
         EXPECT_FLOAT_EQ(capsule.Radius, 1.0f);
+    }
+
+    TEST(BoundingCapsule2DTests, CreateFromCenterAndDirectionUnnormalizedDirection)
+    {
+        const BoundingCapsule2D capsule = BoundingCapsule2D::CreateFromCenterAndDirection(Vector2(5, 5), Vector2(3, 4), 10.0f, 3.0f);
+        EXPECT_NEAR(Vector2::Distance(capsule.PointA, capsule.PointB), 10.0f, 1e-5f);
+    }
+
+    TEST(BoundingCapsule2DTests, TransformTranslation)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 3.0f);
+        const Matrix matrix = Matrix::CreateTranslation(5, 10, 0);
+        const BoundingCapsule2D transformed = capsule.Transform(matrix);
+
+        EXPECT_EQ(transformed.PointA, Vector2(5, 10));
+        EXPECT_EQ(transformed.PointB, Vector2(15, 10));
+        EXPECT_NEAR(transformed.Radius, 3.0f, 1e-5f);
+    }
+
+    TEST(BoundingCapsule2DTests, TransformUniformScale)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 3.0f);
+        const Matrix matrix = Matrix::CreateScale(2.0f);
+        const BoundingCapsule2D transformed = capsule.Transform(matrix);
+
+        EXPECT_EQ(transformed.PointA, Vector2(0, 0));
+        EXPECT_EQ(transformed.PointB, Vector2(20, 0));
+        EXPECT_NEAR(transformed.Radius, 6.0f, 1e-5f);
+    }
+
+    TEST(BoundingCapsule2DTests, TransformNonUniformScale)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 3.0f);
+        const Matrix matrix = Matrix::CreateScale(2.0f, 3.0f, 1.0f);
+        const BoundingCapsule2D transformed = capsule.Transform(matrix);
+
+        EXPECT_EQ(transformed.PointA, Vector2(0, 0));
+        EXPECT_EQ(transformed.PointB, Vector2(20, 0));
+        EXPECT_GE(transformed.Radius, 6.0f);
+    }
+
+    TEST(BoundingCapsule2DTests, TransformRotation)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 3.0f);
+        const Matrix matrix = Matrix::CreateRotationZ(Microsoft::Xna::Framework::MathHelper::PiOver2);
+        const BoundingCapsule2D transformed = capsule.Transform(matrix);
+
+        constexpr float tolerance = 1e-5f;
+        EXPECT_NEAR(transformed.PointA.X, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.PointA.Y, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.PointB.X, 0.0f, tolerance);
+        EXPECT_NEAR(transformed.PointB.Y, 10.0f, tolerance);
+        EXPECT_NEAR(transformed.Radius, 3.0f, tolerance);
     }
 
     TEST(BoundingCapsule2DTests, TranslateMovesBothEndpoints)

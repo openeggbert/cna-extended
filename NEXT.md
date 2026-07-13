@@ -6,6 +6,85 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (18) — Phase 1 test-suite parity pass; PHASE 1 COMPLETE (Phase 1 task 30)
+
+Continued straight through, no check-in pause. **This was the last Phase 1 task.**
+
+**Started with a direct personal audit** (not delegated) of all 16 upstream files under
+`tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` — the plan's literal
+task wording. Confirmed 100% already covered by tests ported during each type's own
+earlier implementation task.
+
+**Then deliberately widened scope past that literal wording**: the task's actual purpose
+is full Phase-1 test parity, which is broader than 4 named subfolders. A cheap `grep -c
+'\[Fact\]\|\[Theory\]'` count comparison between each upstream root-level test file and
+its ported counterpart surfaced a real, substantial gap: `BoundingBox2D`,
+`BoundingCapsule2D`, `BoundingCircle2D`, `BoundingPolygon2D`, `LineSegment2D`, and
+`OrientedBoundingBox2D` each had noticeably fewer tests than upstream actually has
+(`OrientedBoundingBox2D` was the largest: 13 ported vs. 33 active upstream). Worth
+remembering: when a task's literal scope and its evident purpose diverge, checking the
+purpose-implied scope first is cheap and worth doing before declaring a task done on the
+literal wording alone.
+
+**Delegated the confirmed gap to a forked sub-agent** (7 files to check for real gaps, 8
+more for a lighter verification pass), with explicit instructions to distinguish
+"genuinely un-ported, portable now" tests from "correctly deferred to Phase 2 pending
+`Collision2D`" tests by reading each type's own header-comment-documented deferral list
+— not by guessing from test names — and to flag prominently (not paper over) any case
+where a test needed functionality a header comment claimed was already ported but which
+turned out not to actually exist.
+
+**Result: +43 tests, no genuine discrepancies found.** Every header's documented
+deferred-vs-ported split held up exactly. `BoundingBox2D` +4, `BoundingCapsule2D` +5,
+`BoundingCircle2D` +8, `BoundingPolygon2D` +11, `LineSegment2D` +6,
+`OrientedBoundingBox2D` +9. `HslColor` had no real gap (a `[Theory]`-vs-`TEST_P` counting
+artifact, not a coverage gap). Every remaining un-ported test in these files genuinely
+depends on `Collision2D` (not yet ported) or has no C++-translatable concept. The lighter
+pass on 8 more files (`Angle`, `ColorExtensions`, `ColorHelper`, `Line2D`,
+`MathExtended`, `Ray2D`, `RectangleExtensions`, `Vector2Extensions`) confirmed all
+already at parity or better. `OrthographicCameraTests.cs` (53 upstream tests)
+intentionally excluded — `OrthographicCamera` itself remains correctly deferred to
+Phase 3.
+
+**Independently re-verified before landing** (not just trusting the fork's self-report):
+re-read 2 of the 6 modified files' diffs against the actual upstream `.cs` source
+line-by-line, including the most calculation-heavy new tests (`OrientedBoundingBox2D`'s
+`CreateFromRotation90Degrees`/`TransformNonUniformScale`) — all matched exactly. Then did
+a genuinely clean `rm -rf build` + full rebuild of both CMake configurations myself
+before trusting the reported pass count.
+
+**Verification**: both build modes clean from a genuinely clean rebuild, zero new
+warnings, `ctest` → **100% passed, 663/663** (was 624 — 39 net new tests).
+
+## PHASE 1 IS COMPLETE
+
+All 30 tasks landed, from `Version` through this test-parity pass — spanning ~50
+forked-and-direct porting tasks, roughly 130 ported/created source files, and a test
+suite that grew from 0 to 663 passing tests. Four genuine upstream bugs were found and
+faithfully preserved along the way, never silently fixed:
+1. `Segment2.SquaredDistanceTo`'s missing `return` for points beyond the segment's End.
+2. `RectangleF.Extensions.Clip`'s mutate-X/Y-before-deriving-Width/Height ordering quirk.
+3. `FramesPerSecondCounter.UpdateOrder`'s setter raising the wrong event (`EnabledChanged`
+   instead of `UpdateOrderChanged`).
+4. `ObjectPool<T>`'s severe self-referencing-node infinite-loop bug in `GetEnumerator()`.
+
+Plus two confirmed-and-preserved `Deque<T>` correctness bugs (`IndexOf`'s not-found
+handling, `RemoveAt`'s middle-index shift logic) — found by a fork and independently
+re-verified by hand-tracing before being trusted.
+
+**State / next step:** Phase 2 ("Collisions 2D") is next per `plan.md` §5 — first task:
+root types `Collision2D`, `CollisionResult2D`, `CollisionShape2D`, `CollisionShapeKind2D`.
+This phase unblocks the large cluster of `Intersects`/`Contains`/`TryGetCollision`
+methods deferred throughout Phase 1 across nearly every bounding-volume and primitive
+type — expect a "follow-up sweep" pattern similar to the `PrimitivesHelper` task (22) once
+`Collision2D` itself lands: grep the tree for "Collision2D" in header deferral comments
+and land every genuinely-unblocked follow-up in the same pass, verifying each by reading
+the actual dependency (not assuming from a type's name). Continue without pausing for a
+status update, per the standing correction, unless a genuine blocker requiring the user's
+judgment comes up. **Commit AND push to `develop`** after landing work, as always.
+
+---
+
 ## 2026-07-13 (17) — Collections: KeyedCollection, ListExtensions ported; DictionaryExtensions intentionally skipped (Phase 1 task 29)
 
 Continued straight through, no check-in pause.

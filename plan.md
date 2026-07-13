@@ -1,8 +1,8 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phase 0 complete, Phase 1 underway.
-Fidelity requirement: port 1:1 wherever C#/C++ differences allow — no simplification.
-See `NEXT.md` for session history.**
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phase 0 and Phase 1 complete (2026-07-13),
+Phase 2 ("Collisions 2D") next. Fidelity requirement: port 1:1 wherever C#/C++ differences
+allow — no simplification. See `NEXT.md` for session history.**
 
 ## 1. What this project is
 
@@ -693,8 +693,47 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       files — wrote fresh tests for `KeyedCollection`/`Shuffle` (determinism,
       element-preservation, edge cases). Test suite grew from 608 to 624 (16 net new
       tests). Both build modes clean.
-- [ ] Port `tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` as
-      GoogleTest suites
+- [x] Port `tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` as
+      GoogleTest suites (2026-07-13) — audited personally first: all 16 upstream files
+      under the 4 literal named folders were already fully covered by tests ported
+      during each type's own earlier implementation task, confirmed by reading every one
+      and cross-checking against the corresponding `cna-extended` test file (not just
+      trusting a stale assumption). **Widened the audit past the plan's literal 4-folder
+      wording** to root-level upstream test files (`tests/MonoGame.Extended.Tests/*.cs`,
+      not in a subfolder) testing Phase-1-scope types, since this task's actual intent —
+      full Phase-1 test parity — is broader than its literal wording. That wider sweep
+      found a real, substantial gap: `BoundingBox2D`/`BoundingCapsule2D`/
+      `BoundingCircle2D`/`BoundingPolygon2D`/`OrientedBoundingBox2D`/`LineSegment2D` each
+      had noticeably fewer tests ported than upstream's own root-level test files for
+      those types actually have (`OrientedBoundingBox2D` was the largest gap: 13 ported
+      vs. 33 active upstream). Delegated closing this gap to a forked sub-agent, given
+      the volume (7 files audited for gaps, 8 more given a lighter verification pass).
+      Fork's findings, independently verified before landing (re-read 2 of the 6 modified
+      files' diffs against the actual upstream `.cs` source line-by-line, including the
+      most calculation-heavy new tests like `OrientedBoundingBox2D`'s
+      `CreateFromRotation90Degrees`/`TransformNonUniformScale` — all matched exactly):
+      +43 tests total across `BoundingBox2D` (+4), `BoundingCapsule2D` (+5),
+      `BoundingCircle2D` (+8), `BoundingPolygon2D` (+11), `LineSegment2D` (+6),
+      `OrientedBoundingBox2D` (+9); `HslColor` had no real gap (the count mismatch was a
+      `[Theory]`-vs-`TEST_P` parameterized-test counting artifact, not a coverage gap).
+      Confirmed (against each type's own header-comment-documented deferred-vs-ported
+      split, not assumed from test names) that every remaining un-ported upstream test in
+      these 6 files genuinely depends on the not-yet-ported `Collision2D` system
+      (`TryGetCollision_*`, `Contains`/`ContainsPoint` where `Contains` itself is
+      deferred, `Distance*`/`Intersects` on `LineSegment2D`) or has no C++-translatable
+      concept (`GetCorners_ThrowsWhenArrayNull` — this project's `std::vector<T>&`
+      out-param convention has no "null" case). **No genuine discrepancies found** — no
+      case where a header comment claimed something was ported but the functionality
+      didn't actually exist. The lighter verification pass on 8 more root-level files
+      (`Angle`, `ColorExtensions`, `ColorHelper`, `Line2D`, `MathExtended`, `Ray2D`,
+      `RectangleExtensions`, `Vector2Extensions`) confirmed all already at parity or
+      better (extra fresh coverage beyond upstream). `OrthographicCameraTests.cs` (53
+      active upstream tests) intentionally excluded — `OrthographicCamera` itself remains
+      correctly deferred to Phase 3 pending `ViewportAdapters`, not a Phase 1 gap. Test
+      suite grew from 624 to 663 (39 net new tests). Both build configurations verified
+      clean from a genuinely clean rebuild, independently re-confirmed by me (not just
+      trusting the fork's self-report), including the headers-only compile-check config.
+      **This was the last Phase 1 task — Phase 1 is now complete.**
 
 ### Phase 2 — Collisions 2D
 
@@ -1099,6 +1138,43 @@ implementations — confirm and reuse rather than re-rolling).
   rule alongside the earlier lesson: a same-named `sharp-runtime` method isn't
   automatically reusable OR automatically to-be-avoided — check the actual algorithm
   each time, and the answer can go either way.
+- 2026-07-13 — Phase 1's final task, the test-suite parity pass, started with a direct
+  personal audit (not delegated) of all 16 upstream files under the plan's literal
+  4-folder wording (`Math`/`Primitives`/`Shapes`/`Collections`) — confirmed 100% already
+  covered. Then deliberately widened scope past that literal wording to root-level
+  upstream test files testing Phase-1 types, since the task's actual purpose (full
+  Phase-1 parity) is broader than 4 named subfolders — a plain `grep -c '\[Fact\]\|
+  \[Theory\]'` count comparison between each upstream file and its ported counterpart
+  surfaced a real, substantial gap in 6 bounding-volume/line-segment files (up to 20
+  missing tests in one file). This is a useful precedent: when a task's literal written
+  scope and its evident purpose diverge, checking the purpose-implied scope (here, cheap:
+  a few `grep -c` calls) is worth doing before declaring a task done on the literal
+  wording alone. Delegated the confirmed gap-filling to a forked sub-agent (7 files to
+  check for real gaps, 8 more for a lighter verification pass) with explicit instructions
+  to distinguish "genuinely un-ported, portable now" tests from "correctly deferred to
+  Phase 2 pending `Collision2D`" tests by reading each type's own header-comment-
+  documented deferral list, not by guessing from test names, and to flag (not silently
+  paper over) any case where a test needed functionality a header comment claimed was
+  already ported but which turned out not to actually exist. None were found — every
+  header's documented deferred-vs-ported split held up exactly. Independently
+  re-verified 2 of the fork's 6 modified files by reading the actual diffs against the
+  upstream `.cs` source line-by-line (including the most calculation-heavy new tests,
+  e.g. `OrientedBoundingBox2D::CreateFromRotation`/`Transform` with non-uniform scale) —
+  all matched exactly — then did a genuinely clean `rm -rf build` + full rebuild of both
+  CMake configurations myself before trusting the reported 663/663 pass count, the same
+  "never just trust a fork's self-report" discipline applied to every fork in this
+  session. **Phase 1 is now complete: all 30 tasks landed**, from `Version` through this
+  test-parity pass, spanning ~50 forked-and-direct porting tasks, ~130 ported/created
+  source files, and a test suite that grew from 0 to 663 passing tests. Four genuine
+  upstream bugs were found and faithfully preserved along the way (`Segment2.
+  SquaredDistanceTo`'s missing `return`, `RectangleF.Extensions.Clip`'s mutate-before-
+  derive ordering, `FramesPerSecondCounter.UpdateOrder`'s wrong-event-raised copy-paste
+  error, and `ObjectPool<T>`'s severe self-referencing-node infinite-loop bug), plus two
+  confirmed-and-preserved `Deque<T>` correctness bugs (`IndexOf`'s not-found handling and
+  `RemoveAt`'s middle-index shift logic) found by a fork and independently re-verified.
+  Next per `plan.md` §5: Phase 2 ("Collisions 2D"), which unblocks the large cluster of
+  `Intersects`/`Contains`/`TryGetCollision` methods deferred throughout Phase 1 — see
+  `NEXT.md` for the concrete next-task pointer.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

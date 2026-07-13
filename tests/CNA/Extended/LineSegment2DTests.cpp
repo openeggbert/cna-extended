@@ -53,12 +53,50 @@ namespace CNA::Extended
         EXPECT_EQ(bounds.Max, Vector2(5, 8));
     }
 
+    TEST(LineSegment2DTests, GetBoundsHorizontalSegment)
+    {
+        const LineSegment2D segment(Vector2(2, 5), Vector2(8, 5));
+        const BoundingBox2D bounds = segment.GetBounds();
+        EXPECT_EQ(bounds.Min, Vector2(2, 5));
+        EXPECT_EQ(bounds.Max, Vector2(8, 5));
+    }
+
+    TEST(LineSegment2DTests, GetBoundsVerticalSegment)
+    {
+        const LineSegment2D segment(Vector2(5, 2), Vector2(5, 8));
+        const BoundingBox2D bounds = segment.GetBounds();
+        EXPECT_EQ(bounds.Min, Vector2(5, 2));
+        EXPECT_EQ(bounds.Max, Vector2(5, 8));
+    }
+
+    TEST(LineSegment2DTests, GetBoundsReversedEndpoints)
+    {
+        const LineSegment2D segment(Vector2(9, 7), Vector2(1, 2));
+        const BoundingBox2D bounds = segment.GetBounds();
+        EXPECT_EQ(bounds.Min, Vector2(1, 2));
+        EXPECT_EQ(bounds.Max, Vector2(9, 7));
+    }
+
+    TEST(LineSegment2DTests, GetBoundsDegenerateSegment)
+    {
+        const LineSegment2D segment(Vector2(5, 5), Vector2(5, 5));
+        const BoundingBox2D bounds = segment.GetBounds();
+        EXPECT_EQ(bounds.Min, Vector2(5, 5));
+        EXPECT_EQ(bounds.Max, Vector2(5, 5));
+    }
+
     TEST(LineSegment2DTests, GetPointInterpolatesAlongSegment)
     {
         const LineSegment2D segment(Vector2(0, 0), Vector2(10, 0));
         EXPECT_EQ(segment.GetPoint(0.0f), Vector2(0, 0));
         EXPECT_EQ(segment.GetPoint(0.5f), Vector2(5, 0));
         EXPECT_EQ(segment.GetPoint(1.0f), Vector2(10, 0));
+    }
+
+    TEST(LineSegment2DTests, GetPointExtrapolatesBeyondEnd)
+    {
+        const LineSegment2D segment(Vector2(0, 0), Vector2(10, 0));
+        EXPECT_EQ(segment.GetPoint(1.5f), Vector2(15, 0));
     }
 
     TEST(LineSegment2DTests, ClosestPointClampsToStart)
