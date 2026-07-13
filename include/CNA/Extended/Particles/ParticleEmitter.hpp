@@ -12,6 +12,21 @@
 // Modifier instances); `ModifierExecutionStrategy::ExecuteModifiers` needs a raw-pointer view,
 // built fresh each `Update()` call. `ModifierExecutionStrategy` field -> non-owning pointer into
 // the Serial/Parallel Meyer's singletons (never owned/destroyed by the emitter).
+//
+// `ownedTexture_`/`AdoptOwnedTexture` (added when porting `ParticleEffectSerializer.cs`, no direct
+// upstream field): in C#, a `Texture2D` loaded via `ContentManager.Load<Texture2D>(path)` for this
+// emitter's `TextureRegion` is a GC-managed object kept alive purely by the `Texture2DRegion`
+// referencing it. `ContentManager::Load<T>()` here returns *by value*, and `Texture2DRegion` holds
+// only a non-owning `Texture2D*` (matching its established externally-owned-GPU-resource
+// convention) -- so something has to actually own a texture loaded specifically for this emitter's
+// region. `ParticleEmitter` is that owner, mirroring `Tilemap::ownedTextures_`/
+// `BitmapFont::pageTextures_`'s identical problem and solution -- at most one texture per emitter
+// here (one `TextureRegion` per emitter), so a single `unique_ptr` rather than a vector.
+// `Texture2D.hpp` is included in full here (not just forward-declared, unlike `Texture2DRegion.hpp`'s
+// established non-owning-pointer convention): `AdoptOwnedTexture` is an ordinary (non-template)
+// inline member function whose body move-assigns `unique_ptr<Texture2D>`, and unlike a template,
+// its body is compiled wherever this class definition is parsed -- so every consumer of this header
+// needs `Texture2D` complete right here, not just in `ParticleEmitter.cpp`.
 #pragma once
 
 #include "CNA/Extended/Graphics/Texture2DRegion.hpp"
@@ -22,6 +37,7 @@
 #include "CNA/Extended/Particles/ParticleRenderingOrder.hpp"
 #include "CNA/Extended/Particles/Primitives/LineSegment.hpp"
 #include "CNA/Extended/Particles/Profiles/Profile.hpp"
+#include "Microsoft/Xna/Framework/Graphics/Texture2D.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 #include "System/IDisposable.hpp"
 
@@ -88,6 +104,9 @@ namespace CNA::Extended::Particles
         [[nodiscard]] const std::shared_ptr<Graphics::Texture2DRegion>& getTextureRegionProperty() const { return textureRegion_; }
         void setTextureRegionProperty(std::shared_ptr<Graphics::Texture2DRegion> value) { textureRegion_ = std::move(value); }
 
+        /** @brief Gives this emitter ownership of @p texture, keeping it alive for as long as the emitter is (see header comment). */
+        void AdoptOwnedTexture(std::unique_ptr<Graphics::Texture2D> texture) { ownedTexture_ = std::move(texture); }
+
         [[nodiscard]] ParticleRenderingOrder getRenderingOrderProperty() const { return renderingOrder_; }
         void setRenderingOrderProperty(ParticleRenderingOrder value) { renderingOrder_ = value; }
 
@@ -129,6 +148,7 @@ namespace CNA::Extended::Particles
         std::vector<std::unique_ptr<Modifiers::Modifier>> modifiers_;
         std::unique_ptr<Profiles::Profile> profile_;
         std::shared_ptr<Graphics::Texture2DRegion> textureRegion_;
+        std::unique_ptr<Graphics::Texture2D> ownedTexture_;
         ParticleRenderingOrder renderingOrder_ = ParticleRenderingOrder::FrontToBack;
         bool visible_ = true;
         bool isDisposed_ = false;

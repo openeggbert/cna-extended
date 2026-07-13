@@ -5,6 +5,7 @@
 
 #include "CNA/Extended/FastRandom.hpp"
 #include "CNA/Extended/Particles/Modifiers/Modifier.hpp"
+#include "Microsoft/Xna/Framework/Graphics/Texture2D.hpp"
 #include "Microsoft/Xna/Framework/Vector3.hpp"
 #include "System/ObjectDisposedException.hpp"
 
