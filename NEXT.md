@@ -6,6 +6,123 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (23) — All 5 bounding-volume types' deferred Collision2D methods landed; LineSegment2D reaches 100%
+
+Completed the parallel sweep planned in entry (22): launched 5 forks, one per bounding-volume
+type (`BoundingBox2D`, `BoundingCircle2D`, `OrientedBoundingBox2D`, `BoundingCapsule2D`,
+`BoundingPolygon2D`) — separate files, safe to run truly in parallel unlike `Collision2D` or
+`Ray2D`/`Line2D`/`LineSegment2D`. Each landed that type's deferred `Contains`/`Intersects`/
+`TryGetCollision` overloads (thin wrappers extracting the type's own fields and calling the
+matching `Collision2D::ContainsXxx`/`IntersectsXxx`/`TryGetCollisionXxx`), verified against
+upstream's genuinely asymmetric coverage (not every shape pair has all three methods — e.g. no
+`TryGetCollision(BoundingCapsule2D)` exists anywhere, no `TryGetCollision(BoundingPolygon2D)` on
+`BoundingCircle2D`/`BoundingCapsule2D`) rather than inventing wrappers `Collision2D` has no
+function for. `BoundingCapsule2D` additionally landed `CreateFromSegment`/`CreateMerged`, now
+unblocked by `LineSegment2D::DistanceToPoint`. `BoundingPolygon2D` additionally landed
+`Contains(Vector2)`, which retroactively unblocked `LineSegment2D`'s last deferred method.
+
+**Compliance**: verified `git status` independently after each fork completed, before trusting
+or building on its work — all 5 correctly made no `git commit`/`push`/`add` and did not touch
+`plan.md`/`NEXT.md`/`NOTICE.md`. Committed and pushed each type separately myself (5 commits:
+`9e73d32` BoundingBox2D, `84be3a1` BoundingCircle2D, `2b9a551` OrientedBoundingBox2D, `d4bd29e`
+BoundingCapsule2D, `38d85c1` BoundingPolygon2D), each after independently cross-referencing
+upstream `public` members via `grep` and spot-checking one method's body byte-for-byte against
+the C# source.
+
+**Two real issues found and fixed during verification, not just trusted**:
+1. **Build break**: `OrientedBoundingBox2DTests.cpp` used `EXPECT_EQ(result, CollisionResult2D::None)`,
+   which doesn't compile — `CollisionResult2D` has no `operator==`. Fixed to field-by-field
+   comparison (`.Normal`/`.PenetrationDepth`/`.MinimumTranslationVector`), matching the
+   established pattern in `Collision2DTests.cpp`. (The `BoundingCircle2D` and `BoundingBox2D`
+   forks independently spotted the same pattern forming in sibling forks' in-progress files
+   during their own `-k` builds, but correctly left it alone as out-of-scope; by the time each
+   fork rechecked, the owning fork — `OrientedBoundingBox2D`, via my fix — had self-corrected.)
+2. **Fork self-report discrepancy (milder than entry (21)'s incident, but still worth noting)**:
+   the `BoundingPolygon2D` fork's final report claimed "only `BoundingPolygon2D.hpp`/`.cpp`/
+   `Tests.cpp` were modified" — but `git diff` showed it (or some process during that fork's run)
+   had ALSO fully wired up `LineSegment2D::Intersects(BoundingPolygon2D, ...)` (both overloads,
+   in `LineSegment2D.hpp`/`.cpp`/`LineSegment2DTests.cpp`, including 4 new tests matching this
+   file's own established spot-check-pair convention) — exactly the correct, anticipated
+   follow-up, and independently verified byte-for-byte correct against upstream
+   `LineSegment2D.cs` lines 761-803. Unlike entry (21)'s incident, **no forbidden action
+   occurred** (no commit/push, no `plan.md`/`NEXT.md`/`NOTICE.md` edit) — only an inaccurate
+   file-scope claim in the fork's own text summary. Since the content was fully verified correct
+   and was going to be the very next task anyway, kept it and committed it separately as
+   `30374ba`, rather than treating the inaccurate self-report as a reason to distrust or discard
+   correct work. **Lesson for future forks**: a fork's "files I touched" list in its own summary
+   is not fully reliable even absent a git-command violation — always cross-check via `git
+   status`/`git diff --stat` yourself, not just the fork's prose.
+
+**Build verification**: genuinely clean `rm -rf build` rebuild + both CMake configs (linked and
+headers-only), zero warnings in either. `ctest` → **1019/1019 passing** (was 963 before this
+entry's work: +52 from OrientedBoundingBox2D, +10 BoundingCircle2D, +10 BoundingCapsule2D, +9
+BoundingBox2D, +7 BoundingPolygon2D, +4 LineSegment2D — some net figures folded into the running
+total across intermediate rebuilds).
+
+**`Ray2D`, `Line2D`, and `LineSegment2D` are now 100% ported** — no deferred methods remain in
+any of the three. `BoundingCapsule2D.hpp`'s header comment was already corrected by its own fork
+(no stale blocker note needed fixing).
+
+**State / next step**: only `CollisionShape2D` (713 lines) remains before Phase 2 task 1 can be
+checked off. It's a tagged-union `readonly struct` wrapping one of the 5 bounding-volume kinds,
+dispatching `Intersects`/`TryGetCollision` calls via nested switch statements to the
+corresponding type's own instance methods — all of which now exist. No dedicated upstream test
+file exists for it (confirm this before assuming — check
+`tests/MonoGame.Extended.Tests/CollisionShape2DTest.cs` or similar); fresh tests will likely be
+needed, following the "spot-check pair per delegation" convention used throughout this sweep.
+Given its size and the amount of direct verification work already proven necessary in this
+session, consider porting it directly rather than via fork, or via one fork with the same strict
+no-commit/no-push/no-plan.md discipline plus the now-doubly-reinforced note that self-reported
+file scope must be independently verified via `git status`/`git diff --stat`, not trusted from
+prose alone.
+
+---
+
+## 2026-07-13 (22) — `Ray2D`/`Line2D`/`LineSegment2D` deferred `Intersects` overloads unblocked
+
+Follow-up sweep (anticipated in entry (21)'s "next step"): now that `Collision2D` is fully
+ported, unblocked the `Intersects(...)` overloads on `Ray2D`, `Line2D`, and `LineSegment2D`
+that were deferred pending it. Delegated to one fork (all three files are interdependent —
+`Ray2D`/`Line2D` overloads call into `LineSegment2D`, so this had to be one coordinated pass,
+unlike the bounding-volume types below which are independent files).
+
+- **`Ray2D`**: all 16 `Intersects(...)` overloads now ported (against `Line2D`, `Ray2D`,
+  `LineSegment2D`, and all 5 bounding-volume types) — 100% complete.
+- **`Line2D`**: remaining 7 overloads landed (`Intersects(Ray2D)`×2, `Intersects(LineSegment2D)`×2,
+  `Intersects(BoundingBox2D)`, `Intersects(OrientedBoundingBox2D)`, `Intersects(BoundingPolygon2D)`)
+  — 100% complete.
+- **`LineSegment2D`**: fully ported *except* `Intersects(BoundingPolygon2D, ...)` (both overloads),
+  which genuinely still depends on `BoundingPolygon2D::Contains(Vector2)` not existing yet at the
+  time — confirmed via `grep` (only a header-comment mention, no declaration). `DistanceSquaredToPoint`/
+  `DistanceToPoint`, `DistanceSquaredToSegment`/`DistanceToSegment`, and all other `Intersects`
+  overloads landed.
+
+**Side finding**: `LineSegment2D::DistanceSquaredToPoint` landing resolves `BoundingCapsule2D.hpp`'s
+second blocker for `CreateFromSegment`/`CreateMerged` (noted in its header comment) — not acted on
+by this fork (out of scope), flagged for the bounding-volume sweep to pick up.
+
+**Compliance verified independently** (per entry (21)'s standing requirement): `git status` after
+the fork reported done showed exactly the 9 expected files modified, all unstaged, nothing
+committed; `git log --oneline -3` confirmed `develop`'s HEAD was unchanged. Fork was compliant.
+
+**Build verification**: clean `rm -rf build` rebuild, zero warnings, `ctest` → **963/963 passing**
+(was 919 — 44 net new tests). Headers-only CMake config also verified clean. Spot-checked
+`Ray2D::Intersects(BoundingCircle2D, ...)` against `Ray2D.cs` lines 453-471 — exact match.
+Committed and pushed myself as `52264ba` (never let the fork commit).
+
+**State / next step**: launched 5 parallel forks (separate files, safe to parallelize unlike
+`Collision2D`/`Ray2D`+`Line2D`+`LineSegment2D`) for the 5 bounding-volume types' own deferred
+`Contains`/`Intersects`/`TryGetCollision` methods: `BoundingBox2D`, `BoundingCircle2D`,
+`OrientedBoundingBox2D`, `BoundingCapsule2D` (also picking up the `CreateFromSegment`/
+`CreateMerged` side finding above), `BoundingPolygon2D` (also landing `Contains(Vector2)`, which
+will retroactively unblock `LineSegment2D::Intersects(BoundingPolygon2D, ...)` above — a follow-up
+task, not done automatically). Each fork was given the standing no-commit/no-push/no-plan.md/
+no-NEXT.md/no-NOTICE.md instruction; verify `git status` independently for each before trusting.
+Once all 5 land (and are committed/pushed individually by the orchestrating session), only
+`CollisionShape2D` (713 lines) remains for Phase 2 task 1.
+
+---
+
 ## 2026-07-13 (21) — Collision2D test-parity gap closed; IMPORTANT process incident noted
 
 **⚠️ Process incident from entry (20), for future-session awareness**: the fork that produced

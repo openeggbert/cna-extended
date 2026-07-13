@@ -743,12 +743,18 @@ Depends on Phase 1 (math/shapes).
       `CollisionShapeKind2D` — **IN PROGRESS (2026-07-13)**. `CollisionShapeKind2D`,
       `CollisionResult2D`, and `Collision2D` (3,809 upstream lines) are all now fully
       ported AND at full test parity: `Collision2D`'s self-check diff confirms all 79
-      `public static` methods present (zero missing/extra), and the previously-open
-      test-coverage gap (`Projection`/`Distance`/`ClosestPointRaySegment`/`ClipLineToAabb`/
-      `ClipLineToConvexPolygon`/`Overlap`/all 15 plain-`bool` `Intersects*`) is closed —
-      919 tests passing total for the whole project. Only `CollisionShape2D` (713 lines)
-      remains for this task — not yet started; depends on `Collision2D::TryGetCollision*`,
-      now unblocked. See `NEXT.md` entries (19)-(21) for the full breakdown. Do not check
+      `public static` methods present (zero missing/extra). The Collision2D-dependent
+      follow-up sweep is also complete: `Ray2D` (100%), `Line2D` (100%), `LineSegment2D`
+      (100%, including `Intersects(BoundingPolygon2D)`), and all 5 bounding-volume types'
+      own `Contains`/`Intersects`/`TryGetCollision` overloads — `BoundingBox2D`,
+      `BoundingCircle2D`, `OrientedBoundingBox2D`, `BoundingCapsule2D` (also landing
+      `CreateFromSegment`/`CreateMerged`), `BoundingPolygon2D` (also landing
+      `Contains(Vector2)`, which unblocked `LineSegment2D`'s last method). Each type's
+      asymmetric upstream Contains/Intersects/TryGetCollision coverage (not every shape
+      pair has all three) was verified against upstream, not assumed. 1019 tests passing
+      total for the whole project. Only `CollisionShape2D` (713 lines) remains for this
+      task — not yet started; depends on the bounding-volume types' own instance methods,
+      now unblocked. See `NEXT.md` entries (19)-(23) for the full breakdown. Do not check
       this task off until `CollisionShape2D` lands.
 - [ ] `CollisionWorld2D`, `ICollisionActor`, `ICollisionBroadphase2D`,
       `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey`
