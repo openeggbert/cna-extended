@@ -6,6 +6,70 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (15) — Collections: Bag<T>, Deque<T> ported (Phase 1 task 27)
+
+Continued straight through, no check-in pause.
+
+**Ported via a forked sub-agent** (~1053 lines of C# source + 456 lines of upstream
+tests). First use of a new `CNA::Extended::Collections` sub-namespace. Both are
+header-only templates.
+
+**`Bag<T>` has yet another different license**: unlike everything ported so far,
+`Bag.cs`'s own header credits a BSD-2-clause-style license from GAMADU.COM's C# port of
+thelinuxlich's `artemis_CSharp` project — not MonoGame.Extended's usual MIT header.
+Handled directly (not delegated): `artemis_CSharp` is still live (unlike
+`nickgravelyn/Triangulator`), so fetched its actual source and confirmed the license text
+matches word-for-word. Added a NEW `NOTICE.md` section for this ("Code directly derived
+from other permissively-licensed (non-MIT) projects"), separate from the existing
+MIT-project section, since BSD-2-clause is a genuinely different license family.
+
+**`Deque<T>` implements `sharp-runtime`'s `IList<T>`**, matching how `sharp-runtime`'s
+own `List<T>` does the same.
+
+**The fork reported finding three genuine correctness bugs in upstream `Deque<T>`** —
+not just fidelity/GC-hygiene quirks like everything found before this session. Given how
+much bigger a claim "upstream has silent data-corruption bugs" is than anything found so
+far, did NOT just trust the self-report: independently re-derived all three from scratch
+with my own fresh concrete examples (not reusing the fork's), hand-computing physical-
+array and logical-view state at every step against the actual upstream `.cs` source.
+1. `IndexOf`'s formula doesn't check for "not found" before applying modulo arithmetic —
+   for a genuinely-absent item, this can make `Remove` either throw unexpectedly or
+   **silently remove an unrelated real element while reporting success**, depending on
+   the buffer's wraparound offset. A never-grown `Deque` also hits a literal
+   divide-by-zero here (C#: catchable exception; C++: UB, so explicitly guarded instead).
+2. & 3. `RemoveAt`'s middle-index removal is only reliable in one of three practical
+   cases: front-half-shift on a non-wrapped buffer works; **back-half-shift is broken
+   even unwrapped**; **front-half-shift is ALSO broken once wrapped** (an element is
+   silently lost, replaced by a stale default value). Not caught by upstream's own tests,
+   which only check `Count`, never the resulting values.
+
+All three independently confirmed exactly as claimed — my hand-computed expected values
+matched the fork's test assertions precisely, down to the specific post-removal element
+sequences. Preserved exactly (not fixed), each with a dedicated regression test.
+
+**Iteration needed real care**: upstream's enumerator re-reads live state on every
+loop-condition check (there's an upstream test specifically for removing-from-front
+during iteration) — a naive one-time-snapshot C++ translation wouldn't reproduce this.
+Solved via a physical-index formula re-derived from live state every step.
+
+**Test coverage**: all 17 active upstream `DequeTests.cs` tests ported 1:1, plus 24 fresh
+tests (including the 3 bug regressions and live-iteration behavior). `Bag<T>`'s one
+upstream test is a C#-GC-boxing-allocation benchmark with no C++ equivalent — not
+ported; 19 fresh tests added instead.
+
+**Verification**: did a genuinely clean `rm -rf build` + full reconfigure/rebuild myself
+(not reusing the fork's already-built directory) for both CMake configurations before
+trusting the reported pass count. Both clean, zero new warnings, `ctest` → **100%
+passed, 589/589** (was 529 — 60 net new tests).
+
+**State / next step:** Phase 1 is 27 of ~30 tasks in. Next per `plan.md` §5 Phase 1: task
+28, Collections: `ObjectPool<T>`, `Pool<T>`, `IPoolable`, `ItemEventArgs`. No known
+blockers. Continue without pausing for a status update, per the standing correction,
+unless a genuine blocker requiring the user's judgment comes up. **Commit AND push to
+`develop`** after this task.
+
+---
+
 ## 2026-07-13 (14) — SimpleGameComponent, SimpleDrawableGameComponent ported (Phase 1 task 26)
 
 Continued straight through, no check-in pause.

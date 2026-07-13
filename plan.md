@@ -551,7 +551,76 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       order change events (raised only when the value actually changes),
       `Initialize()`/`Dispose()` idempotency, and `CompareTo` ordering. Both build modes
       clean, `ctest` → 529/529 (was 516).
-- [ ] Collections: `Bag<T>`, `Deque<T>`
+- [x] Collections: `Bag<T>`, `Deque<T>` (2026-07-13, ported via a forked sub-agent) —
+      both fully ported, no deferrals. First use of a new `CNA::Extended::Collections`
+      sub-namespace. Both are header-only templates (matching `Interval<T>`/
+      `Triangulation`'s established convention for generic C# types).
+      **`Bag<T>` has yet another different license than everything ported so far**:
+      unlike every other file (MonoGame.Extended MIT, or the `Angle`/`Triangulation`
+      MIT-from-a-different-project cases), `Bag.cs`'s own header credits a
+      **2-clause-BSD-style** license — GAMADU.COM's C# port (2013) of thelinuxlich's
+      [artemis_CSharp](https://github.com/thelinuxlich/artemis_CSharp) `Bag<T>`. Handled
+      the license research myself (not delegated): unlike the `nickgravelyn/Triangulator`
+      case, `artemis_CSharp` is still live — fetched its actual `Bag.cs` directly from
+      the source repository and confirmed the license text matches MonoGame.Extended's
+      embedded copy verbatim, word for word. Added a NEW `NOTICE.md` section ("Code
+      directly derived from other permissively-licensed (non-MIT) projects"), distinct
+      from the existing MIT-project section, since BSD-2-clause is a genuinely different
+      license family from MIT, not just a different copyright holder.
+      **`Deque<T>` implements `sharp-runtime`'s own `System::Collections::Generic::
+      IList<T>`**, matching how `sharp-runtime`'s own `List<T>` implements the same
+      interface. Two mechanical, no-behavioral-consequence simplifications documented in
+      `Bag.hpp`'s header (upstream's `_isPrimitive` GC-hygiene-only array-clearing skip;
+      upstream's `BagEnumerator`/boxing-avoidance enumerator triad, replaced by plain
+      `begin()/end()`, since C++ range-based `for` never has the C#-specific
+      boxing-allocation problem that machinery exists to solve).
+      **Confirmed and preserved upstream bugs, the most significant found in this port so
+      far** (all independently re-verified by hand-tracing concrete examples against the
+      actual upstream algorithm before trusting the fork's claims — see §6 for the full
+      account and specific traced examples):
+      1. `IndexOf`'s final index-computation formula doesn't check for "not found" (`-1`)
+         before applying modulo arithmetic, so a genuinely-absent item can make `IndexOf`
+         return a bogus non-negative index instead of `-1` — which then makes `Remove`
+         either throw unexpectedly or **silently remove an unrelated, real element while
+         reporting success**, depending on the buffer's current wraparound offset. A
+         freshly-constructed, never-grown `Deque` additionally hits a literal
+         divide-by-zero in this same formula (C#: catchable `DivideByZeroException`;
+         C++: UB, so explicitly guarded and thrown as `std::domain_error` instead, since
+         UB itself cannot be "faithfully preserved" as an observable behavior).
+      2. & 3. `RemoveAt`'s middle-index removal (choosing "shift the shorter half") is
+         only reliable in one of its three practical cases: **front-half-shift on a
+         non-wrapped buffer works correctly; back-half-shift is broken even on a
+         non-wrapped buffer** (its shift source, `arrayCenterIndex`, is a fixed physical
+         midpoint with no relationship to the actual removal point); **front-half-shift
+         is ALSO broken once the buffer has wrapped** (an element is silently lost/
+         orphaned, replaced by a stale default value). Not caught by upstream's own test
+         suite because its one relevant test only asserts `Count` decrements correctly,
+         never that the resulting values are correct. All three preserved exactly (not
+         fixed), each with a dedicated, hand-verified regression test.
+      Smaller preserved quirks: `CopyTo` validates the destination-index bound
+      unconditionally, even before the `Count == 0` no-op check (so copying into an
+      empty-but-valid destination can throw rather than succeed as a no-op);
+      `IList<T>::Insert` always throws (`Deque<T>` only supports front/back insertion),
+      matching the `OrientedRectangle::setPositionProperty` "matches upstream, always
+      throws" precedent from task 17.
+      **Iteration required real care**: upstream's `GetEnumerator()` re-reads
+      `_frontArrayIndex`/`Count` *live* on every loop-condition check (not just once at
+      iteration start) — deliberate, and covered by an upstream test
+      (`Deque_ForEach_Iteration_Modified`) that removes from the front *during*
+      iteration and expects every remaining element to still be visited exactly once. A
+      naive C++ translation that snapshots state once at `begin()` would not reproduce
+      this. Solved by capturing the physical starting offset/capacity once, tracking a
+      visited-count, and re-deriving both the current element and the loop-termination
+      condition from live state on every step — verified to collapse upstream's two
+      differently-shaped loops (wrapped vs. non-wrapped) into one identical physical-index
+      formula. Ported all 17 active upstream `DequeTests.cs` tests 1:1, plus 24 fresh
+      tests including explicit regressions for all three bugs above and the live-iteration
+      behavior. `Bag<T>`'s one upstream test is a C#-GC-allocation-boxing benchmark with
+      no C++ equivalent concept — not ported; 19 fresh tests added instead covering actual
+      correctness. Test suite grew from 529 to 589 (60 net new tests). Both build
+      configurations verified clean from a fully clean rebuild (not a cached one), zero
+      new compiler warnings, independently re-confirmed (not just trusting the fork's
+      self-report).
 - [ ] Collections: `ObjectPool<T>`, `Pool<T>`, `IPoolable`, `ItemEventArgs`
 - [ ] Collections: `KeyedCollection`, `DictionaryExtensions`, `ListExtensions`
 - [ ] Port `tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` as
@@ -893,6 +962,37 @@ implementations — confirm and reuse rather than re-rolling).
   implementation case: check whether upstream gave the two members different names
   before deciding whether a two-member or one-member C++ translation is the more
   faithful choice.
+- 2026-07-13 — `Bag<T>`/`Deque<T>` ported via a forked sub-agent (combined ~1053 lines of
+  C# source + 456 lines of upstream tests, well past the fork threshold). Before
+  delegating, discovered `Bag.cs` carries a BSD-2-clause-style license from a *different*
+  upstream project (GAMADU.COM/artemis_CSharp), not MonoGame.Extended's usual MIT
+  header — handled that license research myself (see the Phase 1 checklist entry above
+  for the full account) and gave the fork the exact SPDX header text to use, the same
+  pattern established for the `Triangulation`/nickgravelyn case.
+  The fork's report claimed to have found three genuine upstream correctness bugs in
+  `Deque<T>` (not just fidelity/GC-hygiene quirks like everything found before this) —
+  including two ("RemoveAt's back-half-shift is broken even unwrapped" and "front-half-
+  shift is ALSO broken once wrapped") it said were discovered *empirically*, by writing a
+  test that asserted the mathematically-correct result, watching it fail against a
+  faithful 1:1 translation, then hand-tracing to confirm the failure was inherent to
+  upstream's algorithm rather than a translation defect. Given the significance of that
+  claim — "upstream's Deque has real data-corruption bugs" is a much bigger claim than
+  "this rounds slightly differently" — did NOT just trust the fork's self-report or its
+  test's assertions at face value. Independently re-derived all three bugs from scratch:
+  hand-traced `IndexOf`'s formula and `RemoveAt`'s middle-index branches against the
+  actual upstream `.cs` source using fresh concrete examples I constructed myself (not
+  the fork's examples), computing expected physical-array and logical-view state by hand
+  at each step. All three bugs reproduced exactly as claimed, and the fork's specific
+  test-expected-values (e.g. the exact post-removal element sequence in
+  `RemoveAtMiddleShiftsShorterBackHalfReproducesKnownUpstreamBug`) matched my
+  independently-computed values precisely. This is the deepest independent re-verification
+  a fork's bug-finding claim has received in this project so far, given the stakes (silent
+  data corruption is a much more serious class of finding than a rounding/formatting
+  quirk) — worth treating "this fork found a real bug, not just a fidelity note" claims
+  as needing proportionally more scrutiny before committing, not just the standard
+  self-check-plus-spot-read pass. Also re-ran the full build from a genuinely clean `rm
+  -rf build` (not reusing the fork's already-built directory) for both CMake
+  configurations before trusting the reported 589/589 pass count.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
