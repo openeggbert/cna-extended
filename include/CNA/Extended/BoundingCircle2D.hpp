@@ -2,11 +2,20 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Ported from MonoGame.Extended's BoundingCircle2D.cs. Contains(...)/Intersects(...)/
-// TryGetCollision(...) overloads are deferred until Collision2D is ported (Phase 2) -- see the
-// header comment in BoundingBox2D.hpp for the full rationale, which applies identically here.
+// Ported from MonoGame.Extended's BoundingCircle2D.cs. Now that Collision2D has landed (Phase 2),
+// all upstream Contains(...)/Intersects(...)/TryGetCollision(...) overloads are ported below as
+// thin wrappers delegating to the matching Collision2D::ContainsCircleXxx/IntersectsCircleXxx/
+// TryGetCollisionCircleXxx static method, using this circle's Center/Radius plus the other
+// shape's own public fields -- except TryGetCollision(BoundingPolygon2D), which upstream itself
+// never defines (there is no Collision2D.TryGetCollisionCircleConvexPolygon in the C# source
+// either): Contains/Intersects both have full Circle/Aabb/Circle/Obb/Capsule/ConvexPolygon
+// coverage (6 and 5 overloads respectively), but TryGetCollision only covers Circle/Aabb/Obb/
+// Capsule (4 overloads) -- a genuine upstream asymmetry, preserved faithfully rather than
+// "completed" with an invented overload.
 #pragma once
 
+#include "CNA/Extended/CollisionResult2D.hpp"
+#include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/Matrix.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
@@ -15,11 +24,14 @@
 
 namespace CNA::Extended
 {
+    using Microsoft::Xna::Framework::ContainmentType;
     using Microsoft::Xna::Framework::Matrix;
     using Microsoft::Xna::Framework::Vector2;
 
     class BoundingBox2D;
     class BoundingCapsule2D;
+    class OrientedBoundingBox2D;
+    class BoundingPolygon2D;
 
     /** @brief Represents a circular bounding volume in 2D space, defined by a center point and radius. */
     struct BoundingCircle2D
@@ -82,6 +94,71 @@ namespace CNA::Extended
          * @param additional The second bounding circle to enclose.
          */
         [[nodiscard]] static BoundingCircle2D CreateMerged(const BoundingCircle2D& original, const BoundingCircle2D& additional);
+
+        /** @brief Determines whether this circle contains the specified point. */
+        [[nodiscard]] ContainmentType Contains(const Vector2& point) const;
+
+        /** @brief Determines whether this circle contains the specified bounding box. */
+        [[nodiscard]] ContainmentType Contains(const BoundingBox2D& box) const;
+
+        /** @brief Determines whether this circle contains the specified other circle. */
+        [[nodiscard]] ContainmentType Contains(const BoundingCircle2D& other) const;
+
+        /** @brief Determines whether this circle contains the specified oriented bounding box. */
+        [[nodiscard]] ContainmentType Contains(const OrientedBoundingBox2D& obb) const;
+
+        /** @brief Determines whether this circle contains the specified capsule. */
+        [[nodiscard]] ContainmentType Contains(const BoundingCapsule2D& capsule) const;
+
+        /** @brief Determines whether this circle contains the specified convex polygon. */
+        [[nodiscard]] ContainmentType Contains(const BoundingPolygon2D& polygon) const;
+
+        /** @brief Determines whether this circle intersects the specified other circle. */
+        [[nodiscard]] bool Intersects(const BoundingCircle2D& other) const;
+
+        /** @brief Determines whether this circle intersects the specified bounding box. */
+        [[nodiscard]] bool Intersects(const BoundingBox2D& box) const;
+
+        /** @brief Determines whether this circle intersects the specified capsule. */
+        [[nodiscard]] bool Intersects(const BoundingCapsule2D& capsule) const;
+
+        /** @brief Determines whether this circle intersects the specified oriented bounding box. */
+        [[nodiscard]] bool Intersects(const OrientedBoundingBox2D& obb) const;
+
+        /** @brief Determines whether this circle intersects the specified convex polygon. */
+        [[nodiscard]] bool Intersects(const BoundingPolygon2D& polygon) const;
+
+        /**
+         * @brief Determines whether this circle intersects the specified other circle, and
+         * computes collision resolution data.
+         * @param other The other circle to test against.
+         * @param result Receives the collision resolution data when an intersection is found.
+         */
+        bool TryGetCollision(const BoundingCircle2D& other, CollisionResult2D& result) const;
+
+        /**
+         * @brief Determines whether this circle intersects the specified bounding box, and
+         * computes collision resolution data.
+         * @param box The bounding box to test against.
+         * @param result Receives the collision resolution data when an intersection is found.
+         */
+        bool TryGetCollision(const BoundingBox2D& box, CollisionResult2D& result) const;
+
+        /**
+         * @brief Determines whether this circle intersects the specified capsule, and computes
+         * collision resolution data.
+         * @param capsule The capsule to test against.
+         * @param result Receives the collision resolution data when an intersection is found.
+         */
+        bool TryGetCollision(const BoundingCapsule2D& capsule, CollisionResult2D& result) const;
+
+        /**
+         * @brief Determines whether this circle intersects the specified oriented bounding box,
+         * and computes collision resolution data.
+         * @param obb The oriented bounding box to test against.
+         * @param result Receives the collision resolution data when an intersection is found.
+         */
+        bool TryGetCollision(const OrientedBoundingBox2D& obb, CollisionResult2D& result) const;
 
         /**
          * @brief Applies a matrix transformation to this circle and creates a new transformed

@@ -5,6 +5,9 @@
 
 #include "CNA/Extended/BoundingBox2D.hpp"
 #include "CNA/Extended/BoundingCapsule2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
+#include "CNA/Extended/Collision2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
 
 #include <cmath>
 #include <functional>
@@ -149,6 +152,81 @@ namespace CNA::Extended
         }
 
         return BoundingCircle2D(center, radius);
+    }
+
+    ContainmentType BoundingCircle2D::Contains(const Vector2& point) const
+    {
+        return Collision2D::ContainsCirclePoint(point, Center, Radius);
+    }
+
+    ContainmentType BoundingCircle2D::Contains(const BoundingBox2D& box) const
+    {
+        return Collision2D::ContainsCircleAabb(Center, Radius, box.Min, box.Max);
+    }
+
+    ContainmentType BoundingCircle2D::Contains(const BoundingCircle2D& other) const
+    {
+        return Collision2D::ContainsCircleCircle(Center, Radius, other.Center, other.Radius);
+    }
+
+    ContainmentType BoundingCircle2D::Contains(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::ContainsCircleObb(Center, Radius, obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents);
+    }
+
+    ContainmentType BoundingCircle2D::Contains(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::ContainsCircleCapsule(Center, Radius, capsule.PointA, capsule.PointB, capsule.Radius);
+    }
+
+    ContainmentType BoundingCircle2D::Contains(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::ContainsCircleConvexPolygon(Center, Radius, polygon.Vertices, polygon.Normals);
+    }
+
+    bool BoundingCircle2D::Intersects(const BoundingCircle2D& other) const
+    {
+        return Collision2D::IntersectsCircleCircle(Center, Radius, other.Center, other.Radius);
+    }
+
+    bool BoundingCircle2D::Intersects(const BoundingBox2D& box) const
+    {
+        return Collision2D::IntersectsCircleAabb(Center, Radius, box.Min, box.Max);
+    }
+
+    bool BoundingCircle2D::Intersects(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::IntersectsCircleCapsule(Center, Radius, capsule.PointA, capsule.PointB, capsule.Radius);
+    }
+
+    bool BoundingCircle2D::Intersects(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::IntersectsCircleObb(Center, Radius, obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents);
+    }
+
+    bool BoundingCircle2D::Intersects(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::IntersectsCircleConvexPolygon(Center, Radius, polygon.Vertices, polygon.Normals);
+    }
+
+    bool BoundingCircle2D::TryGetCollision(const BoundingCircle2D& other, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionCircleCircle(Center, Radius, other.Center, other.Radius, result);
+    }
+
+    bool BoundingCircle2D::TryGetCollision(const BoundingBox2D& box, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionCircleAabb(Center, Radius, box.Min, box.Max, result);
+    }
+
+    bool BoundingCircle2D::TryGetCollision(const BoundingCapsule2D& capsule, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionCircleCapsule(Center, Radius, capsule.PointA, capsule.PointB, capsule.Radius, result);
+    }
+
+    bool BoundingCircle2D::TryGetCollision(const OrientedBoundingBox2D& obb, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionCircleObb(Center, Radius, obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents, result);
     }
 
     BoundingCircle2D BoundingCircle2D::Transform(const Matrix& matrix) const
