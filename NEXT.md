@@ -6,6 +6,59 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (9) — FastRandom, RandomExtensions ported (Phase 1 task 12)
+
+Continued straight through, no check-in pause.
+
+**Ported directly** (~410 lines across 6 files, no fork needed) — `FastRandom` (a
+linear-congruential PRNG class with a bridge/strategy-pattern internal design: private
+`IFastRandomImpl` interface, `LinearCongruentialGeneratorImpl`, and a `[ThreadStatic]`-
+backed `ThreadSafeFastRandomImpl` behind the `Shared` static instance) and
+`RandomExtensions` (free functions extending `System::Random`). No deferrals — fully
+self-contained.
+
+**Design decisions worth remembering**:
+- `Shared`'s lazy-initialized C# static property became a function-local static (Meyer's
+  singleton) rather than a namespace-scope `static const`/`static` object — a deliberate
+  choice to avoid a repeat of the `Matrix3x2::Identity` cross-translation-unit
+  static-init-order bug from two tasks ago.
+- **Deliberately did NOT reuse `sharp-runtime`'s own `System::Random::NextSingle()`** for
+  `RandomExtensions::NextSingle`, even though "reuse sharp-runtime, don't re-roll" is the
+  usual rule here. Checked and confirmed: `sharp-runtime`'s `NextSingle()` already exists
+  and is used elsewhere, but implements a *different* (more modern, real-.NET-6+-matching)
+  algorithm than what `RandomExtensions.cs` itself actually does (a plain
+  `(float)NextDouble()` cast). Using the "better" existing method would have silently
+  changed behavior from what this specific upstream file does — the fidelity mandate
+  wins over the reuse-don't-re-roll convenience rule when they conflict like this.
+  **Worth checking for this same conflict pattern in any future task**: before reusing an
+  existing sharp-runtime method just because the name matches, verify its actual
+  algorithm matches what upstream MonoGame.Extended does, not just that it does something
+  broadly similar.
+
+**Test coverage**: no upstream tests exist for either file — wrote fresh tests covering
+deterministic seeding (same seed → same sequence), range bounds for every `Next`/
+`NextSingle` overload, `NextAngle`'s `[-pi, pi]` range, `NextUnitVector`'s unit-length
+guarantee, and the `Shared` singleton property (same instance returned every call).
+
+**Verification**: both build modes clean on the first try, `ctest` → **100% passed,
+410/410** (was 389 before this task).
+
+**State / next step:** Phase 1 is 12 of ~20 tasks in (13 including the `OrientedRectangle`
+follow-up). Next per `plan.md` §5 Phase 1: `PrimitivesHelper`, `ShapeExtensions`. **This
+one matters a lot** — `PrimitivesHelper` specifically has been the recurring blocker
+behind nearly every deferral left in Phase 1 so far (`RectangleF`/`BoundingRectangle`'s
+`Transform`/`CreateFrom(points)`/`SquaredDistanceTo`, `OrientedRectangle`'s `Transform`/
+`BoundingRectangle`/`RectangleF` conversion, `CircleF`'s `Intersects(BoundingRectangle)`,
+`Segment2`'s `Intersects`/some `Distance*` overloads). **After this task lands, do a full
+sweep** (grep the tree for "PrimitivesHelper" in header comments — there should be a
+concentrated cluster) and land every genuinely-unblocked follow-up, likely across several
+files in one pass, the same way the `SizeF` and `Matrix3x2` tasks did. This could be a
+substantial cleanup task on its own. Continue without pausing for a status update, per
+the standing correction, unless a genuine blocker requiring the user's judgment comes up.
+**Commit AND push to `develop`** after this task.
+
+---
+
 ## 2026-07-13 (8) — OrientedRectangle follow-up picked up immediately; corrected a prior report
 
 Continued straight through from task 11 without a check-in pause — picked up the

@@ -359,7 +359,21 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       nested `Transform` test class (11 tests) is inapplicable (all test the deferred
       method); wrote fresh tests for `Position`/the `RectangleF` conversion/`Intersects`
       (no upstream coverage for that SAT algorithm specifically).
-- [ ] `FastRandom`, `RandomExtensions`
+- [x] `FastRandom`, `RandomExtensions` (2026-07-13, ported directly, no fork) — ~410 lines
+      across 6 files, fully ported, no deferrals. `FastRandom`'s private nested
+      `IFastRandomImpl`/`LinearCongruentialGeneratorImpl`/`ThreadSafeFastRandomImpl`
+      (a bridge/strategy pattern) ported 1:1 via `std::unique_ptr`-owned nested types.
+      C#'s `[ThreadStatic]` → `thread_local`. `Shared`'s lazy-initialized static property
+      → a function-local static (deliberately, to avoid a repeat of this session's
+      `Matrix3x2::Identity` cross-TU static-init-order bug). `RandomExtensions`'s free
+      functions port each algorithm exactly as upstream wrote it (e.g. `NextSingle` as a
+      literal `(float)NextDouble()` cast) **rather than delegating to `sharp-runtime`'s
+      own, more modern `System::Random::NextSingle()`** — that method already exists and
+      is used elsewhere in the codebase, but implements a different algorithm (matching
+      real .NET 6+ `Random.NextSingle()`); using it here would silently change behavior
+      from what this specific upstream file actually does. No upstream tests exist for
+      either file — wrote fresh tests covering deterministic seeding, range bounds for
+      every overload, and the `Shared` singleton property.
 - [ ] `PrimitivesHelper`, `ShapeExtensions`
 - [ ] `Math/Triangulation/*` (polygon triangulation helpers)
 - [ ] `GameTimeExtensions`, `GameComponentCollectionExtensions`
@@ -593,6 +607,16 @@ implementations — confirm and reuse rather than re-rolling).
   the actual dependency chain, not just trusting the most recent summary — the same
   discipline already applied to fork self-reports applies to this session's own carried-
   forward notes too.
+- 2026-07-13 — `FastRandom`/`RandomExtensions` ported directly (small enough, no fork).
+  Deliberately did NOT reuse `sharp-runtime`'s own `System::Random::NextSingle()` for
+  `RandomExtensions::NextSingle`, even though it exists and "reuse sharp-runtime, don't
+  re-roll" is the usual rule — that method implements a different (more modern, matching
+  real .NET 6+) algorithm than what `RandomExtensions.cs` itself actually does (a plain
+  `(float)NextDouble()` cast). The "reuse, don't re-roll" principle is about not
+  duplicating *equivalent* functionality; it does not override the fidelity mandate when
+  the existing utility's behavior actually differs from what upstream's specific file
+  does. Worth keeping in mind for any future case where a sharp-runtime type has a
+  same-named member that isn't a drop-in behavioral match for what's being ported.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
