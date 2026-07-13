@@ -6,6 +6,80 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (30) — Phase 4 (Screens) mostly complete; FadeTransition/ExpandTransition deferred to Phase 5
+
+Ported `Screen`, `GameScreen`, `ScreenManager`, and the abstract `Transition` base directly (not
+via fork — small, 635 upstream lines across 6 files).
+
+**Real forward dependency found while scoping, handled by deferral, not stubbing**:
+`FadeTransition`/`ExpandTransition` both need `SpriteBatch::FillRectangle` (from
+`Math/ShapeExtensions.cs`, despite its folder name a pure `SpriteBatch` debug-drawing file) —
+`plan.md` already flagged this exact file as deferred whole to Phase 5 back during Phase 1's own
+scoping pass. Confirmed via `grep` before assuming, not from memory. Only the `Transition`
+abstract base (no such dependency — just `GameTime`/`MathHelper`/`EventHandler`) is ported now;
+the two concrete transitions wait for Phase 5's `ShapeExtensions`.
+
+**Ownership decision, verified against upstream's own test suite, not assumed**: `ScreenManager`
+holds `Screen*` as a NON-owning reference throughout (not `std::unique_ptr<Screen>`).
+`ScreenManagerTests.cs` proves this is correct: it constructs a `Screen`, hands it to
+`ShowScreen`, later calls `CloseScreen()`, and THEN asserts on the closed screen's own state
+(`screen2.DisposeCalled` checked *after* `CloseScreen()`) — proving the caller retains and
+inspects the object after the manager is done with it. An owning `unique_ptr` that destroys the
+Screen on close would leave the caller's own reference dangling the moment the test (or any real
+caller) inspects it after closing. `Transition` parameters, by contrast, take
+`std::unique_ptr<Transition>` (ownership-transferring) — always constructed inline at the call
+site and never referenced again by the caller afterward, unlike `Screen`.
+
+**Real C#/C++ semantic hazard found and fixed, not a literal translation — the most significant
+finding of this entry**: upstream's transition `Completed` handler does
+`_activeTransition.Dispose(); _activeTransition = null;`. Safe in C# because dropping the last
+reference doesn't immediately reclaim memory — the GC collects it at some later point, well after
+the enclosing `Transition.Update()` call (which raised `Completed` in the first place) has
+returned. A literal `std::unique_ptr::reset()` inside that same handler would destroy the
+`Transition` object WHILE ITS OWN `Update()` METHOD IS STILL EXECUTING on the call stack above it
+(`ScreenManager::Update()` → `activeTransition_->Update()` → `Completed.Raise()` → the lambda →
+`reset()` → `~Transition()`, with `Update()`'s own stack frame still live above the destructor
+call) — a genuine use-after-free the moment `Update()` continues executing or returns after being
+destroyed out from under itself. **Fixed by deferring the actual destruction**: the `Completed`
+handler only sets a `transitionCompletedPending_` flag; `ScreenManager::Update()` checks it and
+safely destroys the transition only AFTER `activeTransition_->Update()` has fully returned, back
+in `ScreenManager`'s own stack frame — never while the transition's own method call is still on
+the stack. **Verified with a dedicated test exercising this exact sequence** (`StateChanged` then
+`Completed` firing across two separate `Update()` calls, using a minimal test-only `Transition`
+subclass since no concrete `Transition` exists in this port yet) — reasoning through the hazard on
+paper wasn't treated as sufficient; the fix needed to actually run and not crash.
+
+**Other translation decisions**: `Stack<Screen>` + `Reverse().ToArray()` caching (with a dirty
+flag) is eliminated — `std::vector<Screen*>` used directly as the stack (`push_back`/`pop_back`)
+already iterates bottom-to-top in forward order, no separate reverse-and-cache step needed. 4 of
+upstream's tests specifically check C#-specific cache reference-identity (`Same`/`NotSame` on the
+returned array) — these have no meaningful translation once the separate cache is gone (the
+"cache" is just the live vector, so identity is trivially always the same address for a reason
+unrelated to what upstream's tests actually verify) — replaced with 1 content-correctness test
+instead. `internal set` on `Screen::ScreenManager`/`IsActive` → `friend class ScreenManager` +
+private setters (more restrictive than C#'s assembly-visible `internal`, same practical intent).
+
+**Tests**: 28 tests ported from `ScreenManagerTests.cs` (minus the 4 cache-identity tests,
+replaced with 1), 1 from `GameScreenTests.cs`, plus 3 fresh tests specifically for the
+Transition-based `ShowScreen`/`CloseScreen`/`ReplaceScreen` overloads (no upstream tests exercise
+these at all) — including the deferred-destruction safety test described above.
+
+**Build verification**: genuinely clean `rm -rf build` rebuild + both CMake configs (linked and
+headers-only), zero warnings in either. `ctest` → **1218/1218 passing** (was 1187 — 31 net new
+tests). All 28+1+3 new tests passed on the very first run, no debugging needed.
+
+**State / next step**: Phase 4 is mostly complete — only `FadeTransition`/`ExpandTransition`
+remain, gated on Phase 5's `ShapeExtensions`/`SpriteBatch::FillRectangle`. Phase 5 ("Graphics,
+BitmapFonts & Animations") is next per `plan.md` §5 — depends on Phase 1 and CNA's
+`GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`. This phase includes `plan.md`'s own flagged
+`Graphics/Effects/*` design question (custom `Effect` wrapper, embedded shader resources — may
+need re-authoring rather than a literal port depending on CNA's shader pipeline shape) — read that
+flagged note and the relevant upstream sources carefully before committing to an implementation
+approach. Once `ShapeExtensions`/`FillRectangle` lands as part of Phase 5, circle back and finish
+Phase 4's two deferred transitions.
+
+---
+
 ## 2026-07-13 (29) — Phase 3 (Input, Timers, Tweening, ViewportAdapters, VectorDraw) COMPLETE
 
 Started fresh after Phase 2's completion (entry (28)). All 5 Phase 3 modules are independent of

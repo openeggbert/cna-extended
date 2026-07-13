@@ -815,12 +815,23 @@ Independent of each other; depends only on Phase 1 and CNA's `Microsoft::Xna::Fr
       are dead code upstream, nothing to port. 49 total fresh/ported tests across Phase 3.
       1187 tests passing total for the whole project.
 
-### Phase 4 — Screens
+### Phase 4 — Screens — **MOSTLY COMPLETE (2026-07-13)**
 
 Depends on Phase 1; needs CNA's `GameComponent`/`Game`.
 
-- [ ] `Screens/*` (`Screen`, `ScreenManager`, transitions, etc.)
-- [ ] Port `tests/MonoGame.Extended.Tests/Screens`
+- [x] `Screens/*` (`Screen`, `ScreenManager`, transitions, etc.) — `Screen`, `GameScreen`,
+      `ScreenManager`, and the abstract `Transition` base are ported. **`FadeTransition`/
+      `ExpandTransition` deliberately deferred to Phase 5**: both depend on
+      `SpriteBatch::FillRectangle` (`ShapeExtensions.cs`), already scoped to Phase 5 during
+      Phase 1's own scoping pass — a real forward dependency, not stubbed around. Port them
+      once `ShapeExtensions`/`FillRectangle` lands in Phase 5. See `NEXT.md` entry (30) for
+      the full design rationale (non-owning `Screen*`, the transition-completion
+      deferred-destruction fix, etc.).
+- [x] Port `tests/MonoGame.Extended.Tests/Screens` — `ScreenManagerTests.cs`/
+      `GameScreenTests.cs` ported (28+1 tests, 4 C#-cache-identity-specific tests replaced
+      with a content-correctness equivalent), plus 3 fresh tests for the Transition-based
+      overloads. Nothing to port yet for `FadeTransition`/`ExpandTransition` since they're
+      deferred. 1218 tests passing total for the whole project.
 
 ### Phase 5 — Graphics, BitmapFonts & Animations
 
