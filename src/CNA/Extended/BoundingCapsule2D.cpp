@@ -3,19 +3,21 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/BoundingCapsule2D.hpp"
 
+#include "CNA/Extended/BoundingBox2D.hpp"
+#include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
+#include "CNA/Extended/Collision2D.hpp"
+#include "CNA/Extended/LineSegment2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
+
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <numbers>
 
 namespace CNA::Extended
 {
-    namespace
-    {
-        // Duplicates MonoGame.Extended's Collision2D.Epsilon (Collision2D.cs:44), which is not yet
-        // ported (scheduled for Phase 2). Point this at Collision2D::Epsilon once that lands.
-        constexpr float kCollision2DEpsilonPending = 1e-6f;
-    }
-
     BoundingCapsule2D::BoundingCapsule2D(const Vector2& pointA, const Vector2& pointB, const float radius)
         : PointA(pointA), PointB(pointB), Radius(radius)
     {
@@ -37,7 +39,7 @@ namespace CNA::Extended
         const Vector2 dir = PointB - PointA;
         const float lengthSquared = dir.X * dir.X + dir.Y * dir.Y;
 
-        if (lengthSquared < kCollision2DEpsilonPending * kCollision2DEpsilonPending)
+        if (lengthSquared < Collision2D::Epsilon * Collision2D::Epsilon)
         {
             return Vector2::Zero;
         }
@@ -57,7 +59,7 @@ namespace CNA::Extended
         // Check if the direction needs to be normalized and normalize it.
         const float lengthSq = direction.LengthSquared();
         Vector2 normalizedDir = Vector2::Zero;
-        if (lengthSq >= kCollision2DEpsilonPending * kCollision2DEpsilonPending)
+        if (lengthSq >= Collision2D::Epsilon * Collision2D::Epsilon)
         {
             normalizedDir = direction / std::sqrt(lengthSq);
         }
@@ -65,6 +67,50 @@ namespace CNA::Extended
         const Vector2 halfExtent = normalizedDir * (length * 0.5f);
 
         return BoundingCapsule2D(center - halfExtent, center + halfExtent, radius);
+    }
+
+    BoundingCapsule2D BoundingCapsule2D::CreateFromSegment(const LineSegment2D& segment, const float radius)
+    {
+        return BoundingCapsule2D(segment.Start, segment.End, radius);
+    }
+
+    BoundingCapsule2D BoundingCapsule2D::CreateMerged(const BoundingCapsule2D& original, const BoundingCapsule2D& additional)
+    {
+        const std::array<Vector2, 4> points = {original.PointA, original.PointB, additional.PointA, additional.PointB};
+        const std::array<float, 4> radii = {original.Radius, original.Radius, additional.Radius, additional.Radius};
+
+        // Find the pair of points that are farthest apart; those become the merged capsule's
+        // endpoints (Ericson's "Sphere-Swept Volumes" / "Merging Two Spheres" approach).
+        int bestI = 0;
+        int bestJ = 1;
+        float bestDistSq = Vector2::DistanceSquared(points[0], points[1]);
+        for (int i = 0; i < 4; ++i)
+        {
+            for (int j = i + 1; j < 4; ++j)
+            {
+                const float distSq = Vector2::DistanceSquared(points[i], points[j]);
+                if (distSq > bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    bestI = i;
+                    bestJ = j;
+                }
+            }
+        }
+
+        const Vector2 newPointA = points[bestI];
+        const Vector2 newPointB = points[bestJ];
+
+        float newRadius = std::max(original.Radius, additional.Radius);
+        const LineSegment2D newSegment(newPointA, newPointB);
+        for (int i = 0; i < 4; ++i)
+        {
+            const float distToSegment = newSegment.DistanceToPoint(points[i]);
+            const float requiredRadius = distToSegment + radii[i];
+            newRadius = std::max(newRadius, requiredRadius);
+        }
+
+        return BoundingCapsule2D(newPointA, newPointB, newRadius);
     }
 
     BoundingCapsule2D BoundingCapsule2D::Transform(const Matrix& matrix) const
@@ -90,6 +136,81 @@ namespace CNA::Extended
         pointA = PointA;
         pointB = PointB;
         radius = Radius;
+    }
+
+    ContainmentType BoundingCapsule2D::Contains(const Vector2& point) const
+    {
+        const float rr = Radius * Radius;
+        float t = 0.0f;
+        Vector2 closestPoint;
+        const float d2 = Collision2D::DistanceSquaredPointSegment(point, PointA, PointB, t, closestPoint);
+        if (d2 <= rr)
+        {
+            return ContainmentType::Contains;
+        }
+        return ContainmentType::Disjoint;
+    }
+
+    ContainmentType BoundingCapsule2D::Contains(const BoundingBox2D& aabb) const
+    {
+        return Collision2D::ContainsCapsuleAabb(PointA, PointB, Radius, aabb.Min, aabb.Max);
+    }
+
+    ContainmentType BoundingCapsule2D::Contains(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::ContainsCapsuleCircle(PointA, PointB, Radius, circle.Center, circle.Radius);
+    }
+
+    ContainmentType BoundingCapsule2D::Contains(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::ContainsCapsuleObb(PointA, PointB, Radius, obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents);
+    }
+
+    ContainmentType BoundingCapsule2D::Contains(const BoundingCapsule2D& other) const
+    {
+        return Collision2D::ContainsCapsuleCapsule(PointA, PointB, Radius, other.PointA, other.PointB, other.Radius);
+    }
+
+    ContainmentType BoundingCapsule2D::Contains(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::ContainsCapsuleConvexPolygon(PointA, PointB, Radius, polygon.Vertices, polygon.Normals);
+    }
+
+    bool BoundingCapsule2D::Intersects(const BoundingCapsule2D& other) const
+    {
+        return Collision2D::IntersectsCapsuleCapsule(PointA, PointB, Radius, other.PointA, other.PointB, other.Radius);
+    }
+
+    bool BoundingCapsule2D::Intersects(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::IntersectsCircleCapsule(circle.Center, circle.Radius, PointA, PointB, Radius);
+    }
+
+    bool BoundingCapsule2D::Intersects(const BoundingBox2D& box) const
+    {
+        return Collision2D::IntersectsAabbCapsule(box.Min, box.Max, PointA, PointB, Radius);
+    }
+
+    bool BoundingCapsule2D::Intersects(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::IntersectsObbCapsule(obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents, PointA, PointB, Radius);
+    }
+
+    bool BoundingCapsule2D::Intersects(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::IntersectsCapsuleConvexPolygon(PointA, PointB, Radius, polygon.Vertices, polygon.Normals);
+    }
+
+    bool BoundingCapsule2D::TryGetCollision(const BoundingCircle2D& circle, CollisionResult2D& result) const
+    {
+        CollisionResult2D circleResult;
+        if (!Collision2D::TryGetCollisionCircleCapsule(circle.Center, circle.Radius, PointA, PointB, Radius, circleResult))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        result = circleResult.Invert();
+        return true;
     }
 
     bool BoundingCapsule2D::Equals(const BoundingCapsule2D& other) const

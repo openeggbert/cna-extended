@@ -2,20 +2,30 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Ported from MonoGame.Extended's BoundingCapsule2D.cs. Contains(...)/Intersects(...)/
-// TryGetCollision(...) overloads are deferred until Collision2D is ported (Phase 2) -- see the
-// header comment in BoundingBox2D.hpp for the full rationale, which applies identically here.
+// Ported from MonoGame.Extended's BoundingCapsule2D.cs. Upstream's Contains(...)/Intersects(...)/
+// TryGetCollision(...) overloads all delegate to static query functions on MonoGame.Extended's
+// Collision2D type, and CreateFromSegment/CreateMerged delegate to LineSegment2D's
+// DistanceToPoint/DistanceSquaredToPoint -- now that Collision2D and LineSegment2D are both fully
+// ported (Phase 2), all of them are landed below: 6 Contains (point, aabb, circle, obb, self,
+// polygon), 5 Intersects (self, circle, aabb, obb, polygon), and CreateFromSegment/CreateMerged.
 //
-// Two additional members are deferred for a second reason: `CreateFromSegment(LineSegment2D, float)`
-// takes a LineSegment2D parameter, and `CreateMerged` calls LineSegment2D.DistanceSquaredToPoint
-// internally. CORRECTION (found once LineSegment2D was actually ported): this is NOT unblocked by
-// LineSegment2D landing -- LineSegment2D::DistanceSquaredToPoint's own body delegates to
-// Collision2D.DistanceSquaredPointSegment, a real algorithm, so it is itself deferred until
-// Collision2D exists (see LineSegment2D.hpp). Both of these BoundingCapsule2D members are
-// therefore still blocked on Collision2D (Phase 2), same as the Contains/Intersects/
-// TryGetCollision overloads above -- add all of it back together once Collision2D lands.
+// Asymmetric coverage (matching Collision2D exactly, not an omission): Collision2D provides only
+// one TryGetCollision* function involving a capsule -- TryGetCollisionCircleCapsule -- so
+// TryGetCollision(BoundingCircle2D, CollisionResult2D&) is the only TryGetCollision overload landed
+// here. Upstream has no TryGetCollision(BoundingBox2D)/TryGetCollision(OrientedBoundingBox2D)/
+// TryGetCollision(BoundingCapsule2D)/TryGetCollision(BoundingPolygon2D) either, and Collision2D
+// itself has no matching TryGetCollisionAabbCapsule/TryGetCollisionObbCapsule/
+// TryGetCollisionCapsuleCapsule/TryGetCollisionCapsuleConvexPolygon functions to wrap -- confirmed
+// by reading Collision2D.hpp -- so there is genuinely nothing more to wrap.
+//
+// TryGetCollision(BoundingCircle2D) calls Collision2D::TryGetCollisionCircleCapsule (Collision2D
+// has no TryGetCollisionCapsuleCircle) and then calls .Invert() on the result, since
+// TryGetCollisionCircleCapsule's MTV convention moves the circle out of the capsule, but this
+// method's contract moves the capsule out of the circle -- matching upstream exactly.
 #pragma once
 
+#include "CNA/Extended/CollisionResult2D.hpp"
+#include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/Matrix.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
@@ -23,8 +33,15 @@
 
 namespace CNA::Extended
 {
+    using Microsoft::Xna::Framework::ContainmentType;
     using Microsoft::Xna::Framework::Matrix;
     using Microsoft::Xna::Framework::Vector2;
+
+    struct BoundingBox2D;
+    struct BoundingCircle2D;
+    struct OrientedBoundingBox2D;
+    struct BoundingPolygon2D;
+    struct LineSegment2D;
 
     /** @brief Represents a capsule bounding volume in 2D space, formed by sweeping a circle along a line segment. */
     struct BoundingCapsule2D
@@ -85,6 +102,24 @@ namespace CNA::Extended
             const Vector2& center, const Vector2& direction, float length, float radius);
 
         /**
+         * @brief Creates a new BoundingCapsule2D from a line segment and radius, using the
+         * segment's endpoints directly as the capsule's PointA/PointB.
+         * @param segment The line segment defining the capsule's central axis.
+         * @param radius The radius of the capsule.
+         */
+        [[nodiscard]] static BoundingCapsule2D CreateFromSegment(const LineSegment2D& segment, float radius);
+
+        /**
+         * @brief Creates a new BoundingCapsule2D that encloses two capsules, using Ericson's
+         * "Sphere-Swept Volumes" merging approach: the new central segment runs between whichever
+         * two of the four input endpoints are farthest apart, and the radius grows to cover all
+         * four original endpoints plus their original radii.
+         * @param original The first capsule to enclose.
+         * @param additional The second capsule to enclose.
+         */
+        [[nodiscard]] static BoundingCapsule2D CreateMerged(const BoundingCapsule2D& original, const BoundingCapsule2D& additional);
+
+        /**
          * @brief Applies a matrix transformation to this capsule and creates a new transformed
          * capsule. The radius is scaled by the maximum of the X and Y scale components of the
          * transformation matrix.
@@ -105,6 +140,33 @@ namespace CNA::Extended
          * @param radius Receives the radius.
          */
         void Deconstruct(Vector2& pointA, Vector2& pointB, float& radius) const;
+
+        /** @brief Determines whether this capsule contains the specified point. */
+        [[nodiscard]] ContainmentType Contains(const Vector2& point) const;
+        /** @brief Determines whether this capsule contains a bounding box. */
+        [[nodiscard]] ContainmentType Contains(const BoundingBox2D& aabb) const;
+        /** @brief Determines whether this capsule contains a bounding circle. */
+        [[nodiscard]] ContainmentType Contains(const BoundingCircle2D& circle) const;
+        /** @brief Determines whether this capsule contains an oriented bounding box. */
+        [[nodiscard]] ContainmentType Contains(const OrientedBoundingBox2D& obb) const;
+        /** @brief Determines whether this capsule contains another capsule. */
+        [[nodiscard]] ContainmentType Contains(const BoundingCapsule2D& other) const;
+        /** @brief Determines whether this capsule contains a bounding polygon. */
+        [[nodiscard]] ContainmentType Contains(const BoundingPolygon2D& polygon) const;
+
+        /** @brief Determines whether this capsule intersects another capsule. */
+        [[nodiscard]] bool Intersects(const BoundingCapsule2D& other) const;
+        /** @brief Determines whether this capsule intersects a bounding circle. */
+        [[nodiscard]] bool Intersects(const BoundingCircle2D& circle) const;
+        /** @brief Determines whether this capsule intersects a bounding box. */
+        [[nodiscard]] bool Intersects(const BoundingBox2D& box) const;
+        /** @brief Determines whether this capsule intersects an oriented bounding box. */
+        [[nodiscard]] bool Intersects(const OrientedBoundingBox2D& obb) const;
+        /** @brief Determines whether this capsule intersects a bounding polygon. */
+        [[nodiscard]] bool Intersects(const BoundingPolygon2D& polygon) const;
+
+        /** @brief Attempts to compute collision information between this capsule and a bounding circle. */
+        [[nodiscard]] bool TryGetCollision(const BoundingCircle2D& circle, CollisionResult2D& result) const;
 
         [[nodiscard]] bool Equals(const BoundingCapsule2D& other) const;
         [[nodiscard]] int GetHashCode() const;

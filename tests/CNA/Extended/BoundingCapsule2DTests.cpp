@@ -2,11 +2,12 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/BoundingCapsule2DTest.cs,
-// covering the subset of upstream test cases that don't require Collision2D or LineSegment2D,
-// both deferred -- see BoundingCapsule2D.hpp.
+// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/BoundingCapsule2DTest.cs.
 #include "CNA/Extended/BoundingCapsule2D.hpp"
 
+#include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/LineSegment2D.hpp"
+#include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
 
 #include <gtest/gtest.h>
@@ -166,5 +167,114 @@ namespace CNA::Extended
         EXPECT_NE(text.find("PointA"), std::string::npos);
         EXPECT_NE(text.find("PointB"), std::string::npos);
         EXPECT_NE(text.find("Radius"), std::string::npos);
+    }
+
+    TEST(BoundingCapsule2DTests, CreateFromSegment)
+    {
+        const LineSegment2D segment(Vector2(0, 0), Vector2(10, 0));
+        constexpr float radius = 3.0f;
+
+        const BoundingCapsule2D capsule = BoundingCapsule2D::CreateFromSegment(segment, radius);
+
+        EXPECT_EQ(capsule.PointA, segment.Start);
+        EXPECT_EQ(capsule.PointB, segment.End);
+        EXPECT_FLOAT_EQ(capsule.Radius, radius);
+    }
+
+    TEST(BoundingCapsule2DTests, CreateMergedNonOverlapping)
+    {
+        const BoundingCapsule2D capsule1(Vector2(0, 0), Vector2(5, 0), 2.0f);
+        const BoundingCapsule2D capsule2(Vector2(20, 0), Vector2(25, 0), 2.0f);
+
+        const BoundingCapsule2D merged = BoundingCapsule2D::CreateMerged(capsule1, capsule2);
+
+        EXPECT_EQ(merged.Contains(capsule1), Microsoft::Xna::Framework::ContainmentType::Contains);
+        EXPECT_EQ(merged.Contains(capsule2), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(BoundingCapsule2DTests, CreateMergedOneContainsOther)
+    {
+        const BoundingCapsule2D capsule1(Vector2(0, 0), Vector2(20, 0), 5.0f);
+        const BoundingCapsule2D capsule2(Vector2(8, 0), Vector2(12, 0), 2.0f);
+
+        const BoundingCapsule2D merged = BoundingCapsule2D::CreateMerged(capsule1, capsule2);
+
+        EXPECT_NEAR(merged.PointA.X, capsule1.PointA.X, 1e-6f);
+        EXPECT_NEAR(merged.PointA.Y, capsule1.PointA.Y, 1e-6f);
+        EXPECT_NEAR(merged.PointB.X, capsule1.PointB.X, 1e-6f);
+        EXPECT_NEAR(merged.PointB.Y, capsule1.PointB.Y, 1e-6f);
+    }
+
+    TEST(BoundingCapsule2DTests, CreateMergedPartiallyOverlapping)
+    {
+        const BoundingCapsule2D capsule1(Vector2(0, 0), Vector2(10, 0), 3.0f);
+        const BoundingCapsule2D capsule2(Vector2(8, 0), Vector2(18, 0), 3.0f);
+
+        const BoundingCapsule2D merged = BoundingCapsule2D::CreateMerged(capsule1, capsule2);
+
+        EXPECT_EQ(merged.Contains(capsule1), Microsoft::Xna::Framework::ContainmentType::Contains);
+        EXPECT_EQ(merged.Contains(capsule2), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(BoundingCapsule2DTests, ContainsPointInside)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 5.0f);
+        const Vector2 point(5, 2);
+
+        EXPECT_EQ(capsule.Contains(point), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(BoundingCapsule2DTests, ContainsPointOnBoundary)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 5.0f);
+        const Vector2 point(5, 5);
+
+        EXPECT_EQ(capsule.Contains(point), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(BoundingCapsule2DTests, ContainsPointOutside)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 5.0f);
+        const Vector2 point(5, 10);
+
+        EXPECT_EQ(capsule.Contains(point), Microsoft::Xna::Framework::ContainmentType::Disjoint);
+    }
+
+    TEST(BoundingCapsule2DTests, ContainsPointAtEndCap)
+    {
+        const BoundingCapsule2D capsule(Vector2(0, 0), Vector2(10, 0), 5.0f);
+        const Vector2 point(-3, 4);
+
+        EXPECT_EQ(capsule.Contains(point), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(BoundingCapsule2DTests, TryGetCollisionWithCircleReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingCapsule2D capsule(Vector2(3.0f, -2.0f), Vector2(3.0f, 2.0f), 2.0f);
+        const BoundingCircle2D circle(Vector2::Zero, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = capsule.TryGetCollision(circle, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(1.0f, 0.0f));
+    }
+
+    TEST(BoundingCapsule2DTests, TryGetCollisionWithSeparatedCircleReturnsFalseAndNone)
+    {
+        const BoundingCapsule2D capsule(Vector2(4.0f, -2.0f), Vector2(4.0f, 2.0f), 1.0f);
+        const BoundingCircle2D circle(Vector2::Zero, 1.0f);
+
+        CollisionResult2D result;
+        const bool intersects = capsule.TryGetCollision(circle, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(result.Normal, CollisionResult2D::None.Normal);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, CollisionResult2D::None.PenetrationDepth);
+        EXPECT_EQ(result.MinimumTranslationVector, CollisionResult2D::None.MinimumTranslationVector);
     }
 }
