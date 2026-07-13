@@ -4,6 +4,10 @@
 #include "CNA/Extended/BoundingPolygon2D.hpp"
 
 #include "CNA/Extended/BoundingBox2D.hpp"
+#include "CNA/Extended/BoundingCapsule2D.hpp"
+#include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/Collision2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
 #include "System/HashCode.hpp"
 
 #include <algorithm>
@@ -148,6 +152,92 @@ namespace CNA::Extended
         EnsureCounterClockwise(hullVertices);
 
         return BoundingPolygon2D(std::move(hullVertices));
+    }
+
+    ContainmentType BoundingPolygon2D::Contains(const Vector2& point) const
+    {
+        return Collision2D::ContainsConvexPolygonPoint(point, Vertices, Normals);
+    }
+
+    ContainmentType BoundingPolygon2D::Contains(const BoundingBox2D& aabb) const
+    {
+        return Collision2D::ContainsConvexPolygonAabb(Vertices, Normals, aabb.Min, aabb.Max);
+    }
+
+    ContainmentType BoundingPolygon2D::Contains(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::ContainsConvexPolygonCircle(Vertices, Normals, circle.Center, circle.Radius);
+    }
+
+    ContainmentType BoundingPolygon2D::Contains(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::ContainsConvexPolygonObb(Vertices, Normals, obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents);
+    }
+
+    ContainmentType BoundingPolygon2D::Contains(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::ContainsConvexPolygonCapsule(Vertices, Normals, capsule.PointA, capsule.PointB, capsule.Radius);
+    }
+
+    ContainmentType BoundingPolygon2D::Contains(const BoundingPolygon2D& other) const
+    {
+        return Collision2D::ContainsConvexPolygonConvexPolygon(Vertices, Normals, other.Vertices, other.Normals);
+    }
+
+    bool BoundingPolygon2D::Intersects(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::IntersectsCircleConvexPolygon(circle.Center, circle.Radius, Vertices, Normals);
+    }
+
+    bool BoundingPolygon2D::Intersects(const BoundingBox2D& box) const
+    {
+        return Collision2D::IntersectsAabbConvexPolygon(box.getCenterProperty(), box.getHalfExtentsProperty(), Vertices, Normals);
+    }
+
+    bool BoundingPolygon2D::Intersects(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::IntersectsObbConvexPolygon(obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents, Vertices, Normals);
+    }
+
+    bool BoundingPolygon2D::Intersects(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::IntersectsCapsuleConvexPolygon(capsule.PointA, capsule.PointB, capsule.Radius, Vertices, Normals);
+    }
+
+    bool BoundingPolygon2D::Intersects(const BoundingPolygon2D& other) const
+    {
+        return Collision2D::IntersectsConvexPolygonConvexPolygon(Vertices, Normals, other.Vertices, other.Normals);
+    }
+
+    bool BoundingPolygon2D::TryGetCollision(const BoundingBox2D& box, CollisionResult2D& result) const
+    {
+        CollisionResult2D boxResult;
+        if (!Collision2D::TryGetCollisionAabbConvexPolygon(box.getCenterProperty(), box.getHalfExtentsProperty(), Vertices, Normals, boxResult))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        result = boxResult.Invert();
+        return true;
+    }
+
+    bool BoundingPolygon2D::TryGetCollision(const OrientedBoundingBox2D& obb, CollisionResult2D& result) const
+    {
+        CollisionResult2D obbResult;
+        if (!Collision2D::TryGetCollisionObbConvexPolygon(obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents, Vertices, Normals, obbResult))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        result = obbResult.Invert();
+        return true;
+    }
+
+    bool BoundingPolygon2D::TryGetCollision(const BoundingPolygon2D& other, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionConvexPolygonConvexPolygon(Vertices, Normals, other.Vertices, other.Normals, result);
     }
 
     BoundingPolygon2D BoundingPolygon2D::Transform(const Matrix& matrix) const

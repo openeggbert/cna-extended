@@ -2,12 +2,13 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/BoundingPolygon2DTest.cs,
-// covering the subset of upstream test cases that don't require Collision2D, which is deferred
-// -- see BoundingPolygon2D.hpp.
+// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/BoundingPolygon2DTest.cs.
+// The ContainsPoint and TryGetCollision regions were originally deferred pending Collision2D --
+// see BoundingPolygon2D.hpp -- and are now ported alongside the methods they cover.
 #include "CNA/Extended/BoundingPolygon2D.hpp"
 
 #include "CNA/Extended/BoundingBox2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
 
 #include <cmath>
@@ -21,6 +22,24 @@ namespace CNA::Extended
         std::vector<Vector2> Square()
         {
             return {Vector2(0, 0), Vector2(4, 0), Vector2(4, 4), Vector2(0, 4)};
+        }
+
+        BoundingPolygon2D CreateRectanglePolygon(const Vector2& min, const Vector2& max)
+        {
+            std::vector<Vector2> vertices = {
+                Vector2(min.X, min.Y),
+                Vector2(max.X, min.Y),
+                Vector2(max.X, max.Y),
+                Vector2(min.X, max.Y),
+            };
+            std::vector<Vector2> normals = {
+                -Vector2::UnitY,
+                Vector2::UnitX,
+                Vector2::UnitY,
+                -Vector2::UnitX,
+            };
+
+            return BoundingPolygon2D(std::move(vertices), std::move(normals));
         }
     }
 
@@ -262,5 +281,98 @@ namespace CNA::Extended
         EXPECT_EQ(polygon.getVertexCountProperty(), 0);
         EXPECT_EQ(polygon.getCentroidProperty(), Vector2::Zero);
         EXPECT_FLOAT_EQ(polygon.getAreaProperty(), 0.0f);
+    }
+
+    TEST(BoundingPolygon2DTests, ContainsPointInside)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(10, 10), Vector2(0, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        const Vector2 point(5, 5);
+
+        const ContainmentType result = polygon.Contains(point);
+
+        EXPECT_EQ(result, ContainmentType::Contains);
+    }
+
+    TEST(BoundingPolygon2DTests, ContainsPointOnBoundary)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(10, 10), Vector2(0, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        const Vector2 point(10, 5);
+
+        const ContainmentType result = polygon.Contains(point);
+
+        EXPECT_EQ(result, ContainmentType::Contains);
+    }
+
+    TEST(BoundingPolygon2DTests, ContainsPointOutside)
+    {
+        const std::vector<Vector2> vertices = {Vector2(0, 0), Vector2(10, 0), Vector2(10, 10), Vector2(0, 10)};
+        const BoundingPolygon2D polygon(vertices);
+        const Vector2 point(15, 5);
+
+        const ContainmentType result = polygon.Contains(point);
+
+        EXPECT_EQ(result, ContainmentType::Disjoint);
+    }
+
+    TEST(BoundingPolygon2DTests, TryGetCollisionWithBoxReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingPolygon2D polygon = CreateRectanglePolygon(Vector2(1.0f, -2.0f), Vector2(5.0f, 2.0f));
+        const BoundingBox2D box(Vector2(-2.0f, -2.0f), Vector2(2.0f, 2.0f));
+
+        CollisionResult2D result;
+        const bool intersects = polygon.TryGetCollision(box, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(1.0f, 0.0f));
+    }
+
+    TEST(BoundingPolygon2DTests, TryGetCollisionWithOrientedBoxReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingPolygon2D polygon = CreateRectanglePolygon(Vector2(1.0f, -2.0f), Vector2(5.0f, 2.0f));
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2.0f, 2.0f));
+
+        CollisionResult2D result;
+        const bool intersects = polygon.TryGetCollision(obb, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(1.0f, 0.0f));
+    }
+
+    TEST(BoundingPolygon2DTests, TryGetCollisionWithPolygonReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingPolygon2D polygon = CreateRectanglePolygon(Vector2(-2.0f, -2.0f), Vector2(2.0f, 2.0f));
+        const BoundingPolygon2D other = CreateRectanglePolygon(Vector2(1.0f, -2.0f), Vector2(5.0f, 2.0f));
+
+        CollisionResult2D result;
+        const bool intersects = polygon.TryGetCollision(other, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, -Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(-1.0f, 0.0f));
+    }
+
+    TEST(BoundingPolygon2DTests, TryGetCollisionWithSeparatedPolygonReturnsFalseAndNone)
+    {
+        const BoundingPolygon2D polygon = CreateRectanglePolygon(Vector2(-1.0f, -1.0f), Vector2(1.0f, 1.0f));
+        const BoundingPolygon2D other = CreateRectanglePolygon(Vector2(4.0f, -1.0f), Vector2(6.0f, 1.0f));
+
+        CollisionResult2D result;
+        const bool intersects = polygon.TryGetCollision(other, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(result.Normal, CollisionResult2D::None.Normal);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, CollisionResult2D::None.PenetrationDepth);
+        EXPECT_EQ(result.MinimumTranslationVector, CollisionResult2D::None.MinimumTranslationVector);
     }
 }
