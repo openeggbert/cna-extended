@@ -11,6 +11,11 @@ namespace CNA::Extended
 {
     const BoundingRectangle BoundingRectangle::Empty = BoundingRectangle();
 
+    BoundingRectangle::BoundingRectangle(const Vector2& center, const SizeF& halfExtents)
+        : Center(center), HalfExtents(halfExtents)
+    {
+    }
+
     void BoundingRectangle::CreateFrom(const Vector2& minimum, const Vector2& maximum, BoundingRectangle& result)
     {
         result.Center = Vector2((maximum.X + minimum.X) * 0.5f, (maximum.Y + minimum.Y) * 0.5f);
@@ -140,5 +145,21 @@ namespace CNA::Extended
     {
         const Vector2 minimum = Center - HalfExtents;
         return RectangleF(minimum.X, minimum.Y, HalfExtents.X * 2, HalfExtents.Y * 2);
+    }
+
+    BoundingRectangle::BoundingRectangle(const Rectangle& rectangle)
+    {
+        const SizeF radii(static_cast<float>(rectangle.Width) * 0.5f, static_cast<float>(rectangle.Height) * 0.5f);
+        const Vector2 centre(static_cast<float>(rectangle.X) + radii.Width, static_cast<float>(rectangle.Y) + radii.Height);
+        Center = centre;
+        HalfExtents = radii;
+    }
+
+    BoundingRectangle::BoundingRectangle(const RectangleF& rectangle)
+    {
+        const SizeF radii(rectangle.Width * 0.5f, rectangle.Height * 0.5f);
+        const Vector2 centre(rectangle.X + radii.Width, rectangle.Y + radii.Height);
+        Center = centre;
+        HalfExtents = radii;
     }
 }

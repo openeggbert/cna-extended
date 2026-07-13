@@ -2,10 +2,10 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Ported from MonoGame.Extended's Math/RectangleF.cs. Several members are deferred because they
-// need types not yet ported in this phase:
-//   - `Size` property, and the `RectangleF(Vector2 position, SizeF size)` constructor: need
-//     `SizeF` (Phase 1, "Size, SizeF, Interval, Thickness").
+// Ported from MonoGame.Extended's Math/RectangleF.cs. `Size` property and the
+// `RectangleF(Vector2 position, SizeF size)` constructor were deferred pending `SizeF` (Phase 1,
+// "Size, SizeF, Interval, Thickness") -- now ported, since SizeF has landed. Remaining
+// deferrals:
 //   - The two `Transform(...)` overloads: need `Matrix3x2` (Phase 1, "Matrix3x2,
 //     MatrixExtensions, Vector2Extensions") and `PrimitivesHelper.TransformRectangle`
 //     (Phase 1, "PrimitivesHelper, ShapeExtensions").
@@ -14,11 +14,12 @@
 //   - `SquaredDistanceTo`/`DistanceTo`/`ClosestPointTo`: need
 //     `PrimitivesHelper.SquaredDistanceToPointFromRectangle`/`ClosestPointToPointFromRectangle`.
 // Everything else (fields, Left/Right/Top/Bottom/IsEmpty/Position/Center/TopLeft/TopRight/
-// BottomLeft/BottomRight, the (x,y,w,h) constructor, CreateFrom(min,max), Union, Intersect,
-// Intersects, Normalize, Contains, Inflate, Offset, Equals/GetHashCode/ToString, and the
-// Rectangle<->RectangleF conversions) is fully ported.
+// BottomLeft/BottomRight/Size, the (x,y,w,h) and (Vector2,SizeF) constructors, CreateFrom(min,max),
+// Union, Intersect, Intersects, Normalize, Contains, Inflate, Offset, Equals/GetHashCode/ToString,
+// and the Rectangle<->RectangleF conversions) is fully ported.
 #pragma once
 
+#include "CNA/Extended/SizeF.hpp"
 #include "Microsoft/Xna/Framework/Rectangle.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
@@ -77,6 +78,15 @@ namespace CNA::Extended
         /** @brief Gets this RectangleF (an IRectangularF-style self-reference, matching upstream's own BoundingRectangle property). */
         [[nodiscard]] RectangleF getBoundingRectangleProperty() const { return *this; }
 
+        /** @brief Gets the SizeF representing the extents of this RectangleF. */
+        [[nodiscard]] SizeF getSizeProperty() const { return SizeF(Width, Height); }
+        /** @brief Sets the extents (Width/Height) of this RectangleF. */
+        void setSizeProperty(const SizeF& value)
+        {
+            Width = value.Width;
+            Height = value.Height;
+        }
+
         /** @brief Gets the Vector2 representing the center of this RectangleF. */
         [[nodiscard]] Vector2 getCenterProperty() const { return Vector2(X + Width * 0.5f, Y + Height * 0.5f); }
 
@@ -99,6 +109,9 @@ namespace CNA::Extended
          * and height.
          */
         RectangleF(float x, float y, float width, float height);
+
+        /** @brief Initializes a new RectangleF from the specified top-left position and extents. */
+        RectangleF(const Vector2& position, const SizeF& size);
 
         /**
          * @brief Computes the RectangleF from a minimum Vector2 and maximum Vector2.

@@ -289,7 +289,25 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       `CircleFTests.cs` has exactly 1 active upstream test (rest commented out) — ported
       that one plus ~15 fresh; `Segment2DTests.cs` is entirely commented out upstream (0
       portable) — wrote 11 fresh tests, including the bug-regression test above.
-- [ ] `Size`, `SizeF`, `Interval`, `Thickness`
+- [x] `Size`, `SizeF`, `Interval`, `Thickness` (2026-07-13, via forked sub-agent) — ~1450
+      lines across 16 files, fully ported with **no deferrals** — nothing in these 4 files
+      depends on unported types. `Interval<T>` is header-only (a template); upstream's
+      `where T : IComparable<T>` constraint has no C++ analogue for primitives, translated
+      to ordinary `<`/`==` comparisons (the natural C++ equivalent). `Thickness` uses
+      getX/setXProperty() accessors (upstream `{get;set;}`) while `Size`/`SizeF` use raw
+      public fields (matching upstream's own field-vs-property split per type).
+      **All three SizeF-blocked follow-ups verified unblocked and landed in the same
+      pass**: `ISizable.hpp` (forward-declare → real include + round-trip test),
+      `RectangleF` (added `Size` property + `RectangleF(Vector2, SizeF)` ctor),
+      `BoundingRectangle` (added `(Vector2, SizeF)` ctor + both implicit conversions from
+      `Rectangle`/`RectangleF`). `RectangleF`'s and `BoundingRectangle`'s *other*
+      deferrals (`Transform`, `CreateFrom(points)`, `SquaredDistanceTo`) remain blocked on
+      `Matrix3x2`/`PrimitivesHelper` — unrelated to this task, not touched.
+      No upstream bugs found this time (unlike the previous task's `Segment2` case).
+      Test coverage: `Math/IntervalTests.cs` fully active, ported 1:1 (34 tests, no
+      `Collision2D` dependency this time); `Primitives/Size2Tests.cs` entirely commented
+      out upstream (0 portable, wrote fresh); no upstream `ThicknessTests.cs` exists at
+      all (wrote fresh).
 - [ ] `Matrix3x2`, `MatrixExtensions`, `Vector2Extensions`
 - [ ] `FastRandom`, `RandomExtensions`
 - [ ] `PrimitivesHelper`, `ShapeExtensions`
@@ -492,6 +510,14 @@ implementations — confirm and reuse rather than re-rolling).
   porting; if another turns up, apply the same rule: preserve it, document it prominently
   in the header, cover it with a regression test that names the discrepancy explicitly —
   never silently "fix" it while porting.
+- 2026-07-13 — `Size`/`SizeF`/`Interval`/`Thickness` ported via a forked sub-agent, with
+  an explicit heads-up in the prompt about the three specific `SizeF`-blocked follow-up
+  spots (`ISizable`, `RectangleF`, `BoundingRectangle`) to check once `SizeF` landed. All
+  three verified genuinely unblocked and landed in the same pass — see the Phase 1
+  checklist entry above for exactly what was added to each. User also asked mid-task to
+  push work so far to GitHub, and to create + push a new `develop` branch; both done
+  (`master` and `develop` both exist on `origin` as of this session; ongoing work commits
+  to `develop` going forward per the user's instruction).
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

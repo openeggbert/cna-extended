@@ -16,6 +16,11 @@ namespace CNA::Extended
     {
     }
 
+    RectangleF::RectangleF(const Vector2& position, const SizeF& size)
+        : X(position.X), Y(position.Y), Width(size.Width), Height(size.Height)
+    {
+    }
+
     void RectangleF::CreateFrom(const Vector2& minimum, const Vector2& maximum, RectangleF& result)
     {
         result.X = minimum.X;

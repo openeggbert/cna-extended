@@ -6,6 +6,64 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (6) — Size/SizeF/Interval/Thickness ported (Phase 1 task 10); pushing to GitHub, new `develop` branch
+
+Continued straight through, no check-in pause.
+
+**Repo workflow change mid-session, from the user directly**: asked to push the work so
+far to GitHub (`git push origin master` — done, `master` now exists on `origin`), then
+asked to create and push a new `develop` branch (`git checkout -b develop && git push -u
+origin develop` — done, tracking set up). **Going forward: commit AND push after every
+task, to `develop`, not just commit.** This supersedes the earlier "one task = one local
+commit" note — now it's "one task = one commit + push to origin/develop."
+
+**Ported (~1450 lines across 16 files)**: `Size`, `SizeF`, `Interval<T>` (header-only
+template), `Thickness` — **no deferrals**, nothing in these 4 files depends on anything
+still unported. `Interval<T>`'s upstream `where T : IComparable<T>` constraint has no C++
+analogue for primitives; translated to plain `<`/`==` comparisons.
+
+**All three `SizeF`-blocked follow-ups (flagged explicitly in the fork prompt from the
+previous session's NEXT.md note) verified genuinely unblocked and landed**:
+1. `ISizable.hpp` — forward-declare → real `#include`, round-trip test added.
+2. `RectangleF` — `Size` property + `RectangleF(Vector2, SizeF)` constructor added.
+3. `BoundingRectangle` — `(Vector2, SizeF)` constructor + both implicit conversions from
+   `Rectangle`/`RectangleF` added.
+`RectangleF`'s/`BoundingRectangle`'s *other* deferrals (`Transform`, `CreateFrom(points)`,
+`SquaredDistanceTo`) are still blocked on `Matrix3x2`/`PrimitivesHelper` — untouched,
+unrelated to this task.
+
+No upstream bugs found this time (unlike the previous task's confirmed `Segment2` bug).
+Two of the fork's own draft bugs caught and fixed before the build even ran: duplicate/
+ambiguous constructor overloads in both `Interval<T>` and `Thickness` (C#'s separate
+constructor + implicit-conversion-operator pair collapses into a single C++ converting
+constructor — declaring both separately is an ambiguous-overload compile error, not just
+redundant) and a `Rectangle::Width`/`Height` field-vs-property mixup (only Left/Right/Top/
+Bottom are properties on CNA's `Rectangle`; Width/Height are plain fields).
+
+**Test coverage**: `Math/IntervalTests.cs` fully active, ported 1:1 (34 tests — first time
+in several tasks a Math-folder test file had *no* `Collision2D` dependency at all).
+`Primitives/Size2Tests.cs` entirely commented out upstream; no upstream `ThicknessTests.cs`
+exists — wrote fresh tests for both.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 343/343** (was 274
+before this task).
+
+**State / next step:** Phase 1 is 10 of ~20 tasks in — halfway through the phase's task
+list. Next per `plan.md` §5 Phase 1: `Matrix3x2`, `MatrixExtensions`, `Vector2Extensions`.
+**This is a big one and matters a lot**: `Matrix3x2` alone is ~1037 lines of C# and is the
+single most-referenced blocker so far this phase — `Transform2` (deferred since task 2),
+`OrientedRectangle` (deferred whole), and several remaining `RectangleF`/
+`BoundingRectangle`/`CircleF`/`Segment2` members are all waiting on it. **After this task
+lands, do a deliberate sweep** (grep the tree for "Matrix3x2" in header comments) and
+land every genuinely-unblocked follow-up in the same pass, the same way the last two
+tasks did for `SizeF`. This could reasonably be its own follow-up task if the sweep turns
+up a lot — use judgment on whether to fold it into the same commit or split it.
+**Commit AND push to `develop`** after this task (see the workflow change above).
+Continue without pausing for a status update, per the standing correction, unless a
+genuine blocker requiring the user's judgment comes up.
+
+---
+
 ## 2026-07-13 (5) — CircleF, EllipseF, Segment2 ported (Phase 1 task 9); found a real upstream bug
 
 Continued straight through, no check-in pause.

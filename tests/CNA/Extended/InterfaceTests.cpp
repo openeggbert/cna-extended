@@ -6,12 +6,9 @@
 // plain property contracts with no behavior of their own). These tests only confirm the
 // interfaces are implementable and that the getX/setX Property() pattern round-trips.
 //
-// ISizable is declared in this phase but still not exercised here: it returns SizeF, ported
-// later in Phase 1 (task 19, "Size, SizeF, Interval, Thickness"). Its round-trip test is
-// appended to this file once that type exists.
-//
-// IRectangularF WAS deferred for the same reason (needed RectangleF) but is no longer blocked:
-// RectangleF landed in Phase 1 task 17 ("RectangleF family"), so its round-trip test below.
+// ISizable and IRectangularF were both deferred pending their respective types (SizeF,
+// RectangleF); both have since landed (Phase 1 tasks 17 and 19), so both get real round-trip
+// tests below.
 #include "CNA/Extended/IColorable.hpp"
 #include "CNA/Extended/IEquatableByRef.hpp"
 #include "CNA/Extended/IMovable.hpp"
@@ -85,6 +82,16 @@ namespace CNA::Extended
             }
         };
 
+        class SizableThing final : public ISizable
+        {
+        public:
+            [[nodiscard]] SizeF getSizeProperty() const override { return size_; }
+            void setSizeProperty(const SizeF& value) override { size_ = value; }
+
+        private:
+            SizeF size_{};
+        };
+
         struct Comparable final : IEquatableByRef<Comparable>
         {
             int value = 0;
@@ -139,6 +146,14 @@ namespace CNA::Extended
         EXPECT_FLOAT_EQ(rect.Y, 2.0f);
         EXPECT_FLOAT_EQ(rect.Width, 3.0f);
         EXPECT_FLOAT_EQ(rect.Height, 4.0f);
+    }
+
+    TEST(MarkerInterfaces, ISizableRoundTrips)
+    {
+        SizableThing thing;
+        thing.setSizeProperty(SizeF(4.0f, 5.0f));
+        EXPECT_FLOAT_EQ(thing.getSizeProperty().Width, 4.0f);
+        EXPECT_FLOAT_EQ(thing.getSizeProperty().Height, 5.0f);
     }
 
     TEST(MarkerInterfaces, IEquatableByRefComparesByReference)
