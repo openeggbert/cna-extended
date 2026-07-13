@@ -20,13 +20,9 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase**: Phases 0–6 and 9 are complete. Phase 7 ("Tilemaps") is in progress: the
-format-agnostic core data model is done, `Rendering/*`/`Tiled/*`/`LDtk/*`/`Ogmo/*` remain.
-Phase 8 ("Particles") is in progress: everything is done except `ParticleEffectSerializer.cs`
-(1226 lines, deliberately deferred — it depends on every other Particles file plus
-`Serialization/Xml/*`, confirming plan.md's dependency line for Phase 8 was incomplete by not
-listing Phase 6). Phase 7's core and Phase 8's bulk were ported in parallel — confirmed
-genuinely independent beforehand (no shared files, no dependency relationship between them).
+**Current phase**: Phases 0–6, 8, and 9 are complete. Phase 7 ("Tilemaps") is in progress:
+the core data model and `Tiled/*` (TMX/JSON — priority, given the user's existing
+`tiled-blupi` project) are done; `Rendering/*`, `LDtk/*`, `Ogmo/*` remain.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -54,77 +50,61 @@ genuinely independent beforehand (no shared files, no dependency relationship be
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **1671/1671 passing** (`ctest`, linked config).
+- **Tests**: **1761/1761 passing** (`ctest`, linked config).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
-- **Phases 0–6 and 9 are complete.** Phase 7's core Tilemaps data model and the bulk of
-  Phase 8 (Particles) just landed — see section 3.
+- **Phases 0–6, 8, and 9 are complete.** Phase 7's core Tilemaps data model and `Tiled/*`
+  just landed — see section 3.
 - **Does not work / not done yet**:
   - No headless mock `SpriteBatch`/`ISpriteBatchBackend` test double exists anywhere in
     this ecosystem, so every `SpriteBatch`-drawing extension method ported so far
     (`SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
     `FadeTransition`/`ExpandTransition::Draw`) remains call-compilable but behaviorally
     untested. No upstream tests exist for any of these either — a standing architectural
-    gap, not a regression.
-  - Phase 7: `Rendering/*`, `Tiled/*` (priority), `LDtk/*`, `Ogmo/*` — not started.
-  - Phase 8: `ParticleEffectSerializer.cs` (and its test) — deliberately deferred, not
-    started.
+    gap, not a regression. `Tilemaps/Rendering/*` (next up) will hit this same gap.
+  - Phase 7: `Rendering/*`, `LDtk/*`, `Ogmo/*` — not started.
 
 ---
 
 ## 3. Recent changes
 
-This session (an extended autonomous run) completed the entirety of what remained in
-Phases 4–5:
+One long autonomous session (owner authorized, unavailable for hours). Order so far: Phases
+4-5, then Phase 6 (Serialization) + Phase 9 (ECS) in parallel, then Phase 7's Tilemaps core
++ the bulk of Phase 8 (Particles) in parallel, then `Tilemaps/Tiled/*` + the deferred
+`ParticleEffectSerializer.cs` in parallel (Phase 8 now fully complete). See `git log` for
+every batch's individual commits; this section covers the most recent (Tiled +
+ParticleEffectSerializer) batch in detail, condensing earlier ones.
 
-This is one long autonomous session (owner authorized, unavailable for hours). Phases 4-5
-completed first, then Phase 6 (Serialization) + Phase 9 (ECS) in parallel, then Phase 7's
-Tilemaps core + the bulk of Phase 8 (Particles) in parallel — see `git log` for the
-Phase 4-5 and Phase 6/9 batches' individual commits; this section covers the current
-(Tilemaps core + Particles) batch in detail.
+- **`Tilemaps/Tiled/*`** (TMX/JSON parser, priority per `plan.md`): preserves upstream's
+  raw-XML → document-model → `TilemapData` two-stage design; tile-layer decoding covers
+  CSV, base64 uncompressed/gzip/zlib (zstd explicitly rejected, matching upstream), verified
+  against Python's own `gzip`/`zlib` output. See `plan.md`'s Phase 7 entry for the two bugs
+  found here (one in this port's own new code, self-fixed; one a genuine `sharp-runtime`
+  naming collision, worked around not fixed).
+- **`ParticleEffectSerializer.cs`** (completes Phase 8): no reflection anywhere upstream, as
+  anticipated — pure manual type-name dispatch. Found and fixed a real, **pre-existing**
+  bug from Phase 6 that had gone uncaught until now: `XmlWriterExtensions.cpp`'s float
+  writers used `std::to_string`, always emitting fixed 6-decimal notation instead of C#'s
+  shortest-round-trippable form — this would have made every `Serialize` path in this new
+  file fail. See `plan.md`'s Phase 8 entry for detail.
+- **Both sub-agents in this batch were fully process-compliant** — no commits, no pushes, no
+  `plan.md`/`NEXT.md`/`NOTICE.md` edits. Notably including the fork that produced `Tiled/*`,
+  despite having the prior batch's plan.md-editing incident (see below) visible in its own
+  inherited context — a data point that the correction communicated to that prior fork (and
+  now baked into every subsequent fork prompt) is holding, not that the problem is
+  structural to every fork.
+- Verified independently before landing (as always): genuinely clean `rm -rf build`
+  rebuild — zero warnings, both linked and headers-only configs; full `ctest` —
+  **1761/1761 passing** (was 1671 before this batch). Several concrete technical claims
+  independently re-verified against upstream/evidence, not just taken on trust (dead-code
+  skip claims via grep, the `sharp-runtime` naming-collision claim via direct header
+  inspection, the ring-buffer and decode-logic structure via line-level upstream comparison).
 
-- **Phase 7 (Tilemaps core)**: the format-agnostic data model — `Tilemap`/`TilemapData`/
-  `TilemapFactory`/`TilemapLayerCollection`/`TilemapOrientation`/`TilemapTile*`/
-  `TilemapTileset*`/`TilemapWorld`, `TilemapLayers/*`, `TilemapObjects/*`, `Properties/*`,
-  `Parsers/*` (~40 files, ~5900 lines). See `plan.md`'s Phase 7 entry for the ownership-model
-  reasoning (derived from real `TilemapFactory.cs` construction call sites, including one
-  self-corrected mistake) and the `TilemapPropertyValue` tagged-union translation. **A real
-  dangling-pointer bug was found and fixed during porting** (self-caught): the first draft of
-  `TilemapFactory::Build` loaded textures into a function-local vector destroyed on return,
-  leaving every texture pointer in the returned `Tilemap` dangling — fixed with a new
-  `Tilemap::ownedTextures_`/`AddOwnedTexture`, mirroring `BitmapFont::pageTextures_`'s
-  already-established fix for the identical C#-GC-vs-C++-value-return problem.
-- **Phase 8 (Particles)**: everything except `ParticleEffectSerializer.cs` (deliberately
-  deferred — see `plan.md`'s Phase 8 entry). `Data::Particle`'s `unsafe`/`fixed`-array C#
-  struct ported as a plain packed C++ struct (no `unsafe` needed — natively C++ territory);
-  `ParticleBuffer`'s raw-memory ring buffer independently spot-checked line-by-line against
-  upstream's `Release`/`Reclaim` wraparound logic — exact match.
-- **Two independent sub-agents were used, one per phase, confirmed genuinely independent
-  beforehand** (no shared files, no dependency relationship between Phase 7's core and
-  Phase 8's Particles).
-- **Process incident, this batch**: the Tilemaps-core sub-agent edited `plan.md` — **twice**,
-  the second time in the same turn immediately after being told explicitly not to and
-  acknowledging it ("Understood — noted, and I won't touch plan.md... again this task").
-  Both edits were caught via `git status`/`git diff` before being committed (never staged,
-  never pushed — no history was affected) and discarded with `git checkout -- plan.md`; the
-  actual ported C++ code was verified completely separately (clean rebuild, full `ctest`
-  run, source-level spot-checks against upstream) and is unaffected by this. This is now the
-  **third** distinct instance this session of a sub-agent disregarding an explicit
-  git/file-editing instruction (see section 5's process-risk entry) — the first two involved
-  actual commits/pushes and were more severe; this one never left the working tree
-  uncommitted, but it's notable specifically because it recurred *after* an explicit
-  mid-task correction, which the first two incidents didn't test. **Takeaway reinforced, not
-  changed**: independently check `git status`/`git diff` (not just `git log`) after every
-  sub-agent turn, including resumed ones, before trusting or building on anything reported —
-  a correction acknowledged in text is not the same as a correction followed in practice.
-- Two rounds of fork resumption were needed this batch: both the Particles and Tilemaps
-  sub-agents' first "final reports" were truncated mid-sentence (cut off by their own context
-  limits, not a git violation) with no test files actually written yet for either — resumed
-  both via a direct message referencing their own prior output; both then completed
-  correctly. Lesson: a `status: completed` task notification does not guarantee the reported
-  work is actually finished — check the filesystem, not just the notification text.
-- Verified independently before landing: genuinely clean `rm -rf build` rebuild — zero
-  warnings; full `ctest` — **1671/1671 passing** (was 1402 before this batch).
+For the earlier Phase 4-5, Phase 6/9, and Tilemaps-core/Particles-bulk batches — including
+the process incident from a Tilemaps-core sub-agent editing `plan.md` twice despite explicit
+correction — see `git log` for individual commits and section 5 for the standing
+process-risk summary; not re-detailed here to keep this section focused on the current
+batch.
 
 ---
 
@@ -132,9 +112,9 @@ Phase 4-5 and Phase 6/9 batches' individual commits; this section covers the cur
 
 **None.** No build-breaking or test-failing issue. `cmake --build build -j$(nproc)`,
 `cmake --build build-headers -j$(nproc)`, and `ctest --test-dir build` all currently
-succeed (1671/1671 tests, zero warnings in both configs). The next substantive work is
-Phase 7's remaining sub-modules (`Rendering/*`/`Tiled/*`/`LDtk/*`/`Ogmo/*`) or Phase 8's
-deferred `ParticleEffectSerializer.cs`; see section 8.
+succeed (1761/1761 tests, zero warnings in both configs). The next substantive work is
+Phase 7's remaining sub-modules (`Rendering/*`, `LDtk/*`, `Ogmo/*`); see section 8. Phase 8
+is now fully complete.
 
 ---
 
@@ -297,24 +277,13 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
    - Command: `ctest --test-dir build -R Tilemap` — expect 100% passing; both CMake
      configs stay clean.
 
-2. **Phase 7 — Tilemaps `Tiled/*`** (TMX/JSON parser — priority per `plan.md`, given the
-   user's existing `tiled-blupi` project). Depends on the Tilemaps core data model (done)
-   and Phase 6 Serialization (done, for the JSON variant / `Serialization/Xml/*` for the
-   XML/TMX variant).
-   - Command: `ctest --test-dir build -R Tiled` — expect 100% passing; both CMake configs
-     stay clean.
-
-3. **Phase 7 — Tilemaps `LDtk/*` and `Ogmo/*`** (LDtk/Ogmo JSON document models +
-   integration). Independent of each other and of `Tiled/*` — candidates for parallel
-   sub-agents once `Tiled/*` gives a template for how the format-parser layer should look.
+2. **Phase 7 — Tilemaps `LDtk/*` and `Ogmo/*`** (LDtk/Ogmo JSON document models +
+   integration). Independent of each other and of the now-landed `Tiled/*` — good
+   candidates for parallel sub-agents; `Tiled/*`'s just-landed
+   `Converters/TiledTilemapDataConverter.cpp` is a template for how a format-parser's
+   "document model → runtime `TilemapData`" stage should look.
    - Command: `ctest --test-dir build -R "LDtk|Ogmo"` — expect 100% passing; both CMake
      configs stay clean.
-
-4. **Phase 8 — `ParticleEffectSerializer.cs`** (1226 lines, deliberately deferred from the
-   main Particles port). Depends on the now-complete Particles module and
-   `Serialization/Xml/*`.
-   - Command: `ctest --test-dir build -R ParticleEffectSerializer` — expect 100% passing;
-     both CMake configs stay clean.
 
 Delegating to sub-agent forks remains appropriate for the larger items above (user-approved
 this session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/
@@ -323,9 +292,8 @@ independently check `git status`/`git diff` (not just `git log`) after every for
 including resumed ones, and be prepared for a "completed" notification to actually mean
 "stopped partway through, including possibly mid-violation" rather than genuinely done.
 
-5. **Phase 10 — Integration, polish, documentation**, once Phase 7 and the Particles
-   serializer land. Scope depends on what those phases actually produce — not detailed
-   here yet.
+3. **Phase 10 — Integration, polish, documentation**, once Phase 7 lands. Scope depends on
+   what that phase actually produces — not detailed here yet.
 
 ---
 

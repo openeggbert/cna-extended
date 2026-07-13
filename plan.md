@@ -1,10 +1,9 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6 and 9 complete (2026-07-13).
-Phase 7 ("Tilemaps") in progress: core data model done, Rendering/Tiled/LDtk/Ogmo
-outstanding. Phase 8 ("Particles") in progress: everything done except
-`ParticleEffectSerializer.cs`, deliberately deferred. Fidelity requirement: port 1:1
-wherever C#/C++ differences allow — no simplification. See `NEXT.md`
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6, 8, and 9 complete
+(2026-07-13). Phase 7 ("Tilemaps") in progress: core data model + `Tiled/*` done,
+`Rendering/*`/`LDtk/*`/`Ogmo/*` outstanding. Fidelity requirement: port 1:1 wherever
+C#/C++ differences allow — no simplification. See `NEXT.md`
 for current state.**
 
 ## 1. What this project is
@@ -1074,15 +1073,41 @@ all now complete.
 - [ ] `Rendering/*` (`TilemapRenderer`, `TilemapSpriteBatchRenderer`, `TilemapWorldRenderer`,
       `TilemapWorldSpriteBatchRenderer`, `RenderMode`, `TilemapRendererShared`) — depends on
       the now-complete Core above and Phase 5's `SpriteBatch`; not yet started.
-- [ ] `Tiled/*` (TMX/JSON parser — `TiledTmxParser` and friends) — priority given the
-      user's existing `tiled-blupi` project
+- [x] `Tiled/*` (TMX/JSON parser — `TiledTmxParser` and friends) — **COMPLETE (2026-07-13)**,
+      priority given the user's existing `tiled-blupi` project. Preserves upstream's
+      two-stage design (raw XML → `TiledMapXml` document model → `TilemapData`), since
+      `System.Xml.Serialization.XmlSerializer` has no C++ equivalent — hand-written DOM walk
+      via `System::Xml`'s `XmlDocument`/`XmlElement` instead. Tile-layer data decoding
+      (CSV, base64 uncompressed/gzip/zlib) uses `sharp-runtime`'s `Convert::FromBase64String`
+      + `GZipStream`/`DeflateStream` (zlib handled manually: strip the 2-byte header + 4-byte
+      Adler32 trailer, feed the raw deflate stream to `DeflateStream`) — zstd explicitly
+      rejected with a clear error, matching upstream. Decoded gzip/zlib fixture payloads were
+      independently verified against Python's own `gzip`/`zlib` modules before writing test
+      assertions. `TiledDataDecoder.cs`/`TiledPropertyConverter.cs` explicitly **not
+      ported** — confirmed via grep to have zero call sites anywhere upstream (source or
+      tests); `TiledTilemapDataConverter.cs` has its own independent, actually-used
+      equivalent logic. **Real bug found and fixed in this port's own new code** (not
+      `sharp-runtime`): an `XmlNode::getChildNodesProperty()` non-owning cached pointer was
+      initially double-wrapped in a second `unique_ptr` by this port's own child-element
+      helpers, causing a double-free segfault on any `<map>` with element children — fixed
+      by using raw observer pointers. **Real `sharp-runtime` bug found and worked around,
+      not fixed** (sibling-repo rule): `System/Convert.hpp`'s `using SharpRuntime::Single;`
+      collides with `System/Single.hpp`'s `class Single` when both headers land in one
+      translation unit — worked around locally with `std::from_chars`-based strict parsing
+      helpers instead of using `System::Single` directly in the converter. 33 fresh tests
+      (6 `TiledColorParser` + 27 `TiledTmxParser`; no upstream unit tests existed to port
+      1:1 for the color parser, and the upstream `TiledTmxParserTests.cs` was re-derived
+      against fixtures rather than copied verbatim — check `NEXT.md`/the commit for detail
+      if exact upstream-test parity here ever matters).
+      **Process note**: this fork edited neither `plan.md` nor any other doc file — fully
+      compliant, unlike the fork that produced the Core item above.
 - [ ] `LDtk/*` (LDtk JSON document model + integration)
 - [ ] `Ogmo/*` (Ogmo Editor JSON document model + integration)
 - [ ] Explicitly **skip**: `Tilemaps/Content/*Reader` (xnb-based, see §2 exclusions)
-- [ ] Port the remaining `tests/MonoGame.Extended.Tests/Tilemaps/**` files (Rendering/Tiled/
-      LDtk/Ogmo test coverage — the 8 core-data-model test files are already done, above)
+- [ ] Port the remaining `tests/MonoGame.Extended.Tests/Tilemaps/**` files (Rendering/LDtk/
+      Ogmo test coverage — the 8 core-data-model + `Tiled/*` test files are already done)
 
-### Phase 8 — Particles
+### Phase 8 — Particles — **COMPLETE (2026-07-13)**
 
 Depends on Phases 1 and 5 (rendering) — both complete. Ported in parallel with Phase 7's
 Tilemaps core (confirmed genuinely independent: no shared files, no dependency relationship).
@@ -1110,22 +1135,44 @@ Tilemaps core (confirmed genuinely independent: no shared files, no dependency r
       (every modifier's update runs concurrently against one shared mutable iterator, not
       synchronized); `Rectangle{Loop}ContainerModifier` applies `(int)` truncation
       inconsistently across its four boundary checks.
-      **`ParticleEffectSerializer.cs` (1226 lines) and its test are explicitly NOT
-      ported yet** — deliberately deferred: it depends on every other file in this module
-      plus `Serialization/Xml/*` (now available), and is large/self-contained enough to
-      warrant its own follow-up pass rather than folding into this one.
+- [x] `ParticleEffectSerializer.cs` (1226 lines) — **COMPLETE (2026-07-13)**, follow-up
+      pass after the rest of the module landed. No reflection anywhere upstream (pure manual
+      type-name dispatch both directions, as anticipated). The read side is built on
+      `System::Xml::XmlDocument`/`XmlElement`/`SelectSingleNode`/`SelectNodes` (DOM), not
+      `XmlReader` (`sharp-runtime`'s `XmlReader` lacks `ReadToDescendant`/`ReadSubtree`) —
+      same pattern `BitmapFontFileReader.cpp` already established. Preserved upstream
+      quirks, not fixed: a `<Modifier>` must explicitly specify `Frequency` in XML (throws
+      otherwise, since the setter rejects ≤0 and the default read value is 0);
+      `ReadInterpolator`'s unrecognized-`Type` path is a null-deref crash in C#, translated
+      to a catchable `std::logic_error` per this session's established convention.
+      **Real, pre-existing bug found and fixed** (silently broken since Phase 6, would have
+      made every `Serialize` path in this file fail): `Serialization/Xml/
+      XmlWriterExtensions.cpp`'s `WriteAttributeFloat`/`Vector2`/`Vector3` used
+      `std::to_string(float)`, which always emits fixed 6-decimal notation ("60.000000"),
+      not C#'s shortest-round-trippable `$"{value}"` ("60") — switched to the already-
+      existing `System::Single::ToString` (`std::to_chars`-based), matching upstream exactly.
+      Also added `ParticleEmitter::ownedTexture_`/`AdoptOwnedTexture` (mirroring
+      `Tilemap`/`BitmapFont`'s established loaded-texture-ownership pattern — a texture
+      loaded specifically for this emitter's region needs an explicit C++ owner, unlike
+      C#'s GC). 57 fresh GoogleTest cases ported from upstream's 2183-line test file
+      (all 8 profiles, all 11 modifiers, all 6 interpolators, both directions). Two upstream
+      null-argument tests not portable (this port's `Deserialize` takes references, not
+      nullable pointers). `AssertParticleEffect`'s test helper compares attribute/tag sets
+      rather than exact document strings, since tinyxml2 doesn't match .NET's `XmlWriter`
+      byte-for-byte (case, whitespace, indent) — same precedent already established by
+      `XmlWriterExtensionsTests.cpp`.
 - [x] Explicitly **skip**: `Content/ContentReaders/ParticleEffectContentReader.cs`
       (xnb-based).
-- [x] Port `tests/MonoGame.Extended.Tests/Particles/**` — **COMPLETE for everything except
-      the deferred serializer** (`ParticleEffectSerializerTests.cs` deferred alongside it).
-      `RingProfileTests.cs`/`PointProfileTests.cs` ported 1:1 (the only two upstream test
-      files that weren't themselves stale/commented-out dead code — `AssertionModifier.cs`,
-      `EmitterTests.cs`, and `ParticleBufferTests.cs` were checked directly and found to be
-      substantially or entirely stale against the current upstream API, so those sections
-      were adapted or re-created fresh against the real API instead of ported verbatim).
-      Fresh GoogleTest coverage added for every other type with no upstream test (all 6
-      interpolators, all 11 modifiers, all 8 profiles, `LineSegment`, `ParticleEffect`,
-      `ModifierExecutionStrategy`, the 4 `Particle*Parameter` types) — 39 tests total.
+- [x] Port `tests/MonoGame.Extended.Tests/Particles/**` — **COMPLETE**.
+      `RingProfileTests.cs`/`PointProfileTests.cs`/`ParticleEffectSerializerTests.cs` ported
+      1:1 (the only upstream test files that weren't themselves stale/commented-out dead
+      code — `AssertionModifier.cs`, `EmitterTests.cs`, and `ParticleBufferTests.cs` were
+      checked directly and found to be substantially or entirely stale against the current
+      upstream API, so those sections were adapted or re-created fresh against the real API
+      instead of ported verbatim). Fresh GoogleTest coverage added for every other type with
+      no upstream test (all 6 interpolators, all 11 modifiers, all 8 profiles, `LineSegment`,
+      `ParticleEffect`, `ModifierExecutionStrategy`, the 4 `Particle*Parameter` types) — 96
+      tests total (39 + 57).
 
 ### Phase 9 — ECS — **COMPLETE (2026-07-13)**
 
