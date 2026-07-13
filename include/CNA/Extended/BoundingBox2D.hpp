@@ -4,15 +4,29 @@
 //
 // Ported from MonoGame.Extended's BoundingBox2D.cs. Upstream's Contains(...)/Intersects(...)/
 // TryGetCollision(...) overloads all delegate to static query functions on MonoGame.Extended's
-// Collision2D type (a 3809-line file) which is scheduled for Phase 2 ("Collisions 2D") in
-// plan.md, not this phase. Those 16 overloads (6 Contains, 5 Intersects, 5 TryGetCollision,
-// covering BoundingCircle2D/BoundingCapsule2D/OrientedBoundingBox2D/BoundingPolygon2D/self) are
-// therefore NOT declared here -- they are deferred as a whole, to be added once Collision2D
-// lands, rather than declared without a definition. Everything else (fields, properties,
-// factory methods, GetCorners, Transform, Translate, Deconstruct, equality, ToString) is fully
-// ported.
+// Collision2D type -- now that Collision2D is fully ported (Phase 2), all of them are landed
+// below: 6 Contains (point, self, circle, obb, capsule, polygon), 5 Intersects (self, circle,
+// capsule, obb, polygon), 4 TryGetCollision (self, circle, obb, polygon -- upstream has no
+// TryGetCollision(BoundingCapsule2D) overload; Collision2D itself has no matching
+// TryGetCollisionAabbCapsule function, confirmed by reading Collision2D.hpp, so there is
+// genuinely nothing to wrap here -- this is not an omission). Everything else (fields,
+// properties, factory methods, GetCorners, Transform, Translate, Deconstruct, equality,
+// ToString) was already ported.
+//
+// Two asymmetric-argument-order quirks, both matching upstream exactly (not simplifications):
+//   - Intersects(BoundingCircle2D)/TryGetCollision(BoundingCircle2D) call
+//     Collision2D::IntersectsCircleAabb/TryGetCollisionCircleAabb (Collision2D has no
+//     IntersectsAabbCircle/TryGetCollisionAabbCircle) -- TryGetCollision additionally calls
+//     .Invert() on the result, since TryGetCollisionCircleAabb's MTV convention moves the
+//     circle out of the box, but this method's contract moves the box out of the circle.
+//   - Intersects(OrientedBoundingBox2D)/Intersects(BoundingPolygon2D)/their TryGetCollision
+//     counterparts pass this box's Center/HalfExtents (not Min/Max) to the matching
+//     Collision2D::*AabbObb/*AabbConvexPolygon functions, which take a center/half-extents AABB
+//     representation -- unlike every other overload here, which passes Min/Max directly.
 #pragma once
 
+#include "CNA/Extended/CollisionResult2D.hpp"
+#include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/Matrix.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
@@ -21,8 +35,14 @@
 
 namespace CNA::Extended
 {
+    using Microsoft::Xna::Framework::ContainmentType;
     using Microsoft::Xna::Framework::Matrix;
     using Microsoft::Xna::Framework::Vector2;
+
+    struct BoundingCircle2D;
+    struct OrientedBoundingBox2D;
+    struct BoundingCapsule2D;
+    struct BoundingPolygon2D;
 
     /**
      * @brief Represents an axis-aligned bounding box in 2D space, defined by minimum and maximum
@@ -137,6 +157,39 @@ namespace CNA::Extended
          * @param max Receives the maximum corner.
          */
         void Deconstruct(Vector2& min, Vector2& max) const;
+
+        /** @brief Determines whether this bounding box contains the specified point. */
+        [[nodiscard]] ContainmentType Contains(const Vector2& point) const;
+        /** @brief Determines whether this bounding box contains another bounding box. */
+        [[nodiscard]] ContainmentType Contains(const BoundingBox2D& other) const;
+        /** @brief Determines whether this bounding box contains a bounding circle. */
+        [[nodiscard]] ContainmentType Contains(const BoundingCircle2D& circle) const;
+        /** @brief Determines whether this bounding box contains an oriented bounding box. */
+        [[nodiscard]] ContainmentType Contains(const OrientedBoundingBox2D& obb) const;
+        /** @brief Determines whether this bounding box contains a bounding capsule. */
+        [[nodiscard]] ContainmentType Contains(const BoundingCapsule2D& capsule) const;
+        /** @brief Determines whether this bounding box contains a bounding polygon. */
+        [[nodiscard]] ContainmentType Contains(const BoundingPolygon2D& polygon) const;
+
+        /** @brief Determines whether this bounding box intersects another bounding box. */
+        [[nodiscard]] bool Intersects(const BoundingBox2D& other) const;
+        /** @brief Determines whether this bounding box intersects a bounding circle. */
+        [[nodiscard]] bool Intersects(const BoundingCircle2D& circle) const;
+        /** @brief Determines whether this bounding box intersects a bounding capsule. */
+        [[nodiscard]] bool Intersects(const BoundingCapsule2D& capsule) const;
+        /** @brief Determines whether this bounding box intersects an oriented bounding box. */
+        [[nodiscard]] bool Intersects(const OrientedBoundingBox2D& obb) const;
+        /** @brief Determines whether this bounding box intersects a bounding polygon. */
+        [[nodiscard]] bool Intersects(const BoundingPolygon2D& polygon) const;
+
+        /** @brief Attempts to compute collision information between this bounding box and another bounding box. */
+        [[nodiscard]] bool TryGetCollision(const BoundingBox2D& other, CollisionResult2D& result) const;
+        /** @brief Attempts to compute collision information between this bounding box and a bounding circle. */
+        [[nodiscard]] bool TryGetCollision(const BoundingCircle2D& circle, CollisionResult2D& result) const;
+        /** @brief Attempts to compute collision information between this bounding box and an oriented bounding box. */
+        [[nodiscard]] bool TryGetCollision(const OrientedBoundingBox2D& obb, CollisionResult2D& result) const;
+        /** @brief Attempts to compute collision information between this bounding box and a bounding polygon. */
+        [[nodiscard]] bool TryGetCollision(const BoundingPolygon2D& polygon, CollisionResult2D& result) const;
 
         [[nodiscard]] bool Equals(const BoundingBox2D& other) const;
         [[nodiscard]] int GetHashCode() const;

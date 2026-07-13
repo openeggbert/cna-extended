@@ -3,6 +3,12 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/BoundingBox2D.hpp"
 
+#include "CNA/Extended/BoundingCapsule2D.hpp"
+#include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
+#include "CNA/Extended/Collision2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -101,6 +107,89 @@ namespace CNA::Extended
     {
         min = Min;
         max = Max;
+    }
+
+    ContainmentType BoundingBox2D::Contains(const Vector2& point) const
+    {
+        return Collision2D::ContainsAabbPoint(point, Min, Max);
+    }
+
+    ContainmentType BoundingBox2D::Contains(const BoundingBox2D& other) const
+    {
+        return Collision2D::ContainsAabbAabb(Min, Max, other.Min, other.Max);
+    }
+
+    ContainmentType BoundingBox2D::Contains(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::ContainsAabbCircle(Min, Max, circle.Center, circle.Radius);
+    }
+
+    ContainmentType BoundingBox2D::Contains(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::ContainsAabbObb(Min, Max, obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents);
+    }
+
+    ContainmentType BoundingBox2D::Contains(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::ContainsAabbCapsule(Min, Max, capsule.PointA, capsule.PointB, capsule.Radius);
+    }
+
+    ContainmentType BoundingBox2D::Contains(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::ContainsAabbConvexPolygon(Min, Max, polygon.Vertices, polygon.Normals);
+    }
+
+    bool BoundingBox2D::Intersects(const BoundingBox2D& other) const
+    {
+        return Collision2D::IntersectsAabbAabb(Min, Max, other.Min, other.Max);
+    }
+
+    bool BoundingBox2D::Intersects(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::IntersectsCircleAabb(circle.Center, circle.Radius, Min, Max);
+    }
+
+    bool BoundingBox2D::Intersects(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::IntersectsAabbCapsule(Min, Max, capsule.PointA, capsule.PointB, capsule.Radius);
+    }
+
+    bool BoundingBox2D::Intersects(const OrientedBoundingBox2D& obb) const
+    {
+        return Collision2D::IntersectsAabbObb(getCenterProperty(), getHalfExtentsProperty(), obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents);
+    }
+
+    bool BoundingBox2D::Intersects(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::IntersectsAabbConvexPolygon(getCenterProperty(), getHalfExtentsProperty(), polygon.Vertices, polygon.Normals);
+    }
+
+    bool BoundingBox2D::TryGetCollision(const BoundingBox2D& other, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionAabbAabb(Min, Max, other.Min, other.Max, result);
+    }
+
+    bool BoundingBox2D::TryGetCollision(const BoundingCircle2D& circle, CollisionResult2D& result) const
+    {
+        CollisionResult2D circleResult;
+        if (!Collision2D::TryGetCollisionCircleAabb(circle.Center, circle.Radius, Min, Max, circleResult))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        result = circleResult.Invert();
+        return true;
+    }
+
+    bool BoundingBox2D::TryGetCollision(const OrientedBoundingBox2D& obb, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionAabbObb(getCenterProperty(), getHalfExtentsProperty(), obb.Center, obb.AxisX, obb.AxisY, obb.HalfExtents, result);
+    }
+
+    bool BoundingBox2D::TryGetCollision(const BoundingPolygon2D& polygon, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionAabbConvexPolygon(getCenterProperty(), getHalfExtentsProperty(), polygon.Vertices, polygon.Normals, result);
     }
 
     bool BoundingBox2D::Equals(const BoundingBox2D& other) const

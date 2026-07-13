@@ -2,13 +2,21 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/BoundingBox2DTest.cs,
-// covering the subset of upstream test cases that don't require Collision2D (Contains/
-// Intersects/TryGetCollision), which is deferred -- see BoundingBox2D.hpp. Upstream has ~9
-// additional Collision2D-dependent test methods not ported here; add them back alongside
-// Collision2D in Phase 2.
+// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/BoundingBox2DTest.cs.
+// The ContainsPoint tests are upstream's own "delegation spot check" subset (it does not
+// exhaustively re-test every Collision2D::Contains* overload from every bounding-volume type's
+// test file, and neither do we); the TryGetCollision tests cover all 4 landed overloads
+// (self, circle, obb, polygon). Upstream has no dedicated test methods for the plain
+// Intersects(...) overloads or the 5 remaining Contains(...) overloads (self, circle, obb,
+// capsule, polygon) beyond the point case, so none are added here either -- this mirrors
+// upstream's own test coverage, not a gap in this port.
 #include "CNA/Extended/BoundingBox2D.hpp"
 
+#include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
+#include "CNA/Extended/CollisionResult2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
+#include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
 
 #include <gtest/gtest.h>
@@ -184,6 +192,123 @@ namespace CNA::Extended
 
         EXPECT_EQ(translated.Min, Vector2(5, -5));
         EXPECT_EQ(translated.Max, Vector2(15, 15));
+    }
+
+    TEST(BoundingBox2DTests, ContainsPointInside)
+    {
+        const BoundingBox2D box(Vector2(0, 0), Vector2(10, 10));
+        const Vector2 point(5, 5);
+
+        const ContainmentType result = box.Contains(point);
+
+        EXPECT_EQ(result, ContainmentType::Contains);
+    }
+
+    TEST(BoundingBox2DTests, ContainsPointOnBoundary)
+    {
+        const BoundingBox2D box(Vector2(0, 0), Vector2(10, 10));
+        const Vector2 point(10, 5);
+
+        const ContainmentType result = box.Contains(point);
+
+        EXPECT_EQ(result, ContainmentType::Contains);
+    }
+
+    TEST(BoundingBox2DTests, ContainsPointOutside)
+    {
+        const BoundingBox2D box(Vector2(0, 0), Vector2(10, 10));
+        const Vector2 point(15, 5);
+
+        const ContainmentType result = box.Contains(point);
+
+        EXPECT_EQ(result, ContainmentType::Disjoint);
+    }
+
+    TEST(BoundingBox2DTests, TryGetCollisionWithOverlappingBoxReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingBox2D box(Vector2(-2.0f, -2.0f), Vector2(2.0f, 2.0f));
+        const BoundingBox2D other(Vector2(1.0f, -2.0f), Vector2(5.0f, 2.0f));
+
+        CollisionResult2D result;
+        const bool intersects = box.TryGetCollision(other, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, -Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(-1.0f, 0.0f));
+    }
+
+    TEST(BoundingBox2DTests, TryGetCollisionWithSeparatedBoxReturnsFalseAndNone)
+    {
+        const BoundingBox2D box(Vector2(-1.0f, -1.0f), Vector2(1.0f, 1.0f));
+        const BoundingBox2D other(Vector2(4.0f, -1.0f), Vector2(6.0f, 1.0f));
+
+        CollisionResult2D result;
+        const bool intersects = box.TryGetCollision(other, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(result.Normal, CollisionResult2D::None.Normal);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, CollisionResult2D::None.PenetrationDepth);
+        EXPECT_EQ(result.MinimumTranslationVector, CollisionResult2D::None.MinimumTranslationVector);
+    }
+
+    TEST(BoundingBox2DTests, TryGetCollisionWithCircleReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingBox2D box(Vector2(-2.0f, -2.0f), Vector2(2.0f, 2.0f));
+        const BoundingCircle2D circle(Vector2(3.0f, 0.0f), 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = box.TryGetCollision(circle, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, -Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(-1.0f, 0.0f));
+    }
+
+    TEST(BoundingBox2DTests, TryGetCollisionWithOrientedBoxReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingBox2D box(Vector2(-2.0f, -2.0f), Vector2(2.0f, 2.0f));
+        const OrientedBoundingBox2D obb(Vector2(3.0f, 0.0f), Vector2::UnitX, Vector2::UnitY, Vector2(2.0f, 2.0f));
+
+        CollisionResult2D result;
+        const bool intersects = box.TryGetCollision(obb, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, -Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(-1.0f, 0.0f));
+    }
+
+    TEST(BoundingBox2DTests, TryGetCollisionWithPolygonReturnsReceiverMinimumTranslationVector)
+    {
+        const BoundingBox2D box(Vector2(-2.0f, -2.0f), Vector2(2.0f, 2.0f));
+        const std::vector<Vector2> vertices = {
+            Vector2(1.0f, -2.0f),
+            Vector2(5.0f, -2.0f),
+            Vector2(5.0f, 2.0f),
+            Vector2(1.0f, 2.0f),
+        };
+        const std::vector<Vector2> normals = {
+            -Vector2::UnitY,
+            Vector2::UnitX,
+            Vector2::UnitY,
+            -Vector2::UnitX,
+        };
+        const BoundingPolygon2D polygon(vertices, normals);
+
+        CollisionResult2D result;
+        const bool intersects = box.TryGetCollision(polygon, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, -Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(-1.0f, 0.0f));
     }
 
     TEST(BoundingBox2DTests, DeconstructReturnsMinAndMax)
