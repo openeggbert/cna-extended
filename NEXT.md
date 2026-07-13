@@ -6,6 +6,50 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (14) — SimpleGameComponent, SimpleDrawableGameComponent ported (Phase 1 task 26)
+
+Continued straight through, no check-in pause.
+
+**Ported directly** (no fork; ~127 lines of C# total). Lighter-weight abstract bases that
+don't need a `Game&` (unlike CNA's own `GameComponent`/`DrawableGameComponent`), each
+implementing multiple CNA interfaces directly (`IGameComponent`, `IUpdateable`,
+`System::IDisposable`, `System::IComparable<GameComponent>`,
+`System::IComparable<SimpleGameComponent>` for the first; `+IDrawable` for the second).
+
+**First time this port had to handle C#'s explicit interface implementation.** Upstream
+uses it twice: `bool IUpdateable.Enabled => _isEnabled;` alongside a public `IsEnabled`
+property, and `bool IDrawable.Visible => _isVisible;` alongside a public `Visible`
+property. Decided the translation case-by-case rather than one blanket rule:
+- `IsEnabled`/`Enabled` genuinely differ in name upstream → ported as two distinct C++
+  members: a public `getIsEnabledProperty()`, plus a **private** override of
+  `IUpdateable::getEnabledProperty()` — legal C++, since access specifiers gate name
+  lookup, not virtual dispatch, so the private override still gets called correctly
+  through an `IUpdateable&` reference. This is the closest C++ analog to "accessible
+  only through the interface."
+- `Visible`/`IDrawable.Visible` share the *identical* name upstream — nothing distinct
+  left to preserve — so collapsed to one public `getVisibleProperty()` override
+  satisfying `IDrawable` directly. Both C# members always read the same backing field in
+  both cases regardless, so this naming/visibility collapse changes no observable
+  behavior.
+
+**Worth remembering for any future explicit-interface-implementation case**: check
+whether upstream gave the two members different names before deciding between a
+two-member (name-preserving) or one-member (collapsed) C++ translation.
+
+**Test coverage**: no upstream tests exist for either file — wrote fresh tests via
+minimal concrete test subclasses (both types are abstract), covering
+enabled/visible/update-order/draw-order change events (raised only when the value
+actually changes), `Initialize()`/`Dispose()` idempotency, and `CompareTo` ordering.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 529/529** (was 516).
+
+**State / next step:** Phase 1 is 26 of ~30 tasks in. Next per `plan.md` §5 Phase 1: task
+27, Collections: `Bag<T>`, `Deque<T>`. No known blockers. Continue without pausing for a
+status update, per the standing correction, unless a genuine blocker requiring the
+user's judgment comes up. **Commit AND push to `develop`** after this task.
+
+---
+
 ## 2026-07-13 (13) — FramesPerSecondCounter, FramesPerSecondCounterComponent ported (Phase 1 task 25)
 
 Continued straight through, no check-in pause.

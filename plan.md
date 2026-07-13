@@ -528,7 +528,29 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       Game and GraphicsDevice (SDL/GPU)."). All the independently-testable logic lives in
       `FramesPerSecondCounter`, which is fully unit tested. No upstream tests exist for
       either file. Both build modes clean, `ctest` → 516/516 (was 507).
-- [ ] `SimpleGameComponent` + `SimpleDrawableGameComponent`
+- [x] `SimpleGameComponent` + `SimpleDrawableGameComponent` (2026-07-13, ported directly,
+      no fork) — both fully ported, no deferrals. Lighter-weight abstract bases (don't
+      need a `Game&`, unlike CNA's own `GameComponent`/`DrawableGameComponent`), each
+      implementing multiple CNA interfaces directly (`IGameComponent`, `IUpdateable`,
+      `System::IDisposable`, `System::IComparable<GameComponent>`,
+      `System::IComparable<SimpleGameComponent>` for the first; `+IDrawable` for the
+      second). **Explicit-interface-implementation translation**: upstream uses C#'s
+      explicit interface implementation twice (`bool IUpdateable.Enabled => _isEnabled;`
+      alongside public `IsEnabled`; `bool IDrawable.Visible => _isVisible;` alongside
+      public `Visible`) — C++ has no direct equivalent, approximated per-case:
+      `IsEnabled`/`Enabled` genuinely differ in name upstream, so ported as two distinct
+      C++ members (a public `getIsEnabledProperty()` plus a *private* override of
+      `IUpdateable::getEnabledProperty()`, callable only through an `IUpdateable&`
+      reference via virtual dispatch — the closest C++ analog to "interface-only
+      access"); `Visible`/`IDrawable.Visible` share the identical name upstream (nothing
+      distinct to preserve), so collapsed to one public `getVisibleProperty()` override
+      satisfying `IDrawable` directly — both getters return the same field in both
+      cases regardless, so neither translation changes observable behavior. No upstream
+      tests exist for either file — wrote fresh tests (via minimal concrete test
+      subclasses, since both are abstract) covering enabled/visible/update-order/draw-
+      order change events (raised only when the value actually changes),
+      `Initialize()`/`Dispose()` idempotency, and `CompareTo` ordering. Both build modes
+      clean, `ctest` → 529/529 (was 516).
 - [ ] Collections: `Bag<T>`, `Deque<T>`
 - [ ] Collections: `ObjectPool<T>`, `Pool<T>`, `IPoolable`, `ItemEventArgs`
 - [ ] Collections: `KeyedCollection`, `DictionaryExtensions`, `ListExtensions`
@@ -854,6 +876,23 @@ implementations — confirm and reuse rather than re-rolling).
   time has actually elapsed. Traced the arithmetic by hand to confirm this is correct
   *upstream* behavior (not a fidelity bug in the port), then rewrote the test to assert
   the real behavior instead of masking it.
+- 2026-07-13 — `SimpleGameComponent`/`SimpleDrawableGameComponent` ported directly (no
+  fork; ~127 lines of C# total). First time this port had to translate C#'s explicit
+  interface implementation — decided the policy case-by-case rather than applying one
+  blanket rule: where upstream itself used two *different* names for the public property
+  vs. the interface-only one (`IsEnabled` vs. `IUpdateable.Enabled`), preserved both as
+  distinct C++ members (public getter + a private override of the interface method,
+  reachable only through a base-interface reference — the closest C++ analog to
+  "interface-only access," and legal C++: access specifiers gate name lookup, not
+  virtual dispatch, so a private override is still called correctly through a base
+  pointer/reference). Where upstream reused the *identical* name for both (`Visible` /
+  `IDrawable.Visible`), there was no distinct name left to preserve, so collapsed to one
+  public override — documented as a naming/visibility simplification only (both C#
+  members always read the same backing field regardless, so no behavior differs either
+  way). Worth remembering as the general rule for any future explicit-interface-
+  implementation case: check whether upstream gave the two members different names
+  before deciding whether a two-member or one-member C++ translation is the more
+  faithful choice.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
