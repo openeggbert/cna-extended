@@ -45,15 +45,20 @@ Reference source (full clone, kept up to date, **read-only, never edited**):
   inside a .NET/MSBuild toolchain and has no C++ runtime counterpart.
 - **Runtime `.xnb` content readers**: `Content/ContentReaders/*`
   (`BitmapFontContentReader`, `Texture2DAtlasReader`, `ParticleEffectContentReader`,
-  `JsonContentTypeReader`), the `Tilemaps/Content/*Reader` classes, `Content/BitmapFonts/`
-  (the xnb-side helper, as opposed to the runtime `BitmapFonts/` module which **is**
-  ported), and `Content/ExtendedContentManager.cs` / `Content/ContentReaderExtensions.cs`
-  (glue code that only exists to register those xnb readers). Rationale: without the
-  excluded Content Pipeline there is no way to produce the `.xnb` files these classes
-  read, so porting them would be dead code. Direct-format loading (Tiled TMX/JSON, LDtk
-  JSON, Ogmo JSON, TexturePacker JSON, BMFont `.fnt`) covers the same ground.
+  `JsonContentTypeReader`), the `Tilemaps/Content/*Reader` classes, and
+  `Content/ExtendedContentManager.cs` / `Content/ContentReaderExtensions.cs` (glue code
+  that only exists to register those xnb readers). Rationale: without the excluded
+  Content Pipeline there is no way to produce the `.xnb` files these classes read, so
+  porting them would be dead code. Direct-format loading (Tiled TMX/JSON, LDtk JSON,
+  Ogmo JSON, TexturePacker JSON, BMFont `.fnt`) covers the same ground.
   `Content/ExternalResourceResolver(s).cs` (path resolution for external tileset/image
   references) is **not** xnb-specific and **is** ported, as part of the Tilemaps phase.
+  **Correction (Phase 5):** `Content/BitmapFonts/{BitmapFontFileContent,
+  BitmapFontFileReader}.cs` was originally listed here as "the xnb-side helper" for
+  `BitmapFonts/` — that was wrong, caught while actually implementing Phase 5. Both files
+  were read directly: `BitmapFontFileReader` is a direct parser for the AngleCode BMFont
+  `.fnt` spec (binary/text/XML variants) with no xnb/ContentReader/ContentManager
+  dependency at all. It **is** ported, as part of Phase 5 — see that phase's task list.
 - **`ObservableCollection`/`IObservableCollection`** from MonoGame.Extended's own
   `Collections/` — `sharp-runtime` already has the real BCL type at
   `System::Collections::ObjectModel::ObservableCollection`. Use that instead; only add a
@@ -870,10 +875,30 @@ Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`
       **COMPLETE (2026-07-13)**. `SpriteBatch.Extensions`' private `_patchCache` scratch
       buffer ported as a translation-unit-local static array; its dead `_rect` field was not
       ported (confirmed unused anywhere in the file).
-- [ ] `Content/TexturePacker/*` (direct-JSON TexturePacker atlas format — not xnb-based)
-- [ ] `Content/ExternalResourceResolver(s)` (not xnb-specific)
-- [ ] `BitmapFonts/*` (runtime `BitmapFont`/`BitmapFontRegion` types — **not** the xnb
-      `Content/BitmapFonts/` helper)
+- [x] `Content/TexturePacker/*` (direct-JSON TexturePacker atlas format — not xnb-based) —
+      **COMPLETE (2026-07-13)**. Upstream's `record`s with `[property: JsonPropertyName(...)]`
+      ported as get-only `getXProperty()` classes, each with a hand-written `from_json` free
+      function (nlohmann's ADL customization point, per `JsonSerializer.hpp`'s own documented
+      reflection replacement) supplying the custom JSON-key mapping `JsonPropertyName` gives in
+      C#. `TexturePackerTexture::Size`'s upstream default (`= default` on a reference-type
+      `record`, i.e. genuinely nullable at runtime despite its non-nullable-looking C# type) is
+      ported as `std::optional<TexturePackerSize>`, not a plain value, matching the real runtime
+      behavior rather than the misleading static type. No upstream unit tests exist for this
+      module; 7 fresh tests added.
+- [x] `Content/ExternalResourceResolver(s)` (not xnb-specific) — **COMPLETE**, landed
+      alongside the other small independent Graphics/Content utilities in an earlier Phase 5
+      commit; checkbox was simply missed at the time.
+- [ ] `BitmapFonts/*` (runtime `BitmapFont`/`BitmapFontCharacter`/`BitmapFont.Extensions`)
+      **and** `Content/BitmapFonts/{BitmapFontFileContent,BitmapFontFileReader}` — **scope
+      correction**: the exclusion list above previously called `Content/BitmapFonts/` "the
+      xnb-side helper," which was wrong. Read both files directly: `BitmapFontFileReader.cs`
+      is a direct parser for the AngleCode BMFont `.fnt` spec (binary/text/XML variants,
+      confirmed via its own upstream test fixtures under
+      `tests/MonoGame.Extended.Tests/BitmapFonts/files/bmfont/*.fnt`) — zero xnb/ContentReader/
+      ContentManager dependency, exactly analogous to the already-in-scope direct-JSON
+      TexturePacker reader above. It is the loader for the already-approved-in-scope "BMFont
+      bitmap fonts" goal (see the in-scope bullet list above), not a xnb helper for it. The
+      exclusion-list entry further up this file is corrected accordingly.
 - [x] `Animations/*` (`AnimationController`, `AnimationEvent`, `AnimationEventTrigger`,
       `IAnimationController`, `IAnimation`, `IAnimationFrame`) + root `AnimationComponent` —
       **COMPLETE (2026-07-13)**, ported in parallel with the Sprite/Texture2D chain above

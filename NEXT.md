@@ -6,6 +6,67 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (34) — Content/TexturePacker/* ported (Phase 5, done directly, not via fork); BitmapFonts/* scope-corrected
+
+Ported `Content/TexturePacker/*` myself directly (not delegated to a fork) — 9 DTO types
+(`TexturePackerPoint`, `TexturePackerPointF`, `TexturePackerSize`, `TexturePackerRectangle`,
+`TexturePackerTextureFrame`, `TexturePackerTexture`, `TexturePackerFrame`, `TexturePackerMeta`,
+`TexturePackerFileContent`) plus `TexturePackerFileReader` (`Read(path)`/`Read(Stream&)`). This
+is the first JSON-backed DTO cluster in this project — no existing precedent for combining the
+`getXProperty()` convention with `JsonPropertyName`-style custom key mapping, since
+`sharp-runtime`'s own `JsonSerializer.hpp` only documents the general approach (nlohmann ADL
+`from_json`/`to_json` customization points standing in for reflection), not a concrete example.
+Established the pattern here: private fields, public get-only `getXProperty()` accessors, and a
+`friend`ed free `from_json(const nlohmann::ordered_json&, T&)` per type living in the same
+namespace (so nlohmann's internal ADL lookup finds it). Only `from_json` needed, not `to_json` —
+this format is never written by this project (`TexturePackerWriter.cs` lives in the excluded
+Content Pipeline assembly).
+
+**Real upstream nullability quirk found and preserved**: `TexturePackerTexture.Size` has C#
+signature `TexturePackerSize Size = default` — looks non-nullable, but `TexturePackerSize` is a
+reference-type `record` (not `record struct`), so `default` is actually `null`. Ported as
+`std::optional<TexturePackerSize>` (matching the real runtime nullability, not the misleading
+static type), consistent with `Format`/`Scale`/`Frames` which are explicitly `?`-annotated.
+
+No upstream unit tests exist for this module (confirmed via search — no
+`Content/TexturePacker` entry anywhere under `tests/MonoGame.Extended.Tests/`). 7 fresh tests
+added covering top-level `frames` array parsing, `textures[].frames` nested-dictionary parsing,
+`meta` block parsing, optional-field-absent behavior, a missing-required-field throw case, and
+both `Read()` overloads via a temp-file fixture (matching `ExternalResourceResolversTests.cpp`'s
+established `MakeTempFile` pattern).
+
+**`Content/ExternalResourceResolver(s)` checkbox in `plan.md` was already done** (landed in an
+earlier Phase 5 commit) but had never been checked off — fixed while in this section of
+`plan.md`.
+
+**`BitmapFonts/*` scope correction, found while scoping this task**: `plan.md`'s exclusion list
+previously called `Content/BitmapFonts/{BitmapFontFileContent,BitmapFontFileReader}.cs` "the
+xnb-side helper" for `BitmapFonts/`. Read both files directly before accepting that
+characterization — it's wrong. `BitmapFontFileReader.cs` (602 lines) is a direct parser for the
+AngleCode BMFont `.fnt` spec (binary/text/XML variants — confirmed via its own upstream test
+fixtures, `tests/MonoGame.Extended.Tests/BitmapFonts/files/bmfont/*.fnt`, and a companion
+`BitmapFontFileReaderTests.cs` that exercises all three variants). Zero xnb/ContentReader/
+ContentManager dependency anywhere in either file — it's the direct-format loader for the
+already-approved-in-scope "BMFont bitmap fonts" goal, exactly analogous to the TexturePacker
+JSON reader just ported above, not an xnb helper for it. `plan.md`'s exclusion list and Phase 5
+task list corrected accordingly; `BitmapFonts/*` (runtime module: `BitmapFont`/
+`BitmapFontCharacter`/`BitmapFont.Extensions`, 644 lines) **and** the now-included
+`Content/BitmapFonts/*` reader (704 lines) are the only remaining Phase 5 items before
+`Animations/*` gets its deferred file-by-file member audit and the upstream test ports.
+
+**Verification**: clean `rm -rf`-style rebuild in both CMake configs, zero warnings in either.
+`ctest` → **1306/1306 passing** (was 1299 — 7 net new). Committed and pushed by me directly, not
+via a fork — see entry (33) for why that matters this session.
+
+**Next**: `BitmapFonts/*` runtime module + `Content/BitmapFonts/*` reader (~1350 lines combined,
+substantial enough to warrant delegating to a fork — if so, repeat the no-commit/no-push/no-
+plan.md instruction and verify `git status`/`git log` immediately after, per entries (21) and
+(33)). No upstream test exists for the runtime `BitmapFont.cs` itself beyond
+`BitmapFontTests.cs`/`BitmapFontFileReaderTests.cs` under `tests/MonoGame.Extended.Tests/
+BitmapFonts/` — both should be ported alongside, not deferred.
+
+---
+
 ## 2026-07-13 (33) — IMPORTANT process incident: fork committed/pushed to develop and edited plan.md/NEXT.md, disclosed to and resolved with user
 
 **⚠️ Process incident from entry (32), more severe than the one in entry (21).** The fork that
