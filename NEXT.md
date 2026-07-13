@@ -20,7 +20,12 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase**: Phases 0–5 are complete. Phase 6 ("Serialization") is next — see section 8.
+**Current phase**: Phases 0–6 and 9 are complete (6 and 9 were ported in parallel — confirmed
+genuinely independent beforehand). Phase 7 ("Tilemaps") is next — see section 8. Phase 8
+("Particles") also remains outstanding; plan.md's own dependency line for it doesn't list
+Phase 6, but its `ParticleEffectSerializer.cs` does reference serialization in practice —
+worth confirming the actual dependency before assuming Phase 8 is safe to parallelize with
+Phase 7.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -46,41 +51,23 @@ simplification. Scope was explicitly negotiated with the project owner and is re
 
 - **Build (linked config, `-DCNA_EXTENDED_LINK_CNA=ON`)**: clean. Last verified via a
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
-- **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean as of this
-  session. A real gap was found and fixed: the headers-only branch of `CMakeLists.txt`
-  never added `sharp-runtime/vendor` to the include path, so any header pulling in a
-  vendored third-party dependency (`tinyxml2/tinyxml2.h`, needed by the new BMFont XML
-  reader) failed to compile in this config — `nlohmann/json.hpp` had been silently working
-  only because this dev machine happens to have a system `nlohmann-json3-dev` package
-  installed, masking the same underlying gap. Fixed in `CMakeLists.txt`; verified with a
-  genuinely clean `rm -rf build-headers` rebuild afterward.
-- **Tests**: **1316/1316 passing** (`ctest`, linked config).
+- **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
+  verified via a genuine `rm -rf build-headers` rebuild.
+- **Tests**: **1402/1402 passing** (`ctest`, linked config).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
-- **Recently implemented and committed on `develop`**: `Graphics/Effects/*`
-  (hand-authored GLSL `DefaultEffect`/`MatrixChainEffect`, since CNA's bytecode-based
-  `Effect` constructor is unimplemented), the Sprite/Texture2D/SpriteSheet/NinePatch
-  cluster, the `Animations/*` module, `Content/TexturePacker/*` (direct-JSON atlas reader),
-  and now the `BitmapFonts` module — `Content/BitmapFonts/{BitmapFontFileContent,
-  BitmapFontFileReader}` (direct BMFont `.fnt` parser: binary/text/XML variants) and
-  runtime `BitmapFonts/*` (`BitmapFont`, `BitmapFontCharacter`, `BitmapFontExtensions`).
-  The runtime `BitmapFont.cpp` logic (glyph-enumeration iterators, `FromFile`/`FromStream`,
-  UTF-8 codepoint decoding) has been independently line-reviewed against upstream — exact
-  match, see section 3.
-- **Phase 5 ("Graphics, BitmapFonts & Animations") and Phase 4 ("Screens") are both now
-  fully complete.** `Math/ShapeExtensions.cs` (`SpriteBatch` debug-drawing: `DrawPolygon`/
-  `FillRectangle`/`DrawRectangle`/`DrawLine`/`DrawPoint`/`DrawCircle`/`DrawEllipse`/
-  `DrawArc`) landed in the root `CNA::Extended` namespace (matching its actual upstream C#
-  namespace, not its `Math/` folder location or its graphics-related purpose), which
-  unblocked the two previously-deferred Screen transitions, `FadeTransition` and
-  `ExpandTransition`.
+- **Phases 0–6 and 9 are complete** (see section 3 for what landed most recently — Phase 6
+  Serialization and Phase 9 ECS, ported in parallel by two independent sub-agents since
+  they share no files or dependency relationship). Phase 7 (Tilemaps) is next.
 - **Does not work / not done yet**:
   - No headless mock `SpriteBatch`/`ISpriteBatchBackend` test double exists anywhere in
-    this ecosystem yet, so every `SpriteBatch`-drawing extension method ported so far
+    this ecosystem, so every `SpriteBatch`-drawing extension method ported so far
     (`SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
     `FadeTransition`/`ExpandTransition::Draw`) remains call-compilable but behaviorally
-    untested. No upstream tests exist for any of these either, so this isn't a coverage
-    regression — just a standing architectural gap, unchanged this session.
+    untested. No upstream tests exist for any of these either — a standing architectural
+    gap, not a regression.
+  - Phase 7 (Tilemaps, the largest remaining module — 121+22 files) and Phase 8 (Particles)
+    are not started.
 
 ---
 
@@ -89,46 +76,49 @@ simplification. Scope was explicitly negotiated with the project owner and is re
 This session (an extended autonomous run) completed the entirety of what remained in
 Phases 4–5:
 
-- **`Content/TexturePacker/*`** (9 DTO types + `TexturePackerFileReader`, direct-JSON
-  atlas reader), 7 fresh tests. First JSON-DTO cluster in this project — established the
-  `getXProperty()` + `friend from_json` pattern for future JSON-backed types (Phase 6
-  Serialization will reuse it).
-- **`Content/BitmapFonts/*` + runtime `BitmapFonts/*`** (`BitmapFontFileContent`,
-  `BitmapFontFileReader` — a direct BMFont `.fnt` parser, binary/text/XML variants —
-  `BitmapFont`, `BitmapFontCharacter`, `BitmapFontExtensions`), 10 net-new tests.
-  Independently verified line-by-line against upstream (binary block parser, glyph
-  enumeration, `FromFile`/`FromStream`, `DrawString`) — exact match throughout, including
-  two genuinely-preserved upstream inconsistencies (see section 6).
-  `plan.md`'s exclusion list had wrongly called this xnb-related; corrected.
-- **`Math/ShapeExtensions.cs`** (`SpriteBatch` debug-drawing: `DrawPolygon`/
-  `FillRectangle`/`DrawRectangle`/`DrawLine`/`DrawPoint`/`DrawCircle`/`DrawEllipse`/
-  `DrawArc`), ported into the root `CNA::Extended` namespace matching its actual upstream
-  C# namespace (not `.Graphics`, despite being graphics-related).
-- **`FadeTransition`/`ExpandTransition`** (Screens), unblocked by `ShapeExtensions` landing
-  — completes Phase 4 as well as Phase 5.
-- **Full `Animations/*` file-by-file audit against upstream** (all 7 files, exact match) and
-  discovery that `Animations/AnimationTests.cs` was already fully ported under a
-  differently-named test file — both closed out the last open Phase 5 items.
-- **Two real bugs found**: a `cna-extended` CMake gap (headers-only build never added
-  `sharp-runtime/vendor` to the include path — **fixed**, in scope) and a `sharp-runtime`
-  doc-comment bug (`XmlNode::SelectSingleNode` doesn't actually transfer ownership as
-  documented — **found and worked around, not fixed**, sibling-repo rule). See section 5.
-- **A process incident** from a delegated sub-agent (unauthorized commit/push to
-  `origin/develop`) was investigated, verified, and resolved with the project owner earlier
-  this session — see section 5's process-risk note. `NEXT.md` was also rewritten from an
-  append-only chronological log into this snapshot format at the owner's explicit request.
+This is one long autonomous session (owner authorized, unavailable for hours). Phases 4-5
+completed first (TexturePacker, BitmapFonts, ShapeExtensions, the two Screen transitions,
+the Animations audit — see `git log` for that batch's individual commits), then Phase 6
+(Serialization) and Phase 9 (ECS) were ported **in parallel by two independent sub-agents**,
+confirmed genuinely independent beforehand (zero shared files, zero dependency relationship
+per `plan.md`).
 
-Everything above is committed and pushed to `develop`. **Phases 0–5 are now fully
-complete.**
+- **Phase 6 (Serialization)**: JSON converters for `Color`/`HslColor`/`Vector2`/
+  `RectangleF`/`Thickness`/`SizeF`/`Interval<T>` as `nlohmann::adl_serializer<T>`
+  specializations (nlohmann's own mechanism for foreign types), stateful converters
+  (`TextureAtlasJsonConverter`, etc.) as explicit classes, plus `Serialization/Xml/*`. See
+  `plan.md`'s Phase 6 entry for the full design-decision writeup.
+- **Phase 9 (ECS)**: `World`/`WorldBuilder`/`Entity`/`EntityManager`, `Aspect`/
+  `AspectBuilder`/`ComponentBits`/`ComponentManager`/`ComponentMapper`/
+  `BitArrayExtensions`, `EntitySubscription`, `Systems/*`. See `plan.md`'s Phase 9 entry for
+  the ownership-model reasoning and the C++-only virtual-inheritance fix needed for the
+  `EntitySystem`/`IUpdateSystem`/`IDrawSystem` diamond.
+- **Two real bugs found and fixed during independent verification** (not by either
+  sub-agent — caught via a genuinely clean rebuild + full `ctest` run before committing,
+  which is exactly why that step is mandatory and never skipped): `XmlReaderExtensions.cpp`
+  used `std::stoi`/`std::stof`, which silently ignore trailing garbage instead of throwing
+  like C#'s `int.Parse`/`float.Parse` — fixed with `System::Int32::Parse`/
+  `System::Single::Parse`. A fresh, over-strict test (`HslColorJsonConverterTests`) assumed
+  exact HSL↔RGB round-trip fidelity that the pre-existing `HslColor` implementation doesn't
+  actually provide — fixed by relaxing to an approximate comparison, not by touching the
+  (correct, independently-tested) `HslColor` production code. See `plan.md`'s Phase 6 entry
+  for full detail on both.
+- Everything above is committed and pushed to `develop`.
+
+For the Phase 4-5 batch (TexturePacker/BitmapFonts/ShapeExtensions/Transitions/Animations
+audit, plus a CMake headers-only-build fix and a documented-not-fixed `sharp-runtime` bug)
+and the process incident from a delegated sub-agent earlier in this session (investigated,
+verified, and resolved with the project owner) — see `git log` for the individual commits;
+not re-summarized here to keep this section focused on the current batch.
 
 ---
 
 ## 4. Current blocker / main problem
 
-**None.** No build-breaking or test-failing issue, and Phases 0–5 are fully complete —
+**None.** No build-breaking or test-failing issue, and Phases 0–6 and 9 are fully complete —
 `cmake --build build -j$(nproc)`, `cmake --build build-headers -j$(nproc)`, and
-`ctest --test-dir build` all currently succeed (1316/1316). The next work is simply the
-next phase (Phase 6 — Serialization); see section 8.
+`ctest --test-dir build` all currently succeed (1402/1402). The next work is simply the
+next phase (Phase 7 — Tilemaps); see section 8.
 
 ---
 
@@ -150,6 +140,23 @@ next phase (Phase 6 — Serialization); see section 8.
   **Do not edit `sharp-runtime` to fix this** (sibling-repo rule) — `BitmapFontFileReader.cpp`
   in this repo already works around it by treating `SelectSingleNode`'s return as
   non-owning. Worth reporting to whoever maintains `sharp-runtime` at some point.
+- **FIXED this session**: `Serialization/Xml/XmlReaderExtensions.cpp` used `std::stoi`/
+  `std::stof` for numeric attribute parsing, which silently ignore trailing garbage
+  (`std::stoi("1.5") == 1`, no exception) instead of requiring the whole string to be valid
+  like C#'s `int.Parse`/`float.Parse`. Fixed with `System::Int32::Parse`/
+  `System::Single::Parse` (already available in `sharp-runtime`, matching that exact
+  strictness). Caught by the ported `GetAttributeRectangleInvalidFormatThrows` test failing
+  for `"1.5,2,3,4"` during independent verification — same root-cause fix applied to
+  `FloatStringConverter.cpp`'s `std::stof` (now `System::Single::TryParse`, matching
+  upstream's `float.TryParse`-then-fallthrough structure).
+- **NOT A BUG, but a fresh test was over-strict**: `HslColorJsonConverterTests`
+  (fork-authored, no upstream equivalent) originally asserted exact round-trip fidelity
+  through `HslColor::FromRgb`/`ToRgb`. That pre-existing, independently-tested conversion is
+  not an exact bitwise inverse of itself for arbitrary RGB values (confirmed directly, no
+  JSON involved: `Color(10,20,30,255)` round-trips to `(9,20,30,255)`, and a further round
+  trip drifts again rather than stabilizing) — the test was corrected to an approximate
+  comparison rather than "fixing" correct, already-tested production code to satisfy an
+  incorrect test assumption.
 - **INCOMPLETE / architectural gap, standing since Phase 3**: no headless
   `SpriteBatch`/`ISpriteBatchBackend` mock exists anywhere in this ecosystem, so every
   `SpriteBatch`-drawing extension method ported so far (`SpriteBatch.Extensions`,
@@ -166,6 +173,9 @@ next phase (Phase 6 — Serialization); see section 8.
   recoverable via `git log -- NEXT.md`). Always independently check `git status`/`git log`
   immediately after any delegated work completes, before trusting or building on it — a
   sub-agent being right about code content does not mean it followed process instructions.
+  (Both later sub-agents this session — Phase 6 Serialization and Phase 9 ECS — were fully
+  compliant; the discipline of checking every time, not just after past incidents, is what
+  caught it early both times it did happen and confirmed it wasn't happening again.)
 
 ---
 
@@ -258,54 +268,48 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-1. **Phase 6 — Serialization**: `Serialization/*` (JSON converters — check
-   `sharp-runtime`'s `System::Text::Json` coverage first and reuse rather than hand-rolling
-   a parallel layer), `Serialization/Xml/*`, plus upstream
-   `tests/MonoGame.Extended.Tests/Serialization/**`.
-   - Command: `ctest --test-dir build -R Serialization` — expect 100% passing; both CMake
-     configs stay clean.
-
-2. **Phase 7 — Tilemaps** (the largest module: 121+22 files; depends on Phases 1, 5, 6).
-   Core `Tilemap`/`TilemapData`/`TilemapFactory`/etc., `TilemapLayers/*`,
-   `TilemapObjects/*`, `Rendering/*`, `Properties/*`, `Tiled/*` (TMX/JSON — priority, per
-   `plan.md`, given the user's existing `tiled-blupi` project), `LDtk/*`, `Ogmo/*`,
-   `Parsers/*`. Skip `Tilemaps/Content/*Reader` (xnb-based). Large enough to warrant
-   delegating to sub-agent forks (user-approved this session, with the standing safeguard:
-   forks never commit, orchestrator verifies then commits).
+1. **Phase 7 — Tilemaps** (the largest module: 121+22 files; depends on Phases 1, 5, 6 —
+   all now complete). Core `Tilemap`/`TilemapData`/`TilemapFactory`/etc.,
+   `TilemapLayers/*`, `TilemapObjects/*`, `Rendering/*`, `Properties/*`, `Tiled/*`
+   (TMX/JSON — priority, per `plan.md`, given the user's existing `tiled-blupi` project),
+   `LDtk/*`, `Ogmo/*`, `Parsers/*`. Skip `Tilemaps/Content/*Reader` (xnb-based). Large
+   enough to warrant delegating to sub-agent forks (user-approved this session, with the
+   standing safeguard: forks never commit, orchestrator verifies then commits) — likely
+   split into sub-tasks (e.g. core+Tiled first, then LDtk/Ogmo) given the size.
    - Command: `ctest --test-dir build -R Tilemap` — expect 100% passing; both CMake
      configs stay clean.
 
-3. **Phase 8 — Particles** (depends on Phases 1, 5). Core `ParticleEffect`/
+2. **Phase 8 — Particles** (`plan.md` lists "Phases 1, 5" as its dependency, but
+   `ParticleEffectSerializer.cs` upstream does reference serialization — confirm the real
+   dependency before assuming it's safe to parallelize with Phase 7). Core `ParticleEffect`/
    `ParticleEmitter`/`ParticleBuffer`/`ParticleIterator`/`ParticleRenderingOrder`, plus
    remaining `Particles/**` (profiles, modifiers, primitives — 47 files total, enumerate
    exact list at implementation time). Skip `ParticleEffectContentReader.cs` (xnb-based).
    - Command: `ctest --test-dir build -R Particle` — expect 100% passing; both CMake
      configs stay clean.
 
-4. **Phase 9 — ECS** (depends on Phase 1; reuse `Bag<T>` from Collections, confirm and
-   reuse rather than re-rolling). `World`/`WorldBuilder`/`Entity`/`EntityManager`,
-   `Aspect`/`AspectBuilder`/`ComponentType`/`ComponentBits`/`ComponentManager`/
-   `ComponentMapper`/`BitArrayExtensions`, `EntitySubscription`, `Systems/*`.
-   - Command: `ctest --test-dir build -R ECS` (or the actual GoogleTest suite name once
-     ported) — expect 100% passing; both CMake configs stay clean.
-
-Phase 10 (integration, polish, documentation) follows once Phases 6–9 are done — not
-detailed here since its scope depends on what those phases actually produce.
+3. **Phase 10 — Integration, polish, documentation**, once Phases 7-8 land. Scope depends
+   on what those phases actually produce — not detailed here yet.
 
 ---
 
 ## 9. Do not do yet
 
-- No broad refactor of already-completed phases (0–5).
+- No broad refactor of already-completed phases (0–6, 9).
 - No renaming or restructuring the `getXProperty()` / namespace / file-layout conventions
-  already established across ~45 ported files — they are intentional and load-bearing.
+  already established across ~65 ported files — they are intentional and load-bearing.
 - No new third-party dependencies beyond GoogleTest without asking first.
 - No porting anything from `MonoGame.Extended.Content.Pipeline` or any `.xnb`-reading class.
 - No editing sibling repositories (`../cna`, `../sharp-runtime`, `../easy-3d`) — this
   includes the confirmed `sharp-runtime` `SelectSingleNode` doc-comment bug in section 5;
   report/ask, don't silently fix it there.
-- No skipping the ordered dependency chain within `plan.md` (e.g. don't start Phase 7
-  Tilemaps' `Tiled/*` before Phase 6 Serialization lands, since TMX/JSON parsing needs it).
+- No "fixing" pre-existing, independently-tested production code (like `HslColor`'s
+  conversion math) just because a fresh test's assumption about it turns out to be wrong —
+  verify which side is actually incorrect first (see section 5's HSL round-trip entry for
+  exactly this situation this session).
+- No skipping the ordered dependency chain within `plan.md` — Phase 8 (Particles) in
+  particular may have a real, currently-unconfirmed Serialization dependency despite
+  `plan.md`'s dependency line not listing it (see section 8, task 2).
 - Long unattended autonomous session in progress (owner authorized, unavailable for
   hours): keep pushing verified work directly to `develop` after each task (owner's
   explicit choice), keep using sub-agent forks for large modules under the verify-then-

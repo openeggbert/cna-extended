@@ -1,8 +1,9 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-5 complete (2026-07-13),
-Phase 6 ("Serialization") next. Fidelity requirement: port 1:1 wherever C#/C++ differences
-allow — no simplification. See `NEXT.md` for current state.**
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6 and 9 complete (2026-07-13),
+Phase 7 ("Tilemaps") next (Phase 8 "Particles" also outstanding — see plan). Fidelity
+requirement: port 1:1 wherever C#/C++ differences allow — no simplification. See `NEXT.md`
+for current state.**
 
 ## 1. What this project is
 
@@ -953,15 +954,74 @@ Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`
       checkbox was simply never marked done despite the work existing; corrected this session
       after re-reading the file and confirming all 15 tests match upstream one-to-one.
 
-### Phase 6 — Serialization
+### Phase 6 — Serialization — **COMPLETE (2026-07-13)**
 
 Depends on Phase 1. Feeds Phase 7 (Tilemaps).
 
-- [ ] `Serialization/*` (JSON converters — check `sharp-runtime`'s
-      `System::Text::Json` coverage first and reuse it rather than hand-rolling a
-      parallel JSON layer)
-- [ ] `Serialization/Xml/*`
-- [ ] Port `tests/MonoGame.Extended.Tests/Serialization/**`
+- [x] `Serialization/*` (JSON converters) — **COMPLETE**. Reuses `sharp-runtime`'s
+      `System::Text::Json` (`nlohmann::ordered_json` under the hood) rather than
+      hand-rolling a parallel JSON layer, per this phase's own scoping note.
+      **Design decision**: upstream's `JsonConverter<T>` classes are opted into
+      per-call via `JsonSerializerOptions.Converters.Add(...)`; `sharp-runtime`'s
+      `JsonSerializer` has no such per-call registration, dispatching only through
+      nlohmann's global ADL customization points. Stateless value-type converters
+      (`Color`, `HslColor`, `Vector2`, `RectangleF`, `Thickness`, `SizeF`,
+      `Interval<T>`) became `nlohmann::adl_serializer<T>` full/partial
+      specializations — nlohmann's own documented mechanism for foreign types this
+      project doesn't own the definition of. Genuinely stateful converters needing
+      injected state (`TextureRegion2DJsonConverter`, `NinePatchJsonConverter`,
+      `TextureAtlasJsonConverter`, `ContentManagerJsonConverter<T>`) became explicit
+      classes the caller constructs and invokes directly, since ADL hooks have no
+      room for injected dependencies. `MonoGameJsonSerializerOptionsProvider` is
+      kept only for formatting options; its C# purpose (assembling a `Converters`
+      list) is moot since the stateless converters are always ADL-active.
+      `BaseTypeJsonConverter.cs` explicitly **not ported**: reflection-heavy
+      (`System.Reflection`/`TypeInfo`/runtime-`Type`-keyed dispatch) with
+      **zero call sites anywhere in upstream** (confirmed via grep across both
+      `source/` and `tests/`) — matches the established "skip zero-call-site
+      reflection-dependent code, document, add later if needed" pattern.
+      Added `include/CNA/Extended/Content/ContentManagerExtensions.hpp`, a small
+      in-scope dependency (`Load<T>(ContentManager&, path, loader)`) needed by
+      `JsonContentLoader`/`TextureAtlasJsonConverter` — uses the normal runtime
+      `ContentManager`, not the excluded xnb-registration `ExtendedContentManager`.
+      **Two real bugs found during independent verification and fixed** (not by the
+      fork — caught via a genuinely clean rebuild + full `ctest` run before
+      committing): (1) `XmlReaderExtensions.cpp`'s numeric attribute parsers used
+      `std::stoi`/`std::stof`, which only parse a leading numeric prefix and
+      silently ignore trailing garbage (e.g. `std::stoi("1.5") == 1`, no exception)
+      — unlike upstream's `int.Parse`/`float.Parse`, which require the whole string
+      to be valid and throw `FormatException` otherwise. Fixed by switching to
+      `System::Int32::Parse`/`System::Single::Parse` (already available in
+      `sharp-runtime`, matching that exact strictness) throughout the file — caught
+      by the ported `GetAttributeRectangleInvalidFormatThrows` test failing for
+      `"1.5,2,3,4"`. (2) `FloatStringConverter.cpp` had the same `std::stof`
+      leniency issue and didn't match upstream's `float.TryParse`-then-fallthrough
+      structure; fixed with `System::Single::TryParse`.
+      **Preserved, not fixed, a genuine upstream bug**: `TextureAtlasJsonConverter`'s
+      JSON-string read branch is dead/broken in upstream itself (its own source has
+      a `// TODO ... Need to investigate` comment above unreachable code and an
+      unconditional `throw new NotImplementedException()`) — kept as-is.
+      A real dangling-pointer bug from an early draft (a `Texture2D` loaded into a
+      local, pointed to by the returned `Texture2DAtlas`, with no natural owner
+      since `ContentManager::Load<T>()` returns by value) was caught and fixed by
+      giving the converter its own `std::vector<std::unique_ptr<Texture2D>>`,
+      matching `BitmapFont`'s established precedent for the same problem.
+- [x] `Serialization/Xml/*` — **COMPLETE**, using `sharp-runtime`'s real
+      `System::Xml` DOM (`XmlDocument`/`XmlNode`/`XmlReader`/`XmlWriter`).
+- [x] Port `tests/MonoGame.Extended.Tests/Serialization/**` — **COMPLETE**. The 4
+      upstream test files (`ColorJsonConverterTests`, `RectangleFJsonConverterTest`,
+      `Xml/XmlWriterExtensionsTests`, `Xml/XmlReaderExtensionsTests`) ported, plus
+      fresh coverage for converters with no upstream test
+      (`Vector2`/`Thickness`/`Size2`/`HslColor`/`Interval`/`XmlNodeExtensions`).
+      One fresh test (`HslColorJsonConverterTests.RoundTripPreservesRgbColor`,
+      exact-equality) was itself too strict and had to be corrected to an
+      approximate comparison after independent verification: `HslColor::FromRgb`/
+      `ToRgb` (pre-existing, independently tested) are not exact bitwise inverses
+      of each other for arbitrary RGB values — confirmed directly, without any
+      JSON involved, that a plain round trip of `Color(10,20,30,255)` already
+      drifts to `(9,20,30,255)`, and a further round trip drifts again rather than
+      stabilizing. Renamed to `RoundTripPreservesRgbColorApproximately` with a
+      documented tolerance.
 
 ### Phase 7 — Tilemaps (Tiled / LDtk / Ogmo)
 
@@ -990,18 +1050,55 @@ Depends on Phases 1 and 5 (rendering).
       (xnb-based)
 - [ ] Port `tests/MonoGame.Extended.Tests/Particles/**`
 
-### Phase 9 — ECS
+### Phase 9 — ECS — **COMPLETE (2026-07-13)**
 
 Depends on Phase 1 (`Bag<T>` from Collections is used internally by Artemis-style ECS
-implementations — confirm and reuse rather than re-rolling).
+implementations — confirmed and reused, not re-rolled). Ported in parallel with Phase 6
+(confirmed genuinely independent beforehand: zero references from upstream's `ECS/` folder
+to `System.Text.Json`/`MonoGame.Extended.Serialization` anywhere).
 
-- [ ] `World`, `WorldBuilder`, `Entity`, `EntityManager`
-- [ ] `Aspect`, `AspectBuilder`, `ComponentType`, `ComponentBits`, `ComponentManager`,
-      `ComponentMapper`, `BitArrayExtensions`
-- [ ] `EntitySubscription`
-- [ ] `Systems/*` (`ISystem`, `EntitySystem`, `UpdateSystem`, `DrawSystem`,
-      `EntityUpdateSystem`, `EntityDrawSystem`, `EntityProcessingSystem`)
-- [ ] Port `tests/MonoGame.Extended.Tests/ECS/**`
+- [x] `World`, `WorldBuilder`, `Entity`, `EntityManager` — **COMPLETE**.
+      **Ownership model**: upstream pools and reuses `Entity` objects via `Pool<Entity>`,
+      relying on the GC to keep every created `Entity` alive for as long as the pool's free
+      list or an active `_entityBag` slot references it. `EntityManager` here owns every
+      `Entity` ever created in `allEntities_` (`std::vector<std::unique_ptr<Entity>>`) for
+      pointer stability; `entityPool_`/`entityBag_` hold non-owning `Entity*`, recycled the
+      same way upstream's pool reuses them — matching the "canonical ownership lives
+      somewhere for the whole EntityManager's lifetime, only *where* changes (GC root vs.
+      explicit owning container), not the observable recycling behavior" reasoning, same
+      derive-from-upstream-behavior approach already used for `ScreenManager`/
+      `Texture2DRegion`. `World` similarly owns every registered `ISystem`;
+      `updateSystems_`/`drawSystems_` hold non-owning `IUpdateSystem*`/`IDrawSystem*`
+      obtained via `dynamic_cast` (translating upstream's `system is IUpdateSystem`
+      pattern-match checks). `WorldBuilder::Build()` returns `std::unique_ptr<World>`, not
+      `World` by value (a C++ value-type return doesn't fit a type that owns `unique_ptr`
+      members).
+- [x] `Aspect`, `AspectBuilder`, `ComponentBits`, `ComponentManager`, `ComponentMapper`,
+      `BitArrayExtensions` — **COMPLETE**. `ComponentType.cs` explicitly **not ported**:
+      confirmed by reading the actual file — it is entirely commented-out dead code
+      upstream (as is its would-be test, `ComponentTypeTests.cs`), not a real type.
+      `ComponentMapper<T>` renamed `ComponentMapperOf<T>` (C++ disallows a class template
+      and non-template class sharing a name; C# permits arity-based overloading of type
+      names). `IComponentMapperService` (a generic-method interface) has no direct
+      translation — C++ disallows virtual member-function templates — so `ComponentManager`
+      (its only implementer anywhere upstream) is used directly instead.
+      **Reflection gap, documented not silently resolved**: upstream `ComponentManager`'s
+      `this[Type type]` indexer uses `Activator.CreateInstance(...MakeGenericType(type)...)`
+      to construct a mapper for a type known only at runtime — no C++ equivalent.
+      `GetMapper(std::type_index)` can only return a mapper already created via the generic
+      `GetMapper<T>()` path; documented at length in `ComponentManager.hpp`.
+- [x] `EntitySubscription` — **COMPLETE**.
+- [x] `Systems/*` (`ISystem`, `EntitySystem`, `UpdateSystem`, `DrawSystem`,
+      `EntityUpdateSystem`, `EntityDrawSystem`, `EntityProcessingSystem`) — **COMPLETE**.
+      `EntityUpdateSystem : EntitySystem, IUpdateSystem` (and `EntityDrawSystem`) reach
+      `ISystem` via multiple inheritance paths — required making `ISystem` a virtual base of
+      `IUpdateSystem`/`IDrawSystem`/`EntitySystem` to avoid ambiguous subobjects and broken
+      `dynamic_cast`, a genuine C++-only concern with no C# analogue (interfaces don't have
+      this diamond problem).
+- [x] Port `tests/MonoGame.Extended.Tests/ECS/**` — **COMPLETE**. 6 of 7 upstream test files
+      ported (`ComponentTypeTests.cs` skipped — tests the dead `ComponentType`, see above).
+      The ported `ComponentManagerTests`' indexer test adapted for the reflection-gap
+      difference noted above (calls `GetMapper<T>()` first).
 
 ### Phase 10 — Integration, polish, documentation
 
