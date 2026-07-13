@@ -21,8 +21,8 @@ simplification. Scope was explicitly negotiated with the project owner and is re
 `plan.md` (`Status: APPROVED`, no longer draft).
 
 **Current phase**: Phases 0–6, 8, and 9 are complete. Phase 7 ("Tilemaps") is in progress:
-the core data model and `Tiled/*` (TMX/JSON — priority, given the user's existing
-`tiled-blupi` project) are done; `Rendering/*`, `LDtk/*`, `Ogmo/*` remain.
+the core data model, `Tiled/*` (TMX/JSON — priority, given the user's existing
+`tiled-blupi` project), `LDtk/*`, and `Ogmo/*` are all done; only `Rendering/*` remains.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -50,19 +50,20 @@ the core data model and `Tiled/*` (TMX/JSON — priority, given the user's exist
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **1761/1761 passing** (`ctest`, linked config).
+- **Tests**: **1804/1804 passing** (`ctest`, linked config).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
-- **Phases 0–6, 8, and 9 are complete.** Phase 7's core Tilemaps data model and `Tiled/*`
-  just landed — see section 3.
+- **Phases 0–6, 8, and 9 are complete.** Phase 7's core Tilemaps data model, `Tiled/*`,
+  `LDtk/*`, and `Ogmo/*` all landed — see section 3. Only `Rendering/*` remains for Phase 7.
 - **Does not work / not done yet**:
   - No headless mock `SpriteBatch`/`ISpriteBatchBackend` test double exists anywhere in
     this ecosystem, so every `SpriteBatch`-drawing extension method ported so far
     (`SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
     `FadeTransition`/`ExpandTransition::Draw`) remains call-compilable but behaviorally
     untested. No upstream tests exist for any of these either — a standing architectural
-    gap, not a regression. `Tilemaps/Rendering/*` (next up) will hit this same gap.
-  - Phase 7: `Rendering/*`, `LDtk/*`, `Ogmo/*` — not started.
+    gap, not a regression. `Tilemaps/Rendering/*` (the only item left in this whole plan)
+    will hit this same gap.
+  - Phase 7: `Rendering/*` — the only item remaining anywhere in `plan.md` before Phase 10.
 
 ---
 
@@ -70,41 +71,43 @@ the core data model and `Tiled/*` (TMX/JSON — priority, given the user's exist
 
 One long autonomous session (owner authorized, unavailable for hours). Order so far: Phases
 4-5, then Phase 6 (Serialization) + Phase 9 (ECS) in parallel, then Phase 7's Tilemaps core
-+ the bulk of Phase 8 (Particles) in parallel, then `Tilemaps/Tiled/*` + the deferred
-`ParticleEffectSerializer.cs` in parallel (Phase 8 now fully complete). See `git log` for
-every batch's individual commits; this section covers the most recent (Tiled +
-ParticleEffectSerializer) batch in detail, condensing earlier ones.
++ the bulk of Phase 8 (Particles) in parallel, then `Tilemaps/Tiled/*` +
+`ParticleEffectSerializer.cs` in parallel (Phase 8 completed in full), then
+`Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel (this batch). See `git log` for every
+batch's individual commits; this section covers the LDtk/Ogmo batch in detail, condensing
+earlier ones.
 
-- **`Tilemaps/Tiled/*`** (TMX/JSON parser, priority per `plan.md`): preserves upstream's
-  raw-XML → document-model → `TilemapData` two-stage design; tile-layer decoding covers
-  CSV, base64 uncompressed/gzip/zlib (zstd explicitly rejected, matching upstream), verified
-  against Python's own `gzip`/`zlib` output. See `plan.md`'s Phase 7 entry for the two bugs
-  found here (one in this port's own new code, self-fixed; one a genuine `sharp-runtime`
-  naming collision, worked around not fixed).
-- **`ParticleEffectSerializer.cs`** (completes Phase 8): no reflection anywhere upstream, as
-  anticipated — pure manual type-name dispatch. Found and fixed a real, **pre-existing**
-  bug from Phase 6 that had gone uncaught until now: `XmlWriterExtensions.cpp`'s float
-  writers used `std::to_string`, always emitting fixed 6-decimal notation instead of C#'s
-  shortest-round-trippable form — this would have made every `Serialize` path in this new
-  file fail. See `plan.md`'s Phase 8 entry for detail.
+- **`Tilemaps/LDtk/*`**: 21 Document DTOs + `LDtkTilemapDataConverter` (converts one
+  already-selected level; multi-level iteration is `LDtkJsonParser`'s job) + `LDtkJsonParser`
+  (also exposes LDtk-only convenience API and a genuinely-LDtk-specific `CanParse` —
+  independently confirmed absent from the shared `ITilemapParser` interface). Real
+  `std::stoi`-leniency bug found and fixed in this port's own new hex-color parser (same bug
+  class as the earlier `XmlReaderExtensions.cpp` fix). 21 fresh tests.
+- **`Tilemaps/Ogmo/*`**: 16 Document DTOs + `OgmoTilemapDataConverter` (tileset PNG-header
+  dimension reading, 1D/2D/coord tile decoding) + `OgmoJsonParser`. `OgmoLayerDataConverter`'s
+  polymorphic dispatch is a plain JSON-key-presence check, not reflection. Preserved, not
+  fixed, a real upstream quirk (independently confirmed): `Convert`'s `Name` field applies
+  `Path.GetFileNameWithoutExtension` to a *version string*, not a file path — almost
+  certainly a copy-paste bug in upstream itself. 22 fresh tests.
+- **Both used the `Tiled/Converters/TiledTilemapDataConverter.cpp` two-stage architecture
+  (document model → runtime `TilemapData`) as their template**, as intended — each format's
+  actual conversion logic is format-specific, only the overall shape is shared.
 - **Both sub-agents in this batch were fully process-compliant** — no commits, no pushes, no
-  `plan.md`/`NEXT.md`/`NOTICE.md` edits. Notably including the fork that produced `Tiled/*`,
-  despite having the prior batch's plan.md-editing incident (see below) visible in its own
-  inherited context — a data point that the correction communicated to that prior fork (and
-  now baked into every subsequent fork prompt) is holding, not that the problem is
-  structural to every fork.
+  `plan.md`/`NEXT.md`/`NOTICE.md` edits, continuing the streak since the one plan.md
+  incident several batches back.
 - Verified independently before landing (as always): genuinely clean `rm -rf build`
   rebuild — zero warnings, both linked and headers-only configs; full `ctest` —
-  **1761/1761 passing** (was 1671 before this batch). Several concrete technical claims
-  independently re-verified against upstream/evidence, not just taken on trust (dead-code
-  skip claims via grep, the `sharp-runtime` naming-collision claim via direct header
-  inspection, the ring-buffer and decode-logic structure via line-level upstream comparison).
+  **1804/1804 passing** (was 1761 before this batch). Spot-checked both forks' most notable
+  claims directly against upstream (the `CanParse`/`ITilemapParser` gap-vs-not-a-gap
+  question; the `OgmoVersion`/`Name` quirk) rather than trusting the reports as-is.
 
-For the earlier Phase 4-5, Phase 6/9, and Tilemaps-core/Particles-bulk batches — including
-the process incident from a Tilemaps-core sub-agent editing `plan.md` twice despite explicit
-correction — see `git log` for individual commits and section 5 for the standing
-process-risk summary; not re-detailed here to keep this section focused on the current
-batch.
+**Phase 7 is now down to a single remaining item: `Rendering/*`.** Once that lands, Phase 7
+is complete and every phase in `plan.md` except Phase 10 (integration/polish/docs) is done.
+
+For the earlier Phase 4-5, Phase 6/9, Tilemaps-core/Particles-bulk, and Tiled/
+ParticleEffectSerializer batches — including the process incident from a Tilemaps-core
+sub-agent editing `plan.md` twice despite explicit correction — see `git log` for individual
+commits and section 5 for the standing process-risk summary; not re-detailed here.
 
 ---
 
@@ -112,9 +115,9 @@ batch.
 
 **None.** No build-breaking or test-failing issue. `cmake --build build -j$(nproc)`,
 `cmake --build build-headers -j$(nproc)`, and `ctest --test-dir build` all currently
-succeed (1761/1761 tests, zero warnings in both configs). The next substantive work is
-Phase 7's remaining sub-modules (`Rendering/*`, `LDtk/*`, `Ogmo/*`); see section 8. Phase 8
-is now fully complete.
+succeed (1804/1804 tests, zero warnings in both configs). The next substantive work is
+Phase 7's one remaining sub-module (`Rendering/*`); see section 8. Every other phase in
+`plan.md` except Phase 10 is now complete.
 
 ---
 
@@ -270,30 +273,29 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 1. **Phase 7 — Tilemaps `Rendering/*`** (`TilemapRenderer`, `TilemapSpriteBatchRenderer`,
    `TilemapWorldRenderer`, `TilemapWorldSpriteBatchRenderer`, `RenderMode`,
-   `TilemapRendererShared`). Depends on the now-complete Tilemaps core data model and
-   Phase 5's `SpriteBatch`. Note: this will hit the standing "no headless SpriteBatch mock"
-   gap (section 5) — expect it to compile but have limited/no behavioral test coverage,
-   matching the pattern already established for other SpriteBatch-drawing code.
+   `TilemapRendererShared`). Depends on the now-complete Tilemaps core data model (and its
+   `Tiled`/`LDtk`/`Ogmo` producers, all done) and Phase 5's `SpriteBatch`. Note: this will
+   hit the standing "no headless SpriteBatch mock" gap (section 5) — expect it to compile
+   but have limited/no behavioral test coverage, matching the pattern already established
+   for other SpriteBatch-drawing code. **This is the last item in Phase 7** — once it lands,
+   the only phase left in the entire plan is Phase 10.
    - Command: `ctest --test-dir build -R Tilemap` — expect 100% passing; both CMake
      configs stay clean.
 
-2. **Phase 7 — Tilemaps `LDtk/*` and `Ogmo/*`** (LDtk/Ogmo JSON document models +
-   integration). Independent of each other and of the now-landed `Tiled/*` — good
-   candidates for parallel sub-agents; `Tiled/*`'s just-landed
-   `Converters/TiledTilemapDataConverter.cpp` is a template for how a format-parser's
-   "document model → runtime `TilemapData`" stage should look.
-   - Command: `ctest --test-dir build -R "LDtk|Ogmo"` — expect 100% passing; both CMake
-     configs stay clean.
+Delegating to a sub-agent fork remains appropriate for this (user-approved this session,
+standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/`NOTICE.md`,
+orchestrator verifies then commits) — but see section 5's process-risk entry: independently
+check `git status`/`git diff` (not just `git log`) after every fork turn, including resumed
+ones, and be prepared for a "completed" notification to actually mean "stopped partway
+through" rather than genuinely done.
 
-Delegating to sub-agent forks remains appropriate for the larger items above (user-approved
-this session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/
-`NOTICE.md`, orchestrator verifies then commits) — but see section 5's process-risk entry:
-independently check `git status`/`git diff` (not just `git log`) after every fork turn,
-including resumed ones, and be prepared for a "completed" notification to actually mean
-"stopped partway through, including possibly mid-violation" rather than genuinely done.
-
-3. **Phase 10 — Integration, polish, documentation**, once Phase 7 lands. Scope depends on
-   what that phase actually produces — not detailed here yet.
+2. **Phase 10 — Integration, polish, documentation**, once `Rendering/*` lands. Scope
+   depends on what's actually left to polish at that point — not detailed here yet. Likely
+   candidates worth considering when scoping it: a real `README.md` (mentioned in
+   `CLAUDE.md`'s own "read first" list but not yet confirmed to exist), a pass over every
+   `NOTICE.md`-flagged licensing note for completeness, and deciding whether the standing
+   "no headless SpriteBatch mock" gap (section 5) is worth closing given how many modules
+   now depend on it for real test coverage.
 
 ---
 

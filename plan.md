@@ -1,8 +1,8 @@
 # cna-extended — Porting Plan
 
 Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6, 8, and 9 complete
-(2026-07-13). Phase 7 ("Tilemaps") in progress: core data model + `Tiled/*` done,
-`Rendering/*`/`LDtk/*`/`Ogmo/*` outstanding. Fidelity requirement: port 1:1 wherever
+(2026-07-13). Phase 7 ("Tilemaps") in progress: core data model, `Tiled/*`, `LDtk/*`, and
+`Ogmo/*` all done — only `Rendering/*` remains. Fidelity requirement: port 1:1 wherever
 C#/C++ differences allow — no simplification. See `NEXT.md`
 for current state.**
 
@@ -1101,11 +1101,48 @@ all now complete.
       if exact upstream-test parity here ever matters).
       **Process note**: this fork edited neither `plan.md` nor any other doc file — fully
       compliant, unlike the fork that produced the Core item above.
-- [ ] `LDtk/*` (LDtk JSON document model + integration)
-- [ ] `Ogmo/*` (Ogmo Editor JSON document model + integration)
+- [x] `LDtk/*` (LDtk JSON document model + integration) — **COMPLETE (2026-07-13)**. 21
+      Document DTOs ported as plain public fields + non-friended `from_json` (matching
+      `Tiled/Document`'s parser-intermediate style, since these types are equally pure/
+      behavior-free, unlike `TexturePacker`'s private+friend style). `LDtkTilemapDataConverter`
+      converts one already-selected `LDtkLevel` (LDtk projects are multi-level; iterating
+      levels is `LDtkJsonParser`'s job, not the converter's), following
+      `Tiled::Converters::Convert`'s established two-stage shape. `LDtkJsonParser` also
+      exposes LDtk-only convenience API present on upstream's own public surface
+      (`ParseLevel`/`ParseAllLevels`/`ParseWorld`/`GetWorldIdentifiers`/`GetTableOfContents`/
+      `GetWorldPosition`/`FindLevelByIid`) plus a genuinely-LDtk-specific `CanParse(filePath)`
+      — independently confirmed absent from the shared `ITilemapParser` interface and from
+      `TiledTmxParser.cs` (zero references), so this isn't a gap in the already-landed
+      interface, just a real per-format difference. **Real `std::stoi` leniency bug found
+      and fixed in this port's own new hex-color-parsing code** (same class of bug as the
+      `XmlReaderExtensions.cpp` fix earlier this session — doesn't validate full-string
+      consumption): fixed with a `TryParseHexByte` helper checking the parse position
+      reached the string's end. 21 fresh tests (hand-authored JSON fixture; no upstream
+      test uses a portable fixture format). One test-writing quirk self-caught and fixed:
+      an assertion incorrectly expected `ParseColor("#000000")` to equal
+      `Color::Transparent`, when `ParseColor` always forces `Alpha=255` — meaning upstream's
+      own `color != Color.Transparent || colorString == "#000000"` fallback clause is dead
+      code on the `!=` side; corrected the test's expected value and documented the
+      upstream dead-code quirk inline rather than silently dropping it.
+- [x] `Ogmo/*` (Ogmo Editor JSON document model + integration) — **COMPLETE (2026-07-13)**,
+      ported in parallel with `LDtk/*` (confirmed genuinely independent: disjoint files, no
+      shared dependency). 16 Document DTOs with `from_json`, matching the same JSON
+      convention. `OgmoLayerDataConverter`'s polymorphic layer-type dispatch is a plain
+      JSON-key-presence check (`tileset`/`data`/`data2D` → tile; `grid`/`grid2D` → grid;
+      `entities` → entity; `decals` → decal) — not reflection, translated directly.
+      `OgmoTilemapDataConverter` follows the same `Tiled`-established two-stage architecture,
+      with Ogmo-specific logic for tileset PNG-header dimension reading, 1D/2D/coord tile
+      decoding, and custom-value-to-property mapping. **Genuine upstream quirk preserved,
+      not fixed** (independently confirmed by reading the exact line): `Convert`'s `Name`
+      field is computed via `Path.GetFileNameWithoutExtension(level.OgmoVersion)` — applying
+      a filename-extension strip to a version string (e.g. `"3.4.0"` → `"3"`), almost
+      certainly an upstream copy-paste bug (probably meant to strip the actual file path),
+      ported exactly as-is. 22 fresh tests, including a synthetic in-memory PNG-header
+      resolver to exercise tileset dimension reading without a real texture (matching this
+      project's standing no-live-GraphicsDevice-test-infra boundary).
 - [ ] Explicitly **skip**: `Tilemaps/Content/*Reader` (xnb-based, see §2 exclusions)
-- [ ] Port the remaining `tests/MonoGame.Extended.Tests/Tilemaps/**` files (Rendering/LDtk/
-      Ogmo test coverage — the 8 core-data-model + `Tiled/*` test files are already done)
+- [ ] Port the remaining `tests/MonoGame.Extended.Tests/Tilemaps/**` files (`Rendering/*`
+      test coverage — every other test file for this phase is already done)
 
 ### Phase 8 — Particles — **COMPLETE (2026-07-13)**
 
