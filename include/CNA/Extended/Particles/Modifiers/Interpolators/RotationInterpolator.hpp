@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Robert Vokac and contributors
+// Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
+//
+// Ported from MonoGame.Extended's Particles/Modifiers/Interpolators/RotationInterpolator.cs.
+#pragma once
+
+#include "CNA/Extended/Particles/Modifiers/Interpolators/InterpolatorOfT.hpp"
+
+namespace CNA::Extended::Particles::Modifiers::Interpolators
+{
+    /** @brief Interpolates a particle's rotation between StartValue and EndValue over its lifetime. */
+    class RotationInterpolator : public InterpolatorOfT<float>
+    {
+    public:
+        RotationInterpolator() : InterpolatorOfT("RotationInterpolator") {}
+
+        void Update(float amount, Data::Particle* particle) override;
+    };
+}
