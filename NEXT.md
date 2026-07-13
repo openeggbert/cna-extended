@@ -6,6 +6,84 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (19) — Phase 2 task 1 IN PROGRESS: Collision2D chunk 1 of ~2, CollisionResult2D, CollisionShapeKind2D
+
+Phase 2 ("Collisions 2D") started. Task 1 is "Root types: `Collision2D`, `CollisionResult2D`,
+`CollisionShape2D`, `CollisionShapeKind2D`" — unusually large (`Collision2D.cs` alone is 3,809
+lines, the biggest single file in this whole port by a wide margin), so it's landing across
+several commits rather than one, all still nominally "task 1" until the whole thing is done and
+`plan.md`'s checklist gets ticked.
+
+**Landed so far:**
+- `CollisionShapeKind2D` (trivial `internal enum`) and `CollisionResult2D` (simple result
+  struct + `Invert()`) ported directly, no fork. Fresh tests (6) since no upstream test file
+  covers `Invert` and only 4 of upstream's `CollisionResult2DTest.cs` facts translate 1:1 (the
+  5th, `Default_ReturnsNonIntersectingResult`, folds into the default-constructor check — C++
+  has no separate `default`-keyword-expression distinct from default construction for a struct).
+- `Collision2D` — first of ~2 forked chunks. Originally scoped to just Constants/Helpers/
+  Containment (lines 1–1487 of the upstream file), but the fork discovered and reported a real,
+  verified cross-region dependency chain (confirmed myself by reading upstream directly, e.g.
+  `ContainsConvexPolygonConvexPolygon` genuinely calls `IntersectsConvexPolygonConvexPolygon`)
+  that made the originally-planned narrow scope impossible to port in isolation. Ended up
+  covering: Constants, Helpers, all 5 Containment sub-regions, the full Projection region, the
+  full Distance/ClosestPoint region, 2 of 3 Clipping-region methods (`ClipLineToAabb`/
+  `ClipLineToConvexPolygon`, needed by Distance, not by the still-pending Ray Interval methods),
+  and all 15 plain-`bool` `Intersects*` methods (but none of the `CollisionResult2D`-producing
+  `TryGetCollision*` overloads, which nothing ported so far depends on) — 64 methods, 103 tests
+  ported 1:1 from `Collision2DTest.cs`'s matching regions.
+  **Independently re-verified before committing** (given the significant unrequested scope
+  expansion, this got more scrutiny than a typical fork report): confirmed the
+  `ContainsConvexPolygonConvexPolygon`/`IntersectsConvexPolygonConvexPolygon` dependency
+  directly against upstream; spot-checked `DistanceSquaredSegmentSegment` (Ericson's classic
+  closest-point-between-segments algorithm) line-by-line against upstream, exact match; ran
+  `grep -oP` diffs of upstream method names vs. what's now in `Collision2D.hpp` to get the
+  definitive remaining-method list myself (matches the fork's own count); did a genuinely clean
+  `rm -rf build` + full rebuild of both CMake configs before trusting the reported pass count.
+  **Zero upstream bugs found in this chunk** — unlike several Phase 1 Collections tasks, this
+  algorithmic code translated cleanly.
+
+**Remaining for `Collision2D` (verified via the diff above, not guessed)**: 5 methods —
+`SolveParametricIntersectionWithImplicitLine`, `SolveParametricIntersection2D` (Parametric
+Solvers region), `ClosestPointRaySegment`, `RayCircleIntersectionInterval`,
+`RayCapsuleIntersectionInterval` (Ray Interval methods + their shared helper) — plus all 10
+`TryGetCollision*(..., out CollisionResult2D)` overloads (`TryGetCollisionAabbAabb`,
+`AabbConvexPolygon`, `AabbObb`, `ObbObb`, `ObbConvexPolygon`, `CircleCircle`, `CircleAabb`,
+`CircleObb`, `CircleCapsule`, `ConvexPolygonConvexPolygon`). This is a much smaller remaining
+scope than originally planned (roughly 800–1000 lines, not the ~2300 lines two more forks were
+originally sized for) — likely just ONE more fork, not two.
+
+**After `Collision2D` is fully done**: `CollisionShape2D` (713 lines) is the last piece of task
+1 — it depends on the whole of `Collision2D` including the `TryGetCollision*` overloads (its own
+`TryGetCollision(CollisionShape2D other, out CollisionResult2D result)` method dispatches to
+them by shape-kind pair). No dedicated upstream test file for `CollisionShape2D` exists.
+
+**Verification so far**: both build modes clean from a genuinely clean rebuild, zero new
+warnings, `ctest` → **100% passed, 772/772** (was 669 before this task — 103 new, all from the
+`Collision2D` chunk; `CollisionResult2D`'s 6 tests are already included in that count too via an
+earlier direct-port sub-step, giving 669→772 as the net delta for this whole entry).
+
+**Also landed this session, unrelated to Phase 2**: the user asked for in-code comments (not
+just test-file comments) at every previously-found upstream bug's exact location. Added inline
+comments (in addition to already-present header-comment explanations) to `ObjectPool.hpp`'s
+`Use()` method and `Deque.hpp`'s `RemoveAt`'s two buggy shift branches. Found and fixed a real
+gap: `RectangleF.Extensions.Clip`'s bug (mutates X/Y before deriving Width/Height from the
+already-mutated values) was previously documented ONLY in `RectangleFExtensionsTests.cpp`'s
+comments, with nothing in `RectangleFExtensions.hpp`/`.cpp` themselves — added matching
+header-comment and inline documentation there too. This was a legitimate blind spot: every
+*other* found bug already had both header + inline documentation; this one had fallen through
+the cracks by only ever being written up in the test file. Worth double-checking for this same
+gap (test-file-only documentation without matching header/inline documentation) whenever a
+future bug is found and documented, not just trusting that "documented somewhere" means
+"documented in the right place."
+
+**State / next step**: launch the next fork for `Collision2D`'s remaining 15 methods
+(Parametric Solvers + Ray Interval + all 10 `TryGetCollision*` overloads), verify it the same
+way, then fork `CollisionShape2D`, then finalize `plan.md`'s task-1 checklist entry and decisions
+log, commit, and push. Continue without pausing for a status update, per the standing
+correction, unless a genuine blocker requiring the user's judgment comes up.
+
+---
+
 ## 2026-07-13 (18) — Phase 1 test-suite parity pass; PHASE 1 COMPLETE (Phase 1 task 30)
 
 Continued straight through, no check-in pause. **This was the last Phase 1 task.**
