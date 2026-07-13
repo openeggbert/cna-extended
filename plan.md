@@ -848,18 +848,41 @@ Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`
       `easygl_shader_effect_test.cpp` — passed on real OpenGL ES 3.2 (Mesa) hardware.
       `EffectResource.cs` not ported (superseded entirely). `ITextureEffect`,
       `IMatrixChainEffect` also landed. See `NEXT.md` entry (31) for the full rationale.
-- [ ] `Sprite`, `AnimatedSprite`, `SpriteSheet`, `SpriteSheetAnimation`,
-      `SpriteSheetAnimationBuilder`, `SpriteSheetAnimationFrame`
-- [ ] `Texture2DAtlas`, `Texture2DRegion`, `Texture2DRegion.Extensions`
-- [ ] `NinePatch`
-- [ ] `SpriteBatch.Extensions`, `GraphicsDevice.Extensions`, `RenderTarget2DExtensions`,
-      `PrimitiveTypeExtensions`, `FlipFlags` (`IMatrixChainEffect` already landed above)
+- [x] `Sprite`, `AnimatedSprite`, `SpriteSheet`, `SpriteSheetAnimation`,
+      `SpriteSheetAnimationBuilder`, `SpriteSheetAnimationFrame` — **COMPLETE (2026-07-13)**.
+      Ported as one coordinated dependency-ordered unit (see `NEXT.md`). `AnimatedSprite`
+      consumes the parallel-landed `Animations/` module's `IAnimationController`/
+      `AnimationController` (see below). `SpriteSheetAnimationFrame`'s upstream `internal`
+      constructor kept public per this port's established internal-visibility convention.
+- [x] `Texture2DAtlas`, `Texture2DRegion`, `Texture2DRegion.Extensions` — **COMPLETE
+      (2026-07-13)**. `Texture2DRegion` is `std::shared_ptr`-managed throughout (a genuine
+      multiply-aliased reference type upstream: atlas indexes it twice, `Sprite`/`NinePatch`
+      hold it, `GetSubregion` hands out fresh ones) — see `Texture2DRegion.hpp`'s header
+      comment for the full ownership reasoning. `Texture2DAtlas`'s `internal static
+      CalculateRegions` exposed (not kept `internal`-equivalent-private) specifically so
+      upstream's own issue #1013 regression test could be ported verbatim. The `internal
+      GetRegions(ReadOnlySpan<IAnimationFrame> frames)` overload is *not* ported — confirmed
+      via grep to have zero call sites anywhere in MonoGame.Extended itself; add if a real
+      caller ever needs it.
+- [x] `NinePatch` — **COMPLETE (2026-07-13)**.
+- [x] `SpriteBatch.Extensions`, `GraphicsDevice.Extensions`, `RenderTarget2DExtensions`,
+      `PrimitiveTypeExtensions`, `FlipFlags` (`IMatrixChainEffect` already landed above) —
+      **COMPLETE (2026-07-13)**. `SpriteBatch.Extensions`' private `_patchCache` scratch
+      buffer ported as a translation-unit-local static array; its dead `_rect` field was not
+      ported (confirmed unused anywhere in the file).
 - [ ] `Content/TexturePacker/*` (direct-JSON TexturePacker atlas format — not xnb-based)
 - [ ] `Content/ExternalResourceResolver(s)` (not xnb-specific)
 - [ ] `BitmapFonts/*` (runtime `BitmapFont`/`BitmapFontRegion` types — **not** the xnb
       `Content/BitmapFonts/` helper)
-- [ ] `Animations/*` (`AnimationController`, `AnimationEvent`, `AnimationEventTrigger`,
-      `IAnimationController`, `IAnimation`, `IAnimationFrame`) + root `AnimationComponent`
+- [x] `Animations/*` (`AnimationController`, `AnimationEvent`, `AnimationEventTrigger`,
+      `IAnimationController`, `IAnimation`, `IAnimationFrame`) + root `AnimationComponent` —
+      **COMPLETE (2026-07-13)**, ported in parallel with the Sprite/Texture2D chain above
+      (confirmed independent via grep before parallelizing: zero references from Animations/*
+      into the Sprite cluster at the time). Verified via successful integration (builds clean
+      in both linked and headers-only configs, 100% of `ctest` passes with these files
+      included) and a spot read of `AnimationComponent.hpp` against upstream
+      `AnimationComponent.cs` — not yet given the same file-by-file member-audit pass as the
+      rest of this phase; worth a closer read later if time allows.
 - [ ] Port `tests/MonoGame.Extended.Tests/{Graphics,BitmapFonts,Animations}`
 
 ### Phase 6 — Serialization

@@ -6,6 +6,106 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (32) — Sprite/Texture2D dependency chain ported (Phase 5); Animations/* landed in parallel
+
+Ported the whole Sprite/Texture2D cluster as one coordinated unit, in upstream dependency order:
+`Texture2DRegion` → `Texture2DRegion.Extensions` (`GetSubregion`/`CreateNinePatch`) → `NinePatch` →
+`Texture2DAtlas` → `Sprite` → `SpriteSheetAnimationFrame`/`SpriteSheetAnimation`/
+`SpriteSheetAnimationBuilder` → `SpriteSheet` → `AnimatedSprite` → `SpriteBatch.Extensions` — 11
+new headers, 10 new `.cpp` (`SpriteSheetAnimationFrame` is header-only), 7 fresh test files, 58 new
+tests. In parallel, a separate background agent independently ported `Animations/*`
+(`IAnimationFrame`, `IAnimation`, `IAnimationController`, `AnimationController`, `AnimationEvent`,
+`AnimationEventTrigger`, root `AnimationComponent`) — confirmed genuinely independent beforehand
+via `grep` (zero references from `Animations/*` into the Sprite cluster), and confirmed the
+direction of the *real* dependency runs the other way (`SpriteSheetAnimationFrame implements
+IAnimationFrame`, `SpriteSheetAnimation implements IAnimation`, `AnimatedSprite` uses
+`AnimationController` directly) — so `Animations/*` had to land first from the Sprite chain's
+perspective, and it had, by the time this work reached `SpriteSheetAnimationFrame`.
+
+**Key design decision — `Texture2DRegion` is always `std::shared_ptr`-managed.** Upstream's
+`Texture2DRegion` is a C# reference type genuinely aliased from ≥3 independent owners at once (a
+`Texture2DAtlas` indexes it by both position and name, a `Sprite` holds it, a `NinePatch` holds
+nine of them, `GetSubregion` hands out fresh derived ones) and its mutable `Tag` field means
+identity — not just value — has to be preserved across every holder. A non-owning raw pointer
+would leave no single clear owner; `shared_ptr` is the honest translation of C#'s GC reference
+semantics here, not a reached-for default. Documented at length in `Texture2DRegion.hpp`'s header
+comment. `Texture2D*` itself stays a non-owning raw pointer (externally-owned GPU resource, same
+convention as `Graphics/Effects/ITextureEffect.hpp`). `Sprite`/`Texture2DAtlas` are plain
+value/reference-passed types (nothing else aliases a `Sprite` instance; `SpriteSheet` holds a
+non-owning `Texture2DAtlas&` reference, since the atlas is caller-owned and outlives the sheet in
+every real usage).
+
+**Two genuine upstream quirks found and preserved, not fixed** (per this project's port-faithfully
+mandate):
+- `Texture2DRegion(Texture2D texture, string name)` **ignores its own `name` parameter** — its
+  body always delegates with `null`, so the name silently falls back to `texture.Name` regardless
+  of what's passed. Confirmed by reading the actual constructor body, not assumed. Documented in
+  `Texture2DRegion.hpp` and exercised by a test (`ConstructWithNameParameterIgnoresIt`).
+- `AnimatedSprite`'s single-argument constructor (`AnimatedSprite(SpriteSheet spriteSheet)`) never
+  assigns `_animation`/`Controller` — calling `CurrentAnimation`/`Controller`/`Update` before a
+  follow-up `SetAnimation()` call throws `NullReferenceException` upstream (its own
+  `ArgumentNullException.ThrowIfNull(spriteSheet)` check is dead code, unreachable because
+  `base(spriteSheet.TextureAtlas[0])` already dereferences `spriteSheet` first). Translated as
+  nullable state (`shared_ptr`/`unique_ptr`, both null after that constructor) with an explicit,
+  catchable `std::logic_error` thrown on access instead of replicating the null-deref crash —
+  preserves the "must call `SetAnimation` first" contract as safe, documented C++ behavior rather
+  than UB. Covered by `AccessingControllerBeforeSetAnimationThrows`/`UpdateBeforeSetAnimationThrows`.
+
+**`Texture2DAtlas::CalculateRegions`** (upstream `internal static`) was deliberately exposed as a
+public static method — not folded away as a private implementation detail of `Create()` — 
+specifically so upstream's own regression test for
+[MonoGame-Extended#1013](https://github.com/MonoGame-Extended/Monogame-Extended/issues/1013)
+(duplicate region names) could be ported essentially verbatim
+(`CalculateRegionsShouldGenerateUniqueRegionNames`). This is the only upstream unit test that
+exists anywhere for this whole cluster (`tests/MonoGame.Extended.Tests/Graphics/Texture2DAtlasTests.cs`)
+— every other test in this batch is fresh, no upstream equivalent to port.
+
+**`Texture2DAtlas`'s `internal Texture2DRegion[] GetRegions(ReadOnlySpan<IAnimationFrame> frames)`
+overload was intentionally not ported** — confirmed via `grep` across the entire upstream
+MonoGame.Extended source tree that it has zero call sites anywhere, including within
+MonoGame.Extended itself. Porting it would have pulled an `Animations/` header dependency into
+`Texture2DAtlas.hpp` for genuinely dead code. Add it later if a real caller needs it.
+
+**Test infrastructure note (a positive one, unlike prior Phase 5 gaps):** unlike
+`Graphics/Effects/*`/`ViewportAdapters`/`VectorDraw` earlier this phase, this batch did *not* hit
+the "no live-GraphicsDevice test infra" wall — CNA's `Texture2D::CreateCpuOnlyForTests(w, h,
+format, pixels)` (a NOXNA test-only factory) builds a real, non-null `Texture2D` with no
+GraphicsDevice/GPU backend at all, which is exactly what `Texture2DRegion`/`Sprite`/
+`Texture2DAtlas`/etc. need to construct against. All 58 new tests run headlessly, no GPU needed.
+**`SpriteBatch.Extensions`' `Draw(...)` functions remain untested**, though: they all funnel into a
+real `SpriteBatch::Draw(...)` call, and CNA's own ecosystem has no GoogleTest-based mock
+`ISpriteBatchBackend` precedent (only real-GPU example programs under `cna/examples/`) — same
+documented gap as before, just for a different reason (missing mock infra, not missing GraphicsDevice
+factory). Worth revisiting if/when a headless `ISpriteBatchBackend` test double gets built for this
+ecosystem generally.
+
+**Verification:** clean `rm -rf`-style rebuild in both configs — `cmake --build build
+-j"$(nproc)"` (linked, `-DCNA_EXTENDED_LINK_CNA=ON`) and a separate `build-headers-only` dir
+(plain headers-only default, removed after verifying) — zero warnings/errors in either. `ctest` →
+**1299/1299 passing** (was 1241 before this session's Sprite/Texture2D + Animations work landed —
+58 net new from the Sprite chain here, the rest from the parallel Animations landing). `git status`
+confirms exactly the expected file set (11 headers + 10 `.cpp` + 7 tests under `Graphics/`, plus
+the separately-landed `Animations/` tree) — no `plan.md`/`NEXT.md`/`NOTICE.md` touched by the
+background agent, matching the standing fork-discipline rule.
+
+**Animations/* verification caveat, stated honestly**: checked off in `plan.md` on the strength of
+(a) file presence matching `plan.md`'s own itemized list exactly, (b) clean integration — it builds
+and links as part of the same `CNA_EXTENDED` target and its own tests are part of the 1299 passing
+— and (c) a spot read of `AnimationComponent.hpp` against upstream `AnimationComponent.cs` that
+looked careful and consistent with this project's conventions (correctly caught that
+`AnimationComponent.cs` lives at upstream's package root but declares the `MonoGame.Extended.Animations`
+namespace, not the root namespace, and placed the port accordingly). It has **not** been given the
+same file-by-file member-audit this session's other modules get before being marked complete —
+worth a closer dedicated read later if time allows, per the standing "always independently verify a
+fork's work" discipline.
+
+**Next**: `Content/TexturePacker/*` and `BitmapFonts/*` (both depend on this now-landed Sprite/
+Texture2D chain) are the remaining Phase 5 items, plus porting the Graphics/BitmapFonts/Animations
+upstream test directories (only `Texture2DAtlasTests.cs` and `Animations/AnimationTests.cs` existed
+to port so far; `BitmapFonts` has no code yet to have tests for).
+
+---
+
 ## 2026-07-13 (31) — Phase 5 started: Graphics/Effects/* re-authored on CNA's ShaderEffect (user-approved design deviation)
 
 Started Phase 5. Investigated `plan.md`'s own flagged design question (`Graphics/Effects/*` "may
