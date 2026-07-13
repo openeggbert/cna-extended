@@ -504,7 +504,30 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       `std::function<T*()>`, matching this project's established `Func<T>` convention
       (see `HslColor.hpp`'s `Match`/`Map`). No upstream tests for either file — wrote
       fresh tests. Both build modes clean, `ctest` → 507/507 (was 503).
-- [ ] `FramesPerSecondCounter` + `FramesPerSecondCounterComponent`
+- [x] `FramesPerSecondCounter` + `FramesPerSecondCounterComponent` (2026-07-13, ported
+      directly, no fork) — both fully ported, no deferrals. `FramesPerSecondCounter`
+      implements CNA's `IUpdateable` (`System::Object` base +
+      `EnabledChanged`/`UpdateOrderChanged` as public `System::EventHandler` members +
+      `getEnabledChangedEvent()`/`getUpdateOrderChangedEvent()`), following the exact
+      pattern already established by CNA's own `GameComponent.hpp`/`.cpp` (first
+      `System::Object`-deriving type in `cna-extended`). **Likely upstream bug, preserved
+      for fidelity**: the `UpdateOrder` setter raises `EnabledChanged`, not
+      `UpdateOrderChanged` -- almost certainly a copy-paste error from the `Enabled`
+      setter immediately above it in `FramesPerSecondCounter.cs`. Reproduced exactly,
+      documented prominently in the header, covered by a regression test that names the
+      discrepancy explicitly (matches the `Segment2.SquaredDistanceTo` precedent from
+      task 18). `_oneSecondTimeSpan` (`static readonly` upstream) ported as a local value
+      constructed where needed rather than a `static const` class member, avoiding any
+      static-initialization-order risk (the `Matrix3x2::Identity` lesson from task 20) --
+      a storage-duration simplification only, not a logic change, since the value never
+      varies. `FramesPerSecondCounterComponent` (`DrawableGameComponent` subclass,
+      forwards `Update`/`Draw` to an internal `FramesPerSecondCounter`) requires a live
+      `Game&` to construct; ported without a dedicated test file, matching CNA's own
+      established precedent for this exact situation (`cna`'s own
+      `DrawableGameComponentTests.cpp`: "No tests: DrawableGameComponent requires a live
+      Game and GraphicsDevice (SDL/GPU)."). All the independently-testable logic lives in
+      `FramesPerSecondCounter`, which is fully unit tested. No upstream tests exist for
+      either file. Both build modes clean, `ctest` → 516/516 (was 507).
 - [ ] `SimpleGameComponent` + `SimpleDrawableGameComponent`
 - [ ] Collections: `Bag<T>`, `Deque<T>`
 - [ ] Collections: `ObjectPool<T>`, `Pool<T>`, `IPoolable`, `ItemEventArgs`
@@ -808,6 +831,29 @@ implementations — confirm and reuse rather than re-rolling).
   rather than trusting the fork's already-built `build/` directory, confirming zero new
   compiler warnings and 503/503 `ctest` from scratch. No upstream bugs found this time —
   the algorithm translated cleanly.
+- 2026-07-13 — `FramesPerSecondCounter`/`FramesPerSecondCounterComponent` ported
+  directly (no fork; tiny, ~100 lines of C# total). First `cna-extended` type to
+  implement CNA's own `IUpdateable` interface and derive from `System::Object` — followed
+  CNA's own `GameComponent.hpp`/`.cpp` pattern closely rather than inventing a new one
+  (public `EventHandler<EventArgs>` members, `getXChangedEvent()` accessor overrides,
+  `Raise(this, EventArgs::Empty)` for firing). Found this session's third confirmed
+  upstream bug: `FramesPerSecondCounter.UpdateOrder`'s setter raises `EnabledChanged`
+  instead of `UpdateOrderChanged` (a copy-paste error from the `Enabled` setter directly
+  above it) — preserved exactly, documented prominently, covered by an explicit
+  regression test naming the discrepancy, matching the `Segment2.SquaredDistanceTo`
+  precedent rather than "fixing" it. `FramesPerSecondCounterComponent` needs a live
+  `Game&` to construct (it's a `DrawableGameComponent`); confirmed via `cna`'s own test
+  suite (`DrawableGameComponentTests.cpp`) that this project's sibling repo already
+  established the precedent of not unit-testing that base class for exactly this reason
+  — followed the same precedent rather than inventing test infrastructure CNA itself
+  doesn't have. Caught and fixed one of my own test-authoring mistakes before landing:
+  an initial test assumed `FramesPerSecondCounter`'s internal timer starts at zero, but
+  it actually starts pre-loaded at a full second (matches upstream's own
+  `_timer = _oneSecondTimeSpan;` field initializer) — meaning the very first `Update()`
+  call always latches a `FramesPerSecond` reading immediately, regardless of how little
+  time has actually elapsed. Traced the arithmetic by hand to confirm this is correct
+  *upstream* behavior (not a fidelity bug in the port), then rewrote the test to assert
+  the real behavior instead of masking it.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

@@ -6,6 +6,48 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (13) — FramesPerSecondCounter, FramesPerSecondCounterComponent ported (Phase 1 task 25)
+
+Continued straight through, no check-in pause.
+
+**Ported directly** (no fork; ~100 lines of C# total). First `cna-extended` type to
+implement CNA's `IUpdateable` interface and derive from `System::Object` — closely
+followed CNA's own `GameComponent.hpp`/`.cpp` pattern (public `EventHandler<EventArgs>`
+members, `getXChangedEvent()` accessor overrides, `Raise(this, EventArgs::Empty)`).
+
+**Third confirmed upstream bug this session, preserved not fixed**:
+`FramesPerSecondCounter.UpdateOrder`'s setter raises `EnabledChanged` instead of
+`UpdateOrderChanged` — a copy-paste error from the `Enabled` setter directly above it in
+`FramesPerSecondCounter.cs`. Reproduced exactly, documented prominently in
+`FramesPerSecondCounter.hpp`'s header comment, covered by an explicit regression test
+that names the discrepancy (`UpdateOrderSetterRaisesEnabledChangedNotUpdateOrderChangedReproducesKnownUpstreamBug`).
+
+**`FramesPerSecondCounterComponent`** (a `DrawableGameComponent` subclass, just forwards
+`Update`/`Draw` to an internal `FramesPerSecondCounter`) needs a live `Game&` to
+construct — no dedicated test file, matching a precedent CNA itself already set:
+`cna`'s own `tests/Microsoft/Xna/Framework/DrawableGameComponentTests.cpp` literally says
+"No tests: DrawableGameComponent requires a live Game and GraphicsDevice (SDL/GPU)." All
+the independently-testable logic lives in `FramesPerSecondCounter` itself, which is fully
+unit tested.
+
+**Caught my own test-authoring bug before landing**: an initial test assumed the internal
+timer starts at zero seconds, but it actually starts pre-loaded at a full second (matches
+upstream's `_timer = _oneSecondTimeSpan;` field initializer) — so the very first
+`Update()` call always latches a `FramesPerSecond` reading immediately, no matter how
+little time elapsed. Hand-traced the arithmetic to confirm this is genuine upstream
+behavior, not a fidelity bug in the port, then rewrote the test to assert the real
+behavior.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 516/516** (was 507).
+
+**State / next step:** Phase 1 is 25 of ~30 tasks in. Next per `plan.md` §5 Phase 1: task
+26, `SimpleGameComponent` + `SimpleDrawableGameComponent`. No known blockers. Continue
+without pausing for a status update, per the standing correction, unless a genuine
+blocker requiring the user's judgment comes up. **Commit AND push to `develop`** after
+this task.
+
+---
+
 ## 2026-07-13 (12) — GameTimeExtensions, GameComponentCollectionExtensions ported (Phase 1 task 24)
 
 Continued straight through, no check-in pause.
