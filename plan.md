@@ -264,7 +264,31 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       actually has active and portable 1:1 (7 tests: `Math/RectangleFTests.cs` +
       `RectangleExtensionsTests.cs`), wrote ~30 fresh tests for everything else that's
       ported but untested/disabled upstream.
-- [ ] `CircleF`, `EllipseF`, `Segment2`
+- [x] `CircleF`, `EllipseF`, `Segment2` (2026-07-13, via forked sub-agent) — ~860 lines
+      across 9 files. `EllipseF` fully self-contained, zero deferrals. `CircleF`: 4
+      `Intersects(CircleF, BoundingRectangle)` overloads deferred (call
+      `BoundingRectangle::SquaredDistanceTo`, itself already blocked on `PrimitivesHelper`
+      — inherited blocker, not new). `Segment2`: 2 `Intersects(RectangleF|
+      BoundingRectangle, out Vector2)` overloads deferred (`PrimitivesHelper.
+      IntersectsSlab`, not ported). No whole-type deferral needed this time (unlike
+      `OrientedRectangle`).
+      **Genuine upstream bug found and faithfully preserved**: `Segment2.SquaredDistanceTo`
+      (`Segment2.cs:96`) has a bare `endToPoint.Dot(endToPoint);` expression statement
+      missing its `return` — for a point that projects beyond the segment's `End`, this
+      silently falls through to the perpendicular-distance formula instead of returning the
+      correct end-point distance, producing a wrong result (confirmed: e.g. 400 instead of
+      the correct 800 for one straightforward case). The C++ port reproduces this exactly,
+      per the standing no-simplification mandate; documented prominently in `Segment2.hpp`'s
+      header comment and covered by a regression test asserting the actual (bug-preserving)
+      value with a comment showing what the "correct" value would be. **Do not silently fix
+      this if it's ever noticed again** — it's a deliberate fidelity choice, not an oversight.
+      `CircleF.cs`/`Segment2.cs` cite "Real-Time Collision Detection, Christer Ericson,
+      2005" as an algorithm source in comments — an academic citation, not a third-party
+      code/license dependency (unlike `Angle.cs`'s SlimMath case); no `NOTICE.md` change
+      needed. Test coverage: `EllipseFTest.cs` fully active, ported 1:1 (13 cases);
+      `CircleFTests.cs` has exactly 1 active upstream test (rest commented out) — ported
+      that one plus ~15 fresh; `Segment2DTests.cs` is entirely commented out upstream (0
+      portable) — wrote 11 fresh tests, including the bug-regression test above.
 - [ ] `Size`, `SizeF`, `Interval`, `Thickness`
 - [ ] `Matrix3x2`, `MatrixExtensions`, `Vector2Extensions`
 - [ ] `FastRandom`, `RandomExtensions`
@@ -459,6 +483,15 @@ implementations — confirm and reuse rather than re-rolling).
   both follow-ups in the same pass, updating `Camera.hpp`'s forward-declare to a real
   `#include`. Independent re-verification via `grep -n "public "` against `RectangleF.cs`
   confirmed the `Equals`/`GetHashCode`/`ToString`/operators checklist held up again.
+- 2026-07-13 — `CircleF`/`EllipseF`/`Segment2` ported via a forked sub-agent. Found (and
+  faithfully preserved, per the standing no-simplification mandate) a genuine upstream bug:
+  `Segment2.SquaredDistanceTo` silently drops a `return` for points beyond the segment's
+  `End` (see the Phase 1 checklist entry above for the exact line and confirmed wrong
+  value) — independently re-verified by reading `Segment2.cs:96` directly, confirmed the
+  fork's finding is accurate. This is the first confirmed upstream bug found during
+  porting; if another turns up, apply the same rule: preserve it, document it prominently
+  in the header, cover it with a regression test that names the discrepancy explicitly —
+  never silently "fix" it while porting.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

@@ -6,6 +6,68 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (5) — CircleF, EllipseF, Segment2 ported (Phase 1 task 9); found a real upstream bug
+
+Continued straight through, no check-in pause.
+
+**Forked** (~930 lines of C# across 3 files). **Ported**: `CircleF`, `EllipseF` (fully
+self-contained, zero deferrals), `Segment2` — ~860 lines across 9 new files. Small
+deferrals in `CircleF` (4 `Intersects(CircleF, BoundingRectangle)` overloads) and
+`Segment2` (2 `Intersects(RectangleF|BoundingRectangle, ...)` overloads), both blocked on
+`PrimitivesHelper` (inherited blocker, not new this task). No whole-type deferral needed
+this time.
+
+**Found a genuine upstream bug, independently re-verified before trusting it**:
+`Segment2.SquaredDistanceTo` (upstream `Segment2.cs:96`) has
+```
+if (dot >= startToEndDistanceSquared)
+    endToPoint.Dot(endToPoint);   // <-- missing `return`!
+```
+For a point projecting beyond the segment's `End`, this silently falls through to the
+perpendicular-distance formula below it instead of returning the (correct) end-point
+distance — confirmed wrong (400 instead of the correct 800 for a documented test case).
+Read the upstream line myself to confirm the fork's finding rather than just trusting the
+report. **Ported this exactly as-is** — the project's explicit no-simplification mandate
+means preserving upstream bugs, not silently correcting them. Documented prominently in
+`Segment2.hpp`'s header comment, with a regression test that names both the actual
+(bug-preserving) value and what the mathematically-correct value would be. **If this is
+ever noticed again in a future session, do not "fix" it** — it's a deliberate, documented
+fidelity choice. This is the first confirmed upstream bug found during this port; the same
+handling rule applies to any future ones.
+
+**Attribution check**: `CircleF.cs`/`Segment2.cs` cite "Real-Time Collision Detection,
+Christer Ericson, 2005" in code comments — an academic algorithm citation (like citing a
+textbook for the algorithm's origin), not a third-party code/license dependency the way
+`Angle.cs`'s SlimMath credit was. No `NOTICE.md` change needed for this one.
+
+**Test coverage**: same pattern as recent tasks — upstream's own test suite here is
+unusually thin (`EllipseFTest.cs` fully active, ported 1:1; `CircleFTests.cs` has exactly
+1 active test with the rest commented out; `Segment2DTests.cs` is entirely commented out
+upstream). Ported what's actually active, wrote fresh tests for the rest, including the
+bug-regression test above.
+
+**Bugs the fork found and fixed via building/running (not review alone)**: CNA's
+`Vector2::Dot` is `static`, not an instance method (`a.Dot(b)` doesn't exist, needed
+`Vector2::Dot(a, b)`) — ~7 call sites fixed. Also caught two of its own fresh test bugs
+(a "contains" test using a point that was actually outside the circle; the bug-regression
+test's assertion initially backwards) — both are real "the test was wrong, not the port"
+cases, same category as the RectangleF task's `Clip` test bug.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 274/274** (was 230
+before this task).
+
+**State / next step:** Phase 1 is 9 of ~20 tasks in. Next per `plan.md` §5 Phase 1: `Size`,
+`SizeF`, `Interval`, `Thickness`. This one matters more than most remaining tasks —
+`SizeF` specifically is what's been blocking `ISizable`'s test, parts of `RectangleF`/
+`BoundingRectangle`, and probably more once you check. **After this task lands, do a
+sweep for "needs SizeF" deferral comments across the tree** (grep for "SizeF" in header
+comments) and land whichever follow-ups are genuinely unblocked, the same way the
+RectangleF task did for `IRectangularF`/`Camera<T>`. Continue without pausing for a
+status update, per the standing correction, unless a genuine blocker requiring the user's
+judgment comes up.
+
+---
+
 ## 2026-07-13 (4) — RectangleF family ported (Phase 1 task 8), largest task since bounding volumes
 
 Continued straight through, no check-in pause (per the standing correction).
