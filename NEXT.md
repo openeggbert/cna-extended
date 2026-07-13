@@ -6,6 +6,70 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (11) — Math/Triangulation ported (Phase 1 task 23)
+
+Continued straight through, no check-in pause.
+
+**Ported via a forked sub-agent** (6 upstream files, ~870 lines, an ear-clipping
+triangulation algorithm) — `Vertex`, `LineSegment`, `Triangle`, `CyclicalList<T>`,
+`IndexableCyclicalLinkedList<T>`, `Triangulator` + `WindingOrder` enum, all in a new
+`CNA::Extended::Triangulation` sub-namespace (mirrors the `Shapes` sub-namespace
+precedent from the prior task). No deferrals.
+
+**License note — handled directly, not by the fork**: unlike almost every other file
+ported so far (which just cite an algorithm source, e.g. "Real-Time Collision
+Detection"), all 6 of these files carry `MIT Licensed:
+https://github.com/nickgravelyn/Triangulator` in their own headers — the same "code
+actually derived from a different MIT project" situation as `Angle.cs`/SlimMath. Did the
+license research myself before delegating the port: the original repo 404s on GitHub
+(both web UI and API), no mirror/archive/renamed-account found. Added a `NOTICE.md` entry
+using the standard MIT template with an explicit provenance caveat (documented what's
+confirmed — MIT, per 6 consistent upstream file headers plus web search corroboration —
+vs. what couldn't be verified — the exact original copyright line). Gave the fork the
+exact SPDX header text to use so it didn't have to make that call itself.
+
+**Design highlight**: `CyclicalList<T>`/`IndexableCyclicalLinkedList<T>` are internal-only
+(upstream's own doc comment: `Triangulator` is "the sole public class in the entire
+library"). Upstream implements them via C#'s `new`-keyword method-hiding on `List<T>`/
+`LinkedList<T>` subclasses — the fork correctly judged that mechanism not worth
+replicating in C++ for a type with zero public API surface, and instead composed (not
+inherited) `sharp-runtime`'s `List<T>`/`LinkedList<T>`, adding only the cyclical
+`operator[]`/`RemoveAt`/`IndexOf`. Good precedent for any future C#-collection-subclass
+type.
+
+**Critical fidelity point preserved**: upstream's `Triangulator` has 5 `static readonly`
+mutable buffers shared across every call (explicit upstream design tradeoff for reduced
+GC pressure, not an accident) — ported as genuine `static inline` C++ class members, not
+locals/`thread_local`, keeping `Triangulate`/`CutHoleInShape` non-reentrant/not-
+thread-safe exactly like upstream. Documented prominently in `Triangulator.hpp`.
+
+**Independent verification before committing** (per this session's standing rule —
+never just trust a fork's self-report): re-grepped all 6 upstream `.cs` files for
+`public |internal ` members against the ported headers (nothing dropped — confirmed
+`Equals`/`GetHashCode`/`ToString`/operators present where upstream has them, absent
+where it doesn't, e.g. `Triangle` genuinely has no `ToString` upstream); hand-traced
+`CutHoleInShape` (the trickiest method — nullable-comparison logic, cyclical-index
+injection) line-by-line against the C# source and found it faithful; did a clean
+`rm -rf build` + full reconfigure/rebuild myself (not trusting the fork's already-built
+`build/`), confirming zero new compiler warnings and 503/503 `ctest` from scratch.
+
+**Test coverage**: upstream's one active test file (`TriangulatorTests.cs` — 4
+`DetermineWindingOrder` tests, including a shoelace-formula regression test for issue
+#791) ported 1:1. Fresh tests for everything else (no upstream coverage exists for
+`Triangulate`, `CutHoleInShape`, `EnsureWindingOrder`, `ReverseWindingOrder`, or any of
+`Vertex`/`LineSegment`/`Triangle`/the two cyclical collection types).
+
+**Verification**: both build modes clean, zero warnings, `ctest` → **100% passed,
+503/503** (was 464 before this task — 39 net new tests).
+
+**State / next step:** Phase 1 is 23 of ~30 tasks in. Next per `plan.md` §5 Phase 1: task
+24, `GameTimeExtensions`, `GameComponentCollectionExtensions`. No known blockers.
+Continue without pausing for a status update, per the standing correction, unless a
+genuine blocker requiring the user's judgment comes up. **Commit AND push to `develop`**
+after this task.
+
+---
+
 ## 2026-07-13 (10) — PrimitivesHelper, ShapeExtensions ported; big follow-up sweep (Phase 1 task 22)
 
 Continued straight through, no check-in pause.

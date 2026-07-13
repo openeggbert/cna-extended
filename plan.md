@@ -446,7 +446,52 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
         convention) and `Segment2`'s `Intersects(RectangleF|BoundingRectangle, out
         Vector2)` (2 overloads, using `PrimitivesHelper.IntersectsSlab` directly). Fresh
         tests for both (upstream's own coverage is entirely commented out for both).
-- [ ] `Math/Triangulation/*` (polygon triangulation helpers)
+- [x] `Math/Triangulation/*` (2026-07-13, ported via a forked sub-agent) — all 6
+      upstream files (`Vertex`, `LineSegment`, `Triangle`, `CyclicalList`,
+      `IndexableCyclicalLinkedList`, `Triangulator` + the `WindingOrder` enum) fully
+      ported into a new `CNA::Extended::Triangulation` sub-namespace (matching the
+      `Shapes` sub-namespace precedent from task 22), no deferrals. **Different license
+      provenance than every other file so far**: all 6 upstream files cite
+      `MIT Licensed: https://github.com/nickgravelyn/Triangulator` (an ear-clipping
+      triangulation implementation), the same "code directly derived from a different
+      MIT project" situation as `Angle.cs`/SlimMath — handled directly (not delegated to
+      the fork) since it required license research: the original repo now 404s on GitHub
+      (web UI and API both checked), so `NOTICE.md`'s new entry uses a standard MIT
+      template crediting nickgravelyn with an explicit provenance caveat, rather than a
+      verbatim-unavailable original copyright line. All 6 ported files carry a matching
+      SPDX header crediting nickgravelyn, see `NOTICE.md`.
+      **`CyclicalList<T>`/`IndexableCyclicalLinkedList<T>` design**: upstream implements
+      these as `List<T>`/`LinkedList<T>` subclasses using C#'s `new`-keyword method
+      hiding for their cyclical indexers — both are purely internal to `Triangulator`
+      (upstream's own doc comment: "the sole public class in the entire library"), so
+      rather than replicate that hiding mechanism, they compose (not inherit)
+      `sharp-runtime`'s `System::Collections::Generic::List<T>`/`LinkedList<T>`, per this
+      project's "reuse sharp-runtime, don't re-roll" convention, adding only the
+      cyclical `operator[]`/`RemoveAt`/`IndexOf` on top. Header-only templates, matching
+      `Interval<T>`'s precedent.
+      **Critical fidelity point**: upstream's `Triangulator` has 5 `static readonly`
+      mutable buffer fields shared across every call — a deliberate (if leaky) upstream
+      design tradeoff for reduced per-call GC pressure, explicitly explained in its own
+      doc comment, making `Triangulate`/`CutHoleInShape` non-reentrant and not
+      thread-safe by design. Ported as genuine `static inline` C++ class members (not
+      locals, not `thread_local`) to preserve that exact tradeoff, documented
+      prominently in `Triangulator.hpp`'s header comment.
+      `IsReflex` is dead code upstream (never called in `Triangulator.cs`) — ported
+      anyway for completeness as a private static method (no compiler warning, unlike an
+      unused free function). Independently re-verified (not just trusting the fork's
+      self-report): grepped all 6 upstream `.cs` files for `public |internal ` members
+      and confirmed every one has a mapped fate; hand-traced the trickiest method
+      (`CutHoleInShape`'s nullable-comparison/index-injection logic) line-by-line against
+      the C# source; did a clean `rm -rf build && cmake … && cmake --build …` from
+      scratch to confirm zero new compiler warnings (not just trusting a possibly-cached
+      prior build). Test suite grew from 464 to 503 (39 net new tests): upstream's one
+      active test file (`TriangulatorTests.cs`, 4 `DetermineWindingOrder` tests,
+      including a shoelace-formula regression test for issue #791) ported 1:1; fresh
+      tests for everything else (no upstream coverage exists for `Triangulate`,
+      `CutHoleInShape`, `EnsureWindingOrder`, `ReverseWindingOrder`, or any of `Vertex`/
+      `LineSegment`/`Triangle`/the two cyclical collection types). Both build
+      configurations verified clean, zero warnings, independently confirmed
+      (503/503 `ctest`).
 - [ ] `GameTimeExtensions`, `GameComponentCollectionExtensions`
 - [ ] `FramesPerSecondCounter` + `FramesPerSecondCounterComponent`
 - [ ] `SimpleGameComponent` + `SimpleDrawableGameComponent`
@@ -728,6 +773,30 @@ implementations — confirm and reuse rather than re-rolling).
   tests (upstream's own coverage for all of these is entirely commented out in its test
   suite, so nothing to port 1:1). Test suite grew from 429 to 464 (35 net new tests); both
   `-DCNA_EXTENDED_LINK_CNA=ON` and headers-only builds verified clean.
+- 2026-07-13 — `Math/Triangulation` (6 upstream files) ported via a forked sub-agent.
+  Before delegating, discovered all 6 files cite `MIT Licensed:
+  https://github.com/nickgravelyn/Triangulator` in their own headers — the same "code
+  directly derived from a different MIT project" situation as `Angle.cs`/SlimMath, not
+  the usual "algorithm citation in a comment" pattern seen elsewhere in `Math/`. Did the
+  license diligence myself (not delegated): fetched the cited URL directly (404) and via
+  the GitHub API (404), searched for mirrors/archives/renamed accounts (none found),
+  confirmed via web search that multiple independent sources agree the project was MIT
+  licensed but none could supply the exact original copyright wording. Added a `NOTICE.md`
+  entry using the standard MIT template with an explicit provenance caveat rather than
+  guess at wording, and gave the fork the exact SPDX header text to place in all 6 files
+  so it wouldn't need to make that judgment call itself. Fork's `CyclicalList<T>`/
+  `IndexableCyclicalLinkedList<T>` design choice (composition around `sharp-runtime`'s
+  `List<T>`/`LinkedList<T>` rather than replicating C#'s `new`-keyword-hiding
+  subclassing) is a good precedent for any future upstream type that inherits from a C#
+  collection purely for internal use. Independently re-verified the fork's work before
+  committing (per this session's standing "never just trust a fork's self-report" rule):
+  re-grepped all 6 upstream files for `public |internal ` members against the ported
+  headers (nothing dropped), hand-traced `CutHoleInShape` — the trickiest method, with
+  nullable-comparison logic and cyclical-list index injection — line-by-line against the
+  C# source (faithful), and did a clean `rm -rf build` + full reconfigure/rebuild myself
+  rather than trusting the fork's already-built `build/` directory, confirming zero new
+  compiler warnings and 503/503 `ctest` from scratch. No upstream bugs found this time —
+  the algorithm translated cleanly.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

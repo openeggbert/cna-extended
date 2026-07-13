@@ -68,6 +68,43 @@ repository, not just "inspiration":
   > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   > THE SOFTWARE.
 
+- **`Triangulation` (`include/CNA/Extended/Triangulation/`, ported from MonoGame.Extended's
+  `Math/Triangulation/*.cs`: `Vertex`, `LineSegment`, `Triangle`, `CyclicalList`,
+  `IndexableCyclicalLinkedList`, `Triangulator`)** originates from nickgravelyn's
+  [Triangulator](https://github.com/nickgravelyn/Triangulator) (an ear-clipping
+  triangulation implementation), per every one of those six upstream files' own header
+  comments: `MIT Licensed: https://github.com/nickgravelyn/Triangulator`.
+  **Provenance note (2026-07-13):** unlike the SlimMath case above, MonoGame.Extended's
+  own file headers here only assert "MIT Licensed" and a URL — they don't reproduce the
+  original license text or a copyright holder name. At the time of this port,
+  `https://github.com/nickgravelyn/Triangulator` returned HTTP 404 (via both the web UI
+  and the GitHub API), and no mirror or archived copy of its `LICENSE` file could be
+  located, so the exact original copyright line could not be independently verified
+  verbatim. Multiple independent sources (all six of MonoGame.Extended's own upstream file
+  headers, consistently, plus third-party indexes of the project found via web search) agree
+  the project was MIT licensed. Given that consistent attestation, the standard MIT License
+  template below is used, crediting nickgravelyn as the original author — if the original
+  repository resurfaces, this entry should be updated with the verbatim original text:
+  > Copyright (c) nickgravelyn
+  >
+  > Permission is hereby granted, free of charge, to any person obtaining a copy
+  > of this software and associated documentation files (the "Software"), to deal
+  > in the Software without restriction, including without limitation the rights
+  > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  > copies of the Software, and to permit persons to whom the Software is
+  > furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in
+  > all copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  > THE SOFTWARE.
+
 If a future ported file's upstream `.cs` header credits another project by name the same
 way `Angle.cs` does, add it here too rather than folding it into the "courtesy
 attribution" list below, which is for inspiration-only credits with no code actually
