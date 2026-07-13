@@ -1,8 +1,10 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6 and 9 complete (2026-07-13),
-Phase 7 ("Tilemaps") next (Phase 8 "Particles" also outstanding — see plan). Fidelity
-requirement: port 1:1 wherever C#/C++ differences allow — no simplification. See `NEXT.md`
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6 and 9 complete (2026-07-13).
+Phase 7 ("Tilemaps") in progress: core data model done, Rendering/Tiled/LDtk/Ogmo
+outstanding. Phase 8 ("Particles") in progress: everything done except
+`ParticleEffectSerializer.cs`, deliberately deferred. Fidelity requirement: port 1:1
+wherever C#/C++ differences allow — no simplification. See `NEXT.md`
 for current state.**
 
 ## 1. What this project is
@@ -1025,30 +1027,105 @@ Depends on Phase 1. Feeds Phase 7 (Tilemaps).
 
 ### Phase 7 — Tilemaps (Tiled / LDtk / Ogmo)
 
-The largest module (121 + 22 files). Depends on Phases 1, 5 (rendering), 6 (serialization).
+The largest module (121 + 22 files). Depends on Phases 1, 5 (rendering), 6 (serialization) —
+all now complete.
 
-- [ ] Core: `Tilemap`, `TilemapData`, `TilemapFactory`, `TilemapLayerCollection`,
-      `TilemapOrientation`, `TilemapTile*`, `TilemapTileset*`, `TilemapWorld`
-- [ ] `TilemapLayers/*`, `TilemapObjects/*`, `Rendering/*`, `Properties/*`
+- [x] Core: `Tilemap`, `TilemapData`, `TilemapFactory`, `TilemapLayerCollection`,
+      `TilemapOrientation`, `TilemapTile*`, `TilemapTileset*`, `TilemapWorld`,
+      `TilemapLayers/*` (all 7 files), `TilemapObjects/*` (all 8 files), `Properties/*`
+      (all 3 files), `Parsers/*` (both files) — **COMPLETE (2026-07-13)** (format-agnostic
+      data model + factory, ~40 files/~5900 lines).
+      **Ownership model**, derived from upstream's actual field types and real construction
+      call sites in `TilemapFactory.cs` (not guessed): `TilemapLayerCollection` owns its
+      layers; `TilemapTileLayer` owns its own tile grid (flat array, independent per
+      layer — tiles are never shared between layers); `TilemapObjectLayer` owns its placed
+      objects; `TilemapImageLayer` holds a non-owning `Texture2D*` (external-GPU-resource
+      convention, already established). `TilemapTilesetCollection` owns its tilesets — this
+      required a correction mid-task: an initial non-owning design (based on
+      `TilemapTilesetCollection.cs` alone, which gives no ownership signal) was fixed after
+      reading the real `TilemapFactory.cs` construction call site
+      (`tilemap.Tilesets.Add(tileset)`, a freshly-built local with no other reference —
+      independently confirmed by re-reading that exact line). `TilemapTileset` owns its tile
+      data; `TilemapTile` (a small value type, global ID + flip flags) owns nothing and
+      resolves its data by lookup through a `TilemapTilesetCollection&` at call time — this
+      lookup-not-reference pattern is the actual sharing mechanism: many tile placements
+      across many layers share one `TilemapTileData` instance without duplicating it.
+      **`TilemapPropertyValue`** ported as a literal C++ `union` (int/float/bool/packed-color)
+      + a `std::string` kept outside the union + a type-tag enum — matching upstream's own
+      `[StructLayout(LayoutKind.Explicit)]` real intentional memory layout exactly.
+      `std::variant` was considered and rejected: it wouldn't reproduce upstream's actual
+      chosen representation and buys nothing for the required throw-on-wrong-type-access
+      `As*()` accessors.
+      **Real dangling-pointer bug found and fixed during porting** (self-caught, matching
+      `BitmapFont::pageTextures_`'s already-established precedent for the identical problem):
+      `TilemapFactory::Build`'s first draft loaded textures into a function-local owning
+      vector destroyed on return, leaving every texture pointer in the returned `Tilemap`
+      dangling — fixed by giving `Tilemap` its own `ownedTextures_`
+      (`vector<unique_ptr<Texture2D>>`) via a new `AddOwnedTexture` method (no upstream
+      equivalent needed, since C#'s GC keeps each loaded texture alive via whatever
+      tileset/layer field references it).
+      8 upstream test files ported 1:1.
+      **Process note**: the fork producing this work edited `plan.md` twice despite an
+      explicit standing instruction not to (once before any correction, once again in the
+      very same turn after being told not to and acknowledging it) — both edits were
+      uncommitted and discarded (`git checkout -- plan.md`) before ever being committed; the
+      actual ported code was independently verified separately and is unaffected. See
+      `NEXT.md` for the full incident note.
+- [ ] `Rendering/*` (`TilemapRenderer`, `TilemapSpriteBatchRenderer`, `TilemapWorldRenderer`,
+      `TilemapWorldSpriteBatchRenderer`, `RenderMode`, `TilemapRendererShared`) — depends on
+      the now-complete Core above and Phase 5's `SpriteBatch`; not yet started.
 - [ ] `Tiled/*` (TMX/JSON parser — `TiledTmxParser` and friends) — priority given the
       user's existing `tiled-blupi` project
 - [ ] `LDtk/*` (LDtk JSON document model + integration)
 - [ ] `Ogmo/*` (Ogmo Editor JSON document model + integration)
-- [ ] `Parsers/*`
 - [ ] Explicitly **skip**: `Tilemaps/Content/*Reader` (xnb-based, see §2 exclusions)
-- [ ] Port `tests/MonoGame.Extended.Tests/Tilemaps/**`
+- [ ] Port the remaining `tests/MonoGame.Extended.Tests/Tilemaps/**` files (Rendering/Tiled/
+      LDtk/Ogmo test coverage — the 8 core-data-model test files are already done, above)
 
 ### Phase 8 — Particles
 
-Depends on Phases 1 and 5 (rendering).
+Depends on Phases 1 and 5 (rendering) — both complete. Ported in parallel with Phase 7's
+Tilemaps core (confirmed genuinely independent: no shared files, no dependency relationship).
 
-- [ ] Core: `ParticleEffect`, `ParticleEmitter`, `ParticleBuffer`, `ParticleIterator`,
-      `ParticleRenderingOrder`
-- [ ] Remaining `Particles/**` (profiles, modifiers, primitives — enumerate exact file
-      list at implementation time; 47 files total)
-- [ ] Explicitly **skip**: `Content/ContentReaders/ParticleEffectContentReader.cs`
-      (xnb-based)
-- [ ] Port `tests/MonoGame.Extended.Tests/Particles/**`
+- [x] Core: `ParticleEffect`, `ParticleEmitter`, `ParticleBuffer`, `ParticleIterator`,
+      `ParticleRenderingOrder` — **COMPLETE (2026-07-13)**.
+      **`Data::Particle`**: upstream's `[StructLayout(Pack=1)] unsafe struct` with `fixed
+      float[N]` inline arrays ported as a plain packed C++ struct with ordinary inline
+      arrays — no `unsafe`/pointer tricks needed, this is native C++ territory. **
+      `ParticleBuffer`**: raw `std::malloc`/`std::free` (deliberately not `new[]`, which
+      would default-construct every slot, unlike upstream's genuinely-unmanaged allocation),
+      `Particle*` pointer arithmetic throughout. Independently spot-checked the ring-buffer
+      head/tail wraparound logic (`Release`/`Reclaim`) against upstream line-by-line —
+      exact match, including the `BufferEnd`/`Size + 1` wraparound arithmetic.
+- [x] Remaining `Particles/**` (profiles, modifiers, primitives) — **COMPLETE (2026-07-13)**,
+      45 of 47 files (see the one explicit exception below). `Modifiers/Interpolators/
+      InterpolatorOfT.cs` (generic `Interpolator<T>`) renamed `InterpolatorOfT` — C++
+      disallows a class template and non-template class sharing a name, matching the
+      `ComponentMapper<T>` → `ComponentMapperOf<T>` precedent from the just-landed ECS
+      module. A reflection-in-constructor hazard in the `Modifier`/`Interpolator` base
+      classes (`Name = GetType().Name`) was fixed the same way as this session's established
+      `GameTimer` precedent: an explicit `name` constructor parameter, each concrete
+      subclass passing its own literal name. Two genuine upstream quirks preserved, not
+      "fixed": `ModifierExecutionStrategy::Parallel` has a real, upstream-original data race
+      (every modifier's update runs concurrently against one shared mutable iterator, not
+      synchronized); `Rectangle{Loop}ContainerModifier` applies `(int)` truncation
+      inconsistently across its four boundary checks.
+      **`ParticleEffectSerializer.cs` (1226 lines) and its test are explicitly NOT
+      ported yet** — deliberately deferred: it depends on every other file in this module
+      plus `Serialization/Xml/*` (now available), and is large/self-contained enough to
+      warrant its own follow-up pass rather than folding into this one.
+- [x] Explicitly **skip**: `Content/ContentReaders/ParticleEffectContentReader.cs`
+      (xnb-based).
+- [x] Port `tests/MonoGame.Extended.Tests/Particles/**` — **COMPLETE for everything except
+      the deferred serializer** (`ParticleEffectSerializerTests.cs` deferred alongside it).
+      `RingProfileTests.cs`/`PointProfileTests.cs` ported 1:1 (the only two upstream test
+      files that weren't themselves stale/commented-out dead code — `AssertionModifier.cs`,
+      `EmitterTests.cs`, and `ParticleBufferTests.cs` were checked directly and found to be
+      substantially or entirely stale against the current upstream API, so those sections
+      were adapted or re-created fresh against the real API instead of ported verbatim).
+      Fresh GoogleTest coverage added for every other type with no upstream test (all 6
+      interpolators, all 11 modifiers, all 8 profiles, `LineSegment`, `ParticleEffect`,
+      `ModifierExecutionStrategy`, the 4 `Particle*Parameter` types) — 39 tests total.
 
 ### Phase 9 — ECS — **COMPLETE (2026-07-13)**
 
