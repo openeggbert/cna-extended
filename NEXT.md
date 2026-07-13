@@ -6,6 +6,47 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (17) — Collections: KeyedCollection, ListExtensions ported; DictionaryExtensions intentionally skipped (Phase 1 task 29)
+
+Continued straight through, no check-in pause.
+
+**Ported directly** (no fork; small, 106 lines of C# total across 3 files).
+`KeyedCollection<TKey, TValue>` and `ListExtensions.Shuffle` fully ported as header-only
+templates.
+
+**`DictionaryExtensions.GetValueOrDefault` was deliberately NOT ported.** Verified (not
+assumed) that `sharp-runtime`'s own `Dictionary<TKey, TValue>::GetValueOrDefault(key,
+defaultValue = TValue{})` already implements byte-for-byte identical semantics to
+upstream's extension method. This is the mirror image of the `RandomExtensions::
+NextSingle` situation from task 21 — there, a same-named `sharp-runtime` method turned
+out to implement a *different* algorithm and had to be re-ported to preserve fidelity;
+here, the check came back a true match, so "reuse, don't re-roll" applies cleanly and no
+port was needed. Worth remembering: a same-named `sharp-runtime` method is never
+automatically reusable OR automatically to-be-avoided — check the actual algorithm each
+time.
+
+`KeyedCollection<TKey, TValue>` is backed by that same `Dictionary<TKey, TValue>` (whose
+`operator[](key) const` already throws `KeyNotFoundException` for a missing key, exactly
+matching C#'s `Dictionary` indexer). `CopyTo` matches upstream: always throws.
+`ListExtensions.Shuffle`'s `IList<T>` parameter maps to `std::vector<T>&` and correctly
+returns a reference to the same, now-shuffled vector, preserving upstream's fluent
+return.
+
+**Test coverage**: no upstream tests exist for any of the 3 files — wrote fresh tests for
+`KeyedCollection`/`Shuffle` (determinism, element-preservation, edge cases).
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 624/624** (was 608 —
+16 net new tests).
+
+**State / next step:** Phase 1 is 29 of 30 tasks in — only task 30 left
+("Port `tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` as
+GoogleTest suites", i.e. a Phase 1 test-suite consolidation/parity pass). No known
+blockers. Continue without pausing for a status update, per the standing correction,
+unless a genuine blocker requiring the user's judgment comes up. **Commit AND push to
+`develop`** after this task.
+
+---
+
 ## 2026-07-13 (16) — Collections: ObjectPool<T>, Pool<T>, IPoolable, ItemEventArgs ported (Phase 1 task 28)
 
 Continued straight through, no check-in pause.

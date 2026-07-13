@@ -667,7 +667,32 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       suite grew from 589 to 608 (19 net new tests). Both build modes verified clean, and
       the full suite explicitly re-run under a 60-second `timeout` wrapper as an extra
       safety net given the infinite-loop bug under test, confirming no hang.
-- [ ] Collections: `KeyedCollection`, `DictionaryExtensions`, `ListExtensions`
+- [x] Collections: `KeyedCollection`, `DictionaryExtensions`, `ListExtensions`
+      (2026-07-13, ported directly, no fork; small, 106 lines of C# total across the 3
+      files). `KeyedCollection<TKey, TValue>` and `ListExtensions.Shuffle` fully ported
+      as header-only templates. **`DictionaryExtensions.GetValueOrDefault` was NOT
+      ported** — verified (not assumed) that `sharp-runtime`'s own
+      `System::Collections::Generic::Dictionary<TKey, TValue>::GetValueOrDefault(key,
+      defaultValue = TValue{})` already implements byte-for-byte identical semantics to
+      upstream's extension method (both: return the value if present, else a supplied or
+      default-constructed fallback), unlike the `RandomExtensions::NextSingle` case from
+      task 21 where a same-named `sharp-runtime` method turned out to implement a
+      genuinely different algorithm and had to be re-ported instead of reused. Since the
+      semantics here are a true match, this is a case where "reuse `sharp-runtime`, don't
+      re-roll" applies with no exception — adding a redundant free-function wrapper
+      around an already-identical member method would be pure duplication with zero
+      fidelity benefit, so this file is intentionally not ported; see the decisions log
+      for the full account. `KeyedCollection<TKey, TValue>` is backed by that same
+      `Dictionary<TKey, TValue>` (whose `operator[](key) const` already throws
+      `KeyNotFoundException` for a missing key, exactly matching C#'s `Dictionary`
+      indexer). `CopyTo` matches upstream: always throws (`NotSupportedException`
+      upstream). `ListExtensions.Shuffle`'s `IList<T>` parameter maps to `std::vector<T>&`
+      (matching every other C# `IList<T>`/array translation in this project) and
+      correctly returns a reference to the same, now-shuffled vector, preserving
+      upstream's fluent/chainable return. No upstream tests exist for any of the 3
+      files — wrote fresh tests for `KeyedCollection`/`Shuffle` (determinism,
+      element-preservation, edge cases). Test suite grew from 608 to 624 (16 net new
+      tests). Both build modes clean.
 - [ ] Port `tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` as
       GoogleTest suites
 
@@ -1062,6 +1087,18 @@ implementations — confirm and reuse rather than re-rolling).
   guard is `TotalCount <= Capacity` (allowing `Capacity + 1` total creations before the
   policy ever triggers) — traced and corrected before committing, the same "verify, don't
   assume, even for my own test code" discipline applied throughout this session.
+- 2026-07-13 — `KeyedCollection`/`ListExtensions` ported directly (no fork; `Dictionary
+  Extensions` deliberately NOT ported — see the Phase 1 checklist entry above). This is
+  the mirror image of the `RandomExtensions::NextSingle` situation from task 21: there, a
+  same-named `sharp-runtime` method turned out to implement a *different* algorithm and
+  had to be re-ported to preserve fidelity; here, `sharp-runtime`'s own `Dictionary<TKey,
+  TValue>::GetValueOrDefault` was checked line-by-line against upstream's
+  `DictionaryExtensions.GetValueOrDefault` and found to be a true semantic match (both:
+  value-if-present, else a supplied-or-default fallback) — so "reuse, don't re-roll"
+  applies cleanly this time, and no port was needed. Worth remembering as the general
+  rule alongside the earlier lesson: a same-named `sharp-runtime` method isn't
+  automatically reusable OR automatically to-be-avoided — check the actual algorithm
+  each time, and the answer can go either way.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
