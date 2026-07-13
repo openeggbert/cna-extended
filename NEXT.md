@@ -6,6 +6,86 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (31) — Phase 5 started: Graphics/Effects/* re-authored on CNA's ShaderEffect (user-approved design deviation)
+
+Started Phase 5. Investigated `plan.md`'s own flagged design question (`Graphics/Effects/*` "may
+need re-authoring rather than a literal port — flag as a design question") before writing
+anything, per the standing discipline — confirmed it was real, not hypothetical: CNA's
+`Effect(GraphicsDevice&, const std::vector<bytecs>&)` constructor — the literal 1:1 target for
+upstream's bytecode-blob-based `DefaultEffect`/`MatrixChainEffect` constructors — **always throws
+`System::NotImplementedException`**, per `Effect.hpp`'s own doc comment: CNA has no
+MojoShader-equivalent parser for compiled MonoGame `.mgfxo` bytecode yet (tracked as CNA's own
+future "Phase 74", not something this project controls or should wait on indefinitely).
+
+**Presented this to the user via `AskUserQuestion`** with 3 options (skip `Effects/*` entirely and
+continue with the rest of Phase 5 / port only the two small dependency-free interfaces / manually
+re-author `DefaultEffect` as a CNA `ShaderEffect`). **User chose re-authoring.**
+
+**Re-authored on CNA's `ShaderEffect`** (a NOXNA, GLSL-source-based CNA extension), not raw
+`Effect`. Found the original `DefaultEffect.fx` HLSL source (not just the compiled `.mgfxo`
+resources) in the upstream repo to know exactly what logic to replicate: 4 techniques
+(`Position`/`PositionTexture`/`PositionColor`/`PositionColorTexture`), each computing
+`DiffuseColor` optionally multiplied by vertex color and/or a sampled texture. Verified
+conventions against CNA's own **working, confirmed-compiling** example
+(`examples/easygl_shader_effect_test.cpp` in the CNA repo) before committing to a vertex attribute
+layout — used the exact same `vec2 aPos`/`vec2 aTexCoord`/`vec4 aColor` at locations 0/1/2 that
+example proves SpriteBatch actually binds, rather than guessing. Found `Matrix::ToColumnMajor()` (a
+NOXNA CNA helper) by reading CNA's own EasyGL backend source (`BindDrawParams`), confirming it's
+the correct row-major→column-major conversion CNA's own internal code uses for the exact same
+purpose, not assumed from general GLSL knowledge.
+
+**Collapsed upstream's 4 compile-time techniques into ONE GLSL program** with two runtime uniform
+bools (`TextureEnabled`, `VertexColorEnabled`) — `ShaderEffect` compiles exactly one vertex+fragment
+program per instance, with no technique/multi-program concept at all, so technique-switching
+itself has no direct translation; the uniform-toggle approach produces the identical visual output
+through a different, GLSL-idiomatic mechanism. `EffectResource.cs` (reflection-based OpenGL-vs-DirectX
+platform detection + embedded-`.mgfxo`-resource loading) is not ported at all — this whole
+mechanism is superseded by the GLSL-source-string approach, nothing left for it to do.
+
+**Notable upstream quirk found and preserved, not fixed**: `DefaultEffect.cs`'s `_diffuseColor`
+field is never exposed through any public property in the class — only `Alpha` is publicly
+settable, so `UpdateMaterialColor()`'s output is always exactly `(Alpha,Alpha,Alpha,Alpha)` in
+practice. This port's public API has no `DiffuseColor` accessor either, matching upstream exactly
+rather than "completing" a seemingly-incomplete feature upstream itself never finished.
+
+**Verified with a real GPU render, not just a C++ compile — a meaningful step up in verification
+rigor for hand-authored (non-translated) code**: wrote a one-time scratch program modeled directly
+on CNA's own `easygl_shader_effect_test.cpp`, compiled and linked it against this project's already-
+built CNA libraries (extracted the real link recipe from `cna_extended_minimal`'s own `link.txt`
+rather than guessing flags), and ran it. **Passed**: a white 1×1 texture rendered through
+`DefaultEffect` with `TextureEnabled=true` produced the expected white output pixel
+(`centre=(255,255,255)`) against an untouched green background (`bg=(0,255,0)`) on real OpenGL ES
+3.2 (Mesa) hardware. Deleted the scratch program afterward, per this project's scratch-file
+convention — this was one-time verification, not meant to become permanent test infrastructure
+(this project's GoogleTest suite has no existing precedent for live-`GraphicsDevice` tests at all,
+the same constraint `ViewportAdapters`/`VectorDraw` hit in Phase 3, so no permanent automated test
+exists for this module either — documented, not silently skipped).
+
+**Scoping note for later**: `DefaultEffect`'s only real upstream consumer is
+`TilemapRenderer`/`TilemapWorldRenderer` (both Phase 7 — confirmed via `grep` before assuming, not
+guessed). The SpriteBatch-specific vertex layout choice above is *expected* to match Phase 7's
+actual usage (tile quads are near-certainly drawn via `SpriteBatch`) but has not been confirmed
+against that real, not-yet-ported renderer code. Revisit this specific assumption when Phase 7
+actually wires `DefaultEffect` into `TilemapRenderer`, rather than treating today's guess as final.
+
+**Build verification**: genuinely clean `rm -rf build` rebuild + both CMake configs (linked and
+headers-only), zero warnings in either. `ctest` → **1218/1218 passing** (unchanged — no
+GoogleTest-suite-testable logic in this module, matching the `ViewportAdapters`/`VectorDraw`
+precedent from Phase 3).
+
+**State / next step**: `Graphics/Effects/*` is the single riskiest, most novel piece of Phase 5 and
+is now resolved. The rest of Phase 5's remaining sub-tasks (`Sprite`/`AnimatedSprite`/`SpriteSheet`
+family, `Texture2DAtlas`/`Texture2DRegion`, `NinePatch`, `SpriteBatch.Extensions`/
+`GraphicsDevice.Extensions`/`RenderTarget2DExtensions`/`PrimitiveTypeExtensions`/`FlipFlags`,
+`Content/TexturePacker/*`, `Content/ExternalResourceResolver(s)`, `BitmapFonts/*`, `Animations/*`)
+are expected to be much more straightforward literal ports — none of them were flagged as needing
+re-authoring in `plan.md`, and none showed up as depending on the now-resolved `Effects/*` blocker
+during this entry's investigation. Continue reading and porting them next; several look
+independent of each other and may be good candidates for parallel forks, similar to Phase 3's
+`Tweening`/`Input`/`VectorDraw` split.
+
+---
+
 ## 2026-07-13 (30) — Phase 4 (Screens) mostly complete; FadeTransition/ExpandTransition deferred to Phase 5
 
 Ported `Screen`, `GameScreen`, `ScreenManager`, and the abstract `Transition` base directly (not

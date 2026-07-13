@@ -837,16 +837,23 @@ Depends on Phase 1; needs CNA's `GameComponent`/`Game`.
 
 Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`.
 
-- [ ] `Graphics/Effects/*` (custom `Effect` wrapper — investigate how the embedded
-      `DefaultEffect.fx`/`.mgfxo`/`.dx11.mgfxo`/`.ogl.mgfxo` resources map onto CNA's
-      graphics backend(s); this may need re-authoring rather than a literal port —
-      flag as a design question if CNA's shader pipeline doesn't have an equivalent)
+- [x] `Graphics/Effects/*` (custom `Effect` wrapper) — **COMPLETE (2026-07-13)**.
+      **Confirmed the flagged design question was real**: CNA's `Effect(GraphicsDevice&,
+      bytecode)` constructor always throws `NotImplementedException` (no MonoGame `.mgfxo`
+      bytecode parser yet). Asked the user; **re-authored `DefaultEffect`/
+      `MatrixChainEffect` on CNA's `ShaderEffect` (hand-written GLSL)** instead of a
+      literal port — upstream's 4 compile-time techniques collapsed into 1 GLSL program
+      with 2 runtime uniform toggles. Verified with a real GPU render (not just a C++
+      compile) via a one-time scratch program modeled on CNA's own
+      `easygl_shader_effect_test.cpp` — passed on real OpenGL ES 3.2 (Mesa) hardware.
+      `EffectResource.cs` not ported (superseded entirely). `ITextureEffect`,
+      `IMatrixChainEffect` also landed. See `NEXT.md` entry (31) for the full rationale.
 - [ ] `Sprite`, `AnimatedSprite`, `SpriteSheet`, `SpriteSheetAnimation`,
       `SpriteSheetAnimationBuilder`, `SpriteSheetAnimationFrame`
 - [ ] `Texture2DAtlas`, `Texture2DRegion`, `Texture2DRegion.Extensions`
 - [ ] `NinePatch`
 - [ ] `SpriteBatch.Extensions`, `GraphicsDevice.Extensions`, `RenderTarget2DExtensions`,
-      `PrimitiveTypeExtensions`, `FlipFlags`, `IMatrixChainEffect`
+      `PrimitiveTypeExtensions`, `FlipFlags` (`IMatrixChainEffect` already landed above)
 - [ ] `Content/TexturePacker/*` (direct-JSON TexturePacker atlas format — not xnb-based)
 - [ ] `Content/ExternalResourceResolver(s)` (not xnb-specific)
 - [ ] `BitmapFonts/*` (runtime `BitmapFont`/`BitmapFontRegion` types — **not** the xnb
