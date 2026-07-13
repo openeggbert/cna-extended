@@ -2,11 +2,27 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Ported 1:1 from MonoGame.Extended's tests/MonoGame.Extended.Tests/Collision2DTest.cs, covering
-// the "Helper Methods" region and the full "Containment" region (AABB/Circle/OBB/Capsule/Convex
-// Polygon Methods sub-regions) -- matching the scope of Collision2D.hpp/.cpp in this chunk. Tests
-// from "Projection Methods" onward are out of scope for this chunk (deferred to the chunk that
-// ports TryGetCollision*/Parametric Solvers/Ray Intervals).
+// Ported 1:1 from MonoGame.Extended's tests/MonoGame.Extended.Tests/Collision2DTest.cs.
+//
+// Ported so far: the "Helper Methods" region, the full "Containment" region
+// (AABB/Circle/OBB/Capsule/Convex Polygon Methods sub-regions), the "Parametric Solvers" region
+// (SolveParametricIntersection2D / SolveParametricIntersectionWithImplicitLine), the
+// "RayCircleIntersectionInterval Tests" / "RayCapsuleIntersectionInterval Tests" sub-regions, every
+// "TryGetCollision*" sub-region under "Intersection Methods" (AabbAabb, AabbConvexPolygon, AabbObb,
+// CircleCircle, CircleAabb, CircleObb, CircleCapsule, ObbObb, ObbConvexPolygon,
+// ConvexPolygonConvexPolygon), and the "CollisionResult2D MTV Separation Tests" / "CollisionResult2D
+// Reversed Input Tests" sub-regions.
+//
+// KNOWN GAP (flagged, not fixed here): upstream's "Projection Methods", "Distance Calculations",
+// "ClosestPointRaySegment Tests", "Clipping Methods" (ClipLineToAabb/ClipLineToConvexPolygon),
+// "Overlap Methods" (OverlapOnAxis/OverlapOnAxisAabbPolygon), and every plain-bool "Intersects*"
+// sub-region (IntersectsAabbAabb, IntersectsAabbCapsule, IntersectsAabbConvexPolygon,
+// IntersectsAabbObb, IntersectsCircleCircle, IntersectsCircleAabb, IntersectsCircleObb,
+// IntersectsCircleConvexPolygon, IntersectsCircleCapsule, IntersectsObbObb, IntersectsObbCapsule,
+// IntersectsObbConvexPolygon, IntersectsCapsuleCapsule, IntersectsCapsuleConvexPolygon,
+// IntersectsConvexPolygonConvexPolygon) are STILL NOT PORTED even though their implementations
+// already exist in Collision2D.cpp (from the first porting pass). This gap pre-dates this pass and
+// was discovered, not introduced, here -- see NEXT.md for the follow-up task.
 //
 // C#'s `IsValidPolygon(null, normals)` / `IsValidPolygon(vertices, null)` have no direct C++
 // equivalent since `const std::vector<Vector2>&` cannot be null; an empty vector is the faithful
@@ -1341,5 +1357,1276 @@ namespace CNA::Extended
         const ContainmentType result = Collision2D::ContainsConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals);
 
         EXPECT_EQ(ContainmentType::Intersects, result);
+    }
+
+    // ---- Parametric Solvers: SolveParametricIntersection2D ----
+
+    TEST(Collision2DTests, SolveParametricIntersection2DPerpendicularLinesFindsIntersection)
+    {
+        const Vector2 origin1(0.0f, 5.0f);
+        const Vector2 direction1 = Vector2::UnitX;
+        const Vector2 origin2(5.0f, 0.0f);
+        const Vector2 direction2 = Vector2::UnitY;
+
+        float t1;
+        float t2;
+        const bool result = Collision2D::SolveParametricIntersection2D(origin1, direction1, origin2, direction2, t1, t2);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(5.0f, t1, Collision2D::Epsilon);
+        EXPECT_NEAR(5.0f, t2, Collision2D::Epsilon);
+    }
+
+    TEST(Collision2DTests, SolveParametricIntersection2DParallelLinesReturnsFalse)
+    {
+        const Vector2 origin1(0.0f, 0.0f);
+        const Vector2 direction1 = Vector2::UnitX;
+        const Vector2 origin2(0.0f, 5.0f);
+        const Vector2 direction2 = Vector2::UnitX;
+
+        float t1;
+        float t2;
+        const bool result = Collision2D::SolveParametricIntersection2D(origin1, direction1, origin2, direction2, t1, t2);
+
+        EXPECT_FALSE(result);
+    }
+
+    TEST(Collision2DTests, SolveParametricIntersection2DCollinearLinesReturnsFalse)
+    {
+        const Vector2 origin1(0.0f, 0.0f);
+        const Vector2 direction1 = Vector2::UnitX;
+        const Vector2 origin2(5.0f, 0.0f);
+        const Vector2 direction2 = Vector2::UnitX;
+
+        float t1;
+        float t2;
+        const bool result = Collision2D::SolveParametricIntersection2D(origin1, direction1, origin2, direction2, t1, t2);
+
+        EXPECT_FALSE(result);
+    }
+
+    TEST(Collision2DTests, SolveParametricIntersection2DLinesAtAnAngleFindsIntersection)
+    {
+        const Vector2 origin1(0.0f, 0.0f);
+        const Vector2 direction1(1.0f, 0.0f);
+        const Vector2 origin2(0.0f, 0.0f);
+        const Vector2 direction2(0.0f, 1.0f);
+
+        float t1;
+        float t2;
+        const bool result = Collision2D::SolveParametricIntersection2D(origin1, direction1, origin2, direction2, t1, t2);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(0.0f, t1, Collision2D::Epsilon);
+        EXPECT_NEAR(0.0f, t2, Collision2D::Epsilon);
+    }
+
+    // ---- Parametric Solvers: SolveParametricIntersectionWithImplicitLine ----
+
+    TEST(Collision2DTests, SolveParametricIntersectionWithImplicitLineIntersectingFindsParameter)
+    {
+        const Vector2 lineNormal = Vector2::UnitY;
+        const float lineDistance = 5.0f;
+        const Vector2 origin(0.0f, 0.0f);
+        const Vector2 direction = Vector2::UnitY;
+
+        float t;
+        const bool result = Collision2D::SolveParametricIntersectionWithImplicitLine(lineNormal, lineDistance, origin, direction, t);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(5.0f, t, Collision2D::Epsilon);
+    }
+
+    TEST(Collision2DTests, SolveParametricIntersectionWithImplicitLineParallelReturnsFalse)
+    {
+        const Vector2 lineNormal = Vector2::UnitY;
+        const float lineDistance = 5.0f;
+        const Vector2 origin(0.0f, 0.0f);
+        const Vector2 direction = Vector2::UnitX;
+
+        float t;
+        const bool result = Collision2D::SolveParametricIntersectionWithImplicitLine(lineNormal, lineDistance, origin, direction, t);
+
+        EXPECT_FALSE(result);
+    }
+
+    TEST(Collision2DTests, SolveParametricIntersectionWithImplicitLinePerpendicularFindsParameter)
+    {
+        const Vector2 lineNormal = Vector2::UnitX;
+        const float lineDistance = 10.0f;
+        const Vector2 origin(0.0f, 0.0f);
+        const Vector2 direction = Vector2::UnitX;
+
+        float t;
+        const bool result = Collision2D::SolveParametricIntersectionWithImplicitLine(lineNormal, lineDistance, origin, direction, t);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(10.0f, t, Collision2D::Epsilon);
+    }
+
+    // ---- Ray Interval Methods: RayCircleIntersectionInterval ----
+
+    TEST(Collision2DTests, RayCircleIntersectionIntervalTwoIntersectionsReturnsBothParameters)
+    {
+        const Vector2 origin(-10.0f, 0.0f);
+        const Vector2 direction = Vector2::UnitX;
+        const Vector2 center(0.0f, 0.0f);
+        const float radius = 5.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCircleIntersectionInterval(origin, direction, center, radius, tMin, tMax);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(5.0f, tMin, Collision2D::Epsilon);
+        EXPECT_NEAR(15.0f, tMax, Collision2D::Epsilon);
+    }
+
+    TEST(Collision2DTests, RayCircleIntersectionIntervalTangentReturnsSinglePoint)
+    {
+        const Vector2 origin(-10.0f, 5.0f);
+        const Vector2 direction = Vector2::UnitX;
+        const Vector2 center(0.0f, 0.0f);
+        const float radius = 5.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCircleIntersectionInterval(origin, direction, center, radius, tMin, tMax);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(tMin, tMax, Collision2D::Epsilon);
+    }
+
+    TEST(Collision2DTests, RayCircleIntersectionIntervalMissReturnsFalse)
+    {
+        const Vector2 origin(-10.0f, 10.0f);
+        const Vector2 direction = Vector2::UnitX;
+        const Vector2 center(0.0f, 0.0f);
+        const float radius = 5.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCircleIntersectionInterval(origin, direction, center, radius, tMin, tMax);
+
+        EXPECT_FALSE(result);
+    }
+
+    TEST(Collision2DTests, RayCircleIntersectionIntervalOriginInsideReturnsIntervalFromZero)
+    {
+        const Vector2 origin(0.0f, 0.0f);
+        const Vector2 direction = Vector2::UnitX;
+        const Vector2 center(0.0f, 0.0f);
+        const float radius = 5.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCircleIntersectionInterval(origin, direction, center, radius, tMin, tMax);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(0.0f, tMin, Collision2D::Epsilon);
+        EXPECT_NEAR(5.0f, tMax, Collision2D::Epsilon);
+    }
+
+    // ---- Ray Interval Methods: RayCapsuleIntersectionInterval ----
+
+    TEST(Collision2DTests, RayCapsuleIntersectionIntervalHitsCylinderReturnsInterval)
+    {
+        const Vector2 rayOrigin(-10.0f, 0.0f);
+        const Vector2 rayDirection = Vector2::UnitX;
+        const Vector2 segA(0.0f, -5.0f);
+        const Vector2 segB(0.0f, 5.0f);
+        const float radius = 3.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCapsuleIntersectionInterval(rayOrigin, rayDirection, segA, segB, radius, tMin, tMax);
+
+        EXPECT_TRUE(result);
+        EXPECT_TRUE(tMax > tMin);
+    }
+
+    TEST(Collision2DTests, RayCapsuleIntersectionIntervalHitsEndCapReturnsInterval)
+    {
+        const Vector2 rayOrigin(-10.0f, 10.0f);
+        const Vector2 rayDirection = Vector2::UnitX;
+        const Vector2 segA(0.0f, 10.0f);
+        const Vector2 segB(10.0f, 10.0f);
+        const float radius = 3.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCapsuleIntersectionInterval(rayOrigin, rayDirection, segA, segB, radius, tMin, tMax);
+
+        EXPECT_TRUE(result);
+    }
+
+    TEST(Collision2DTests, RayCapsuleIntersectionIntervalMissReturnsFalse)
+    {
+        const Vector2 rayOrigin(-10.0f, 20.0f);
+        const Vector2 rayDirection = Vector2::UnitX;
+        const Vector2 segA(0.0f, 0.0f);
+        const Vector2 segB(10.0f, 0.0f);
+        const float radius = 3.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCapsuleIntersectionInterval(rayOrigin, rayDirection, segA, segB, radius, tMin, tMax);
+
+        EXPECT_FALSE(result);
+    }
+
+    TEST(Collision2DTests, RayCapsuleIntersectionIntervalOriginInsideReturnsIntervalFromZero)
+    {
+        const Vector2 rayOrigin(5.0f, 5.0f);
+        const Vector2 rayDirection = Vector2::UnitX;
+        const Vector2 segA(0.0f, 5.0f);
+        const Vector2 segB(10.0f, 5.0f);
+        const float radius = 3.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCapsuleIntersectionInterval(rayOrigin, rayDirection, segA, segB, radius, tMin, tMax);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(0.0f, tMin, Collision2D::Epsilon);
+    }
+
+    TEST(Collision2DTests, RayCapsuleIntersectionIntervalDegenerateCapsuleBehavesLikeCircle)
+    {
+        const Vector2 rayOrigin(-10.0f, 0.0f);
+        const Vector2 rayDirection = Vector2::UnitX;
+        const Vector2 segA(0.0f, 0.0f);
+        const Vector2 segB(0.0f, 0.0f);
+        const float radius = 5.0f;
+
+        float tMin;
+        float tMax;
+        const bool result = Collision2D::RayCapsuleIntersectionInterval(rayOrigin, rayDirection, segA, segB, radius, tMin, tMax);
+
+        EXPECT_TRUE(result);
+        EXPECT_NEAR(5.0f, tMin, Collision2D::Epsilon);
+        EXPECT_NEAR(15.0f, tMax, Collision2D::Epsilon);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionAabbAabb ----
+
+    TEST(Collision2DTests, TryGetCollisionAabbAabbOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 aMin(-2.0f, -2.0f);
+        const Vector2 aMax(2.0f, 2.0f);
+        const Vector2 bMin(1.0f, -2.0f);
+        const Vector2 bMax(5.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbAabb(aMin, aMax, bMin, bMax, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbAabbSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 aMin(-1.0f, -1.0f);
+        const Vector2 aMax(1.0f, 1.0f);
+        const Vector2 bMin(4.0f, -1.0f);
+        const Vector2 bMax(6.0f, 1.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbAabb(aMin, aMax, bMin, bMax, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbAabbTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 aMin(-1.0f, -1.0f);
+        const Vector2 aMax(1.0f, 1.0f);
+        const Vector2 bMin(1.0f, -1.0f);
+        const Vector2 bMax(3.0f, 1.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbAabb(aMin, aMax, bMin, bMax, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbAabbWhenFirstBoxIsContainedReturnsSeparatingMinimumTranslationVector)
+    {
+        const Vector2 aMin(-1.0f, -1.0f);
+        const Vector2 aMax(1.0f, 1.0f);
+        const Vector2 bMin(-10.0f, -10.0f);
+        const Vector2 bMax(10.0f, 10.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbAabb(aMin, aMax, bMin, bMax, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(11.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-11.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbAabbWhenInputsAreReversedThenMinimumTranslationVectorIsOpposite)
+    {
+        const Vector2 aMin(-2.0f, -2.0f);
+        const Vector2 aMax(2.0f, 2.0f);
+        const Vector2 bMin(1.0f, -2.0f);
+        const Vector2 bMax(5.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbAabb(aMin, aMax, bMin, bMax, result);
+        CollisionResult2D reversedResult;
+        const bool reversedIntersects = Collision2D::TryGetCollisionAabbAabb(bMin, bMax, aMin, aMax, reversedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(reversedIntersects);
+        EXPECT_EQ(-result.MinimumTranslationVector, reversedResult.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionAabbConvexPolygon ----
+
+    TEST(Collision2DTests, TryGetCollisionAabbConvexPolygonOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(2.0f, 2.0f);
+        const std::vector<Vector2> vertices{Vector2(1.0f, -2.0f), Vector2(5.0f, -2.0f), Vector2(5.0f, 2.0f), Vector2(1.0f, 2.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbConvexPolygon(aabbCenter, aabbHalfExtents, vertices, normals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbConvexPolygonSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(1.0f, 1.0f);
+        const std::vector<Vector2> vertices{Vector2(4.0f, -1.0f), Vector2(6.0f, -1.0f), Vector2(6.0f, 1.0f), Vector2(4.0f, 1.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbConvexPolygon(aabbCenter, aabbHalfExtents, vertices, normals, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbConvexPolygonTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(1.0f, 1.0f);
+        const std::vector<Vector2> vertices{Vector2(1.0f, -1.0f), Vector2(3.0f, -1.0f), Vector2(3.0f, 1.0f), Vector2(1.0f, 1.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbConvexPolygon(aabbCenter, aabbHalfExtents, vertices, normals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbConvexPolygonPolygonOnLeftMovesAabbRight)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(2.0f, 2.0f);
+        const std::vector<Vector2> vertices{Vector2(-5.0f, -2.0f), Vector2(-1.0f, -2.0f), Vector2(-1.0f, 2.0f), Vector2(-5.0f, 2.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbConvexPolygon(aabbCenter, aabbHalfExtents, vertices, normals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionAabbObb ----
+
+    TEST(Collision2DTests, TryGetCollisionAabbObbOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(2.0f, 2.0f);
+        const Vector2 obbCenter(3.0f, 0.0f);
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(2.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbObb(aabbCenter, aabbHalfExtents, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbObbSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(1.0f, 1.0f);
+        const Vector2 obbCenter(5.0f, 0.0f);
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(1.0f, 1.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbObb(aabbCenter, aabbHalfExtents, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbObbTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(1.0f, 1.0f);
+        const Vector2 obbCenter(2.0f, 0.0f);
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(1.0f, 1.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbObb(aabbCenter, aabbHalfExtents, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionAabbObbObbOnLeftMovesAabbRight)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(2.0f, 2.0f);
+        const Vector2 obbCenter(-3.0f, 0.0f);
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(2.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbObb(aabbCenter, aabbHalfExtents, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionCircleCircle ----
+
+    TEST(Collision2DTests, TryGetCollisionCircleCircleOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const float aRadius = 5.0f;
+        const Vector2 bCenter(8.0f, 0.0f);
+        const float bRadius = 5.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCircle(aCenter, aRadius, bCenter, bRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(2.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-2.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCircleSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const float aRadius = 5.0f;
+        const Vector2 bCenter(20.0f, 0.0f);
+        const float bRadius = 5.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCircle(aCenter, aRadius, bCenter, bRadius, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCircleTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const float aRadius = 5.0f;
+        const Vector2 bCenter(10.0f, 0.0f);
+        const float bRadius = 5.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCircle(aCenter, aRadius, bCenter, bRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCircleSecondCircleOnLeftMovesFirstCircleRight)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const float aRadius = 5.0f;
+        const Vector2 bCenter(-8.0f, 0.0f);
+        const float bRadius = 5.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCircle(aCenter, aRadius, bCenter, bRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(2.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(2.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCircleCoincidentCentersUsesStableNormal)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const float aRadius = 3.0f;
+        const Vector2 bCenter = Vector2::Zero;
+        const float bRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCircle(aCenter, aRadius, bCenter, bRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(5.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(5.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionCircleAabb ----
+
+    TEST(Collision2DTests, TryGetCollisionCircleAabbOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 circleCenter(14.0f, 5.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 boxMin = Vector2::Zero;
+        const Vector2 boxMax(10.0f, 10.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleAabb(circleCenter, circleRadius, boxMin, boxMax, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleAabbSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 circleCenter(16.0f, 5.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 boxMin = Vector2::Zero;
+        const Vector2 boxMax(10.0f, 10.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleAabb(circleCenter, circleRadius, boxMin, boxMax, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleAabbTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 circleCenter(15.0f, 5.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 boxMin = Vector2::Zero;
+        const Vector2 boxMax(10.0f, 10.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleAabb(circleCenter, circleRadius, boxMin, boxMax, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleAabbCircleOnLeftMovesCircleLeft)
+    {
+        const Vector2 circleCenter(-4.0f, 5.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 boxMin = Vector2::Zero;
+        const Vector2 boxMax(10.0f, 10.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleAabb(circleCenter, circleRadius, boxMin, boxMax, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleAabbCircleCenterInsideBoxMovesCircleThroughNearestFace)
+    {
+        const Vector2 circleCenter(8.0f, 5.0f);
+        const float circleRadius = 2.0f;
+        const Vector2 boxMin = Vector2::Zero;
+        const Vector2 boxMax(10.0f, 10.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleAabb(circleCenter, circleRadius, boxMin, boxMax, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(4.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(4.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionCircleObb ----
+
+    TEST(Collision2DTests, TryGetCollisionCircleObbOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 circleCenter(9.0f, 0.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(5.0f, 5.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleObb(circleCenter, circleRadius, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleObbSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 circleCenter(11.0f, 0.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(5.0f, 5.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleObb(circleCenter, circleRadius, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleObbTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 circleCenter(10.0f, 0.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(5.0f, 5.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleObb(circleCenter, circleRadius, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleObbCircleOnLeftMovesCircleLeft)
+    {
+        const Vector2 circleCenter(-9.0f, 0.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(5.0f, 5.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleObb(circleCenter, circleRadius, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleObbCircleCenterInsideObbMovesCircleThroughNearestFace)
+    {
+        const Vector2 circleCenter(3.0f, 0.0f);
+        const float circleRadius = 2.0f;
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(5.0f, 5.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleObb(circleCenter, circleRadius, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(4.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(4.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleObbRotatedObbReturnsWorldSpaceCollisionResult)
+    {
+        const Vector2 circleCenter(0.0f, 9.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitY;
+        const Vector2 obbAxisY = -Vector2::UnitX;
+        const Vector2 obbHalfExtents(5.0f, 5.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleObb(circleCenter, circleRadius, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitY, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(0.0f, 1.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionCircleCapsule ----
+
+    TEST(Collision2DTests, TryGetCollisionCircleCapsuleOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 circleCenter = Vector2::Zero;
+        const float circleRadius = 5.0f;
+        const Vector2 capsuleA(6.0f, 0.0f);
+        const Vector2 capsuleB(14.0f, 0.0f);
+        const float capsuleRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCapsule(circleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCapsuleSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 circleCenter = Vector2::Zero;
+        const float circleRadius = 5.0f;
+        const Vector2 capsuleA(8.0f, 0.0f);
+        const Vector2 capsuleB(14.0f, 0.0f);
+        const float capsuleRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCapsule(circleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCapsuleTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 circleCenter = Vector2::Zero;
+        const float circleRadius = 5.0f;
+        const Vector2 capsuleA(7.0f, 0.0f);
+        const Vector2 capsuleB(14.0f, 0.0f);
+        const float capsuleRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCapsule(circleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCapsuleCapsuleOnLeftMovesCircleRight)
+    {
+        const Vector2 circleCenter = Vector2::Zero;
+        const float circleRadius = 5.0f;
+        const Vector2 capsuleA(-14.0f, 0.0f);
+        const Vector2 capsuleB(-6.0f, 0.0f);
+        const float capsuleRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCapsule(circleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCapsuleCircleCenterOnCapsuleSegmentUsesPerpendicularNormal)
+    {
+        const Vector2 circleCenter = Vector2::Zero;
+        const float circleRadius = 1.0f;
+        const Vector2 capsuleA(-5.0f, 0.0f);
+        const Vector2 capsuleB(5.0f, 0.0f);
+        const float capsuleRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCapsule(circleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitY, result.Normal);
+        EXPECT_FLOAT_EQ(3.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(0.0f, 3.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCapsuleDegenerateCapsuleUsesStableNormal)
+    {
+        const Vector2 circleCenter = Vector2::Zero;
+        const float circleRadius = 5.0f;
+        const Vector2 capsuleA = Vector2::Zero;
+        const Vector2 capsuleB = Vector2::Zero;
+        const float capsuleRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCapsule(circleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(7.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(7.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- CollisionResult2D MTV Separation Tests ----
+
+    TEST(Collision2DTests, TryGetCollisionAabbObbWhenMinimumTranslationVectorAppliedThenRemovesPenetration)
+    {
+        const Vector2 aabbCenter = Vector2::Zero;
+        const Vector2 aabbHalfExtents(2.0f, 2.0f);
+        const Vector2 obbCenter(3.0f, 0.0f);
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(2.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionAabbObb(aabbCenter, aabbHalfExtents, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, result);
+        const Vector2 movedAabbCenter = aabbCenter + result.MinimumTranslationVector;
+        CollisionResult2D resolvedResult;
+        const bool resolvedIntersects =
+            Collision2D::TryGetCollisionAabbObb(movedAabbCenter, aabbHalfExtents, obbCenter, obbAxisX, obbAxisY, obbHalfExtents, resolvedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(resolvedIntersects);
+        EXPECT_FLOAT_EQ(0.0f, resolvedResult.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, resolvedResult.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCircleWhenMinimumTranslationVectorAppliedThenRemovesPenetration)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const float aRadius = 5.0f;
+        const Vector2 bCenter(8.0f, 0.0f);
+        const float bRadius = 5.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCircle(aCenter, aRadius, bCenter, bRadius, result);
+        const Vector2 movedCenter = aCenter + result.MinimumTranslationVector;
+        CollisionResult2D resolvedResult;
+        const bool resolvedIntersects = Collision2D::TryGetCollisionCircleCircle(movedCenter, aRadius, bCenter, bRadius, resolvedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(resolvedIntersects);
+        EXPECT_FLOAT_EQ(0.0f, resolvedResult.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, resolvedResult.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleAabbWhenMinimumTranslationVectorAppliedThenRemovesPenetration)
+    {
+        const Vector2 circleCenter(14.0f, 5.0f);
+        const float circleRadius = 5.0f;
+        const Vector2 boxMin = Vector2::Zero;
+        const Vector2 boxMax(10.0f, 10.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleAabb(circleCenter, circleRadius, boxMin, boxMax, result);
+        const Vector2 movedCircleCenter = circleCenter + result.MinimumTranslationVector;
+        CollisionResult2D resolvedResult;
+        const bool resolvedIntersects = Collision2D::TryGetCollisionCircleAabb(movedCircleCenter, circleRadius, boxMin, boxMax, resolvedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(resolvedIntersects);
+        EXPECT_FLOAT_EQ(0.0f, resolvedResult.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, resolvedResult.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionCircleCapsuleWhenMinimumTranslationVectorAppliedThenRemovesPenetration)
+    {
+        const Vector2 circleCenter = Vector2::Zero;
+        const float circleRadius = 5.0f;
+        const Vector2 capsuleA(6.0f, 0.0f);
+        const Vector2 capsuleB(14.0f, 0.0f);
+        const float capsuleRadius = 2.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCapsule(circleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, result);
+        const Vector2 movedCircleCenter = circleCenter + result.MinimumTranslationVector;
+        CollisionResult2D resolvedResult;
+        const bool resolvedIntersects =
+            Collision2D::TryGetCollisionCircleCapsule(movedCircleCenter, circleRadius, capsuleA, capsuleB, capsuleRadius, resolvedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(resolvedIntersects);
+        EXPECT_FLOAT_EQ(0.0f, resolvedResult.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, resolvedResult.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionConvexPolygonConvexPolygonWhenMinimumTranslationVectorAppliedThenRemovesPenetration)
+    {
+        std::vector<Vector2> aVertices{Vector2(-2.0f, -2.0f), Vector2(2.0f, -2.0f), Vector2(2.0f, 2.0f), Vector2(-2.0f, 2.0f)};
+        const std::vector<Vector2> aNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const std::vector<Vector2> bVertices{Vector2(1.0f, -2.0f), Vector2(5.0f, -2.0f), Vector2(5.0f, 2.0f), Vector2(1.0f, 2.0f)};
+        const std::vector<Vector2> bNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals, result);
+        for (std::size_t i = 0; i < aVertices.size(); i++)
+        {
+            aVertices[i] = aVertices[i] + result.MinimumTranslationVector;
+        }
+        CollisionResult2D resolvedResult;
+        const bool resolvedIntersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals, resolvedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(resolvedIntersects);
+        EXPECT_FLOAT_EQ(0.0f, resolvedResult.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, resolvedResult.MinimumTranslationVector);
+    }
+
+    // ---- CollisionResult2D Reversed Input Tests ----
+
+    TEST(Collision2DTests, TryGetCollisionCircleCircleWhenInputsAreReversedThenMinimumTranslationVectorIsOpposite)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const float aRadius = 5.0f;
+        const Vector2 bCenter(8.0f, 0.0f);
+        const float bRadius = 5.0f;
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionCircleCircle(aCenter, aRadius, bCenter, bRadius, result);
+        CollisionResult2D reversedResult;
+        const bool reversedIntersects = Collision2D::TryGetCollisionCircleCircle(bCenter, bRadius, aCenter, aRadius, reversedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(reversedIntersects);
+        EXPECT_EQ(-result.Normal, reversedResult.Normal);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, reversedResult.PenetrationDepth);
+        EXPECT_EQ(-result.MinimumTranslationVector, reversedResult.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionObbObbWhenInputsAreReversedThenMinimumTranslationVectorIsOpposite)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const Vector2 aAxisX = Vector2::UnitX;
+        const Vector2 aAxisY = Vector2::UnitY;
+        const Vector2 aHalf(2.0f, 2.0f);
+        const Vector2 bCenter(3.0f, 0.0f);
+        const Vector2 bAxisX = Vector2::UnitX;
+        const Vector2 bAxisY = Vector2::UnitY;
+        const Vector2 bHalf(2.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbObb(aCenter, aAxisX, aAxisY, aHalf, bCenter, bAxisX, bAxisY, bHalf, result);
+        CollisionResult2D reversedResult;
+        const bool reversedIntersects = Collision2D::TryGetCollisionObbObb(bCenter, bAxisX, bAxisY, bHalf, aCenter, aAxisX, aAxisY, aHalf, reversedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(reversedIntersects);
+        EXPECT_EQ(-result.Normal, reversedResult.Normal);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, reversedResult.PenetrationDepth);
+        EXPECT_EQ(-result.MinimumTranslationVector, reversedResult.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionConvexPolygonConvexPolygonWhenInputsAreReversedThenMinimumTranslationVectorIsOpposite)
+    {
+        const std::vector<Vector2> aVertices{Vector2(-2.0f, -2.0f), Vector2(2.0f, -2.0f), Vector2(2.0f, 2.0f), Vector2(-2.0f, 2.0f)};
+        const std::vector<Vector2> aNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const std::vector<Vector2> bVertices{Vector2(1.0f, -2.0f), Vector2(5.0f, -2.0f), Vector2(5.0f, 2.0f), Vector2(1.0f, 2.0f)};
+        const std::vector<Vector2> bNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals, result);
+        CollisionResult2D reversedResult;
+        const bool reversedIntersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(bVertices, bNormals, aVertices, aNormals, reversedResult);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(reversedIntersects);
+        EXPECT_EQ(-result.Normal, reversedResult.Normal);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, reversedResult.PenetrationDepth);
+        EXPECT_EQ(-result.MinimumTranslationVector, reversedResult.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionObbObb ----
+
+    TEST(Collision2DTests, TryGetCollisionObbObbOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const Vector2 aAxisX = Vector2::UnitX;
+        const Vector2 aAxisY = Vector2::UnitY;
+        const Vector2 aHalf(2.0f, 2.0f);
+        const Vector2 bCenter(3.0f, 0.0f);
+        const Vector2 bAxisX = Vector2::UnitX;
+        const Vector2 bAxisY = Vector2::UnitY;
+        const Vector2 bHalf(2.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbObb(aCenter, aAxisX, aAxisY, aHalf, bCenter, bAxisX, bAxisY, bHalf, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionObbObbSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const Vector2 aAxisX = Vector2::UnitX;
+        const Vector2 aAxisY = Vector2::UnitY;
+        const Vector2 aHalf(1.0f, 1.0f);
+        const Vector2 bCenter(5.0f, 0.0f);
+        const Vector2 bAxisX = Vector2::UnitX;
+        const Vector2 bAxisY = Vector2::UnitY;
+        const Vector2 bHalf(1.0f, 1.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbObb(aCenter, aAxisX, aAxisY, aHalf, bCenter, bAxisX, bAxisY, bHalf, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionObbObbTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const Vector2 aAxisX = Vector2::UnitX;
+        const Vector2 aAxisY = Vector2::UnitY;
+        const Vector2 aHalf(1.0f, 1.0f);
+        const Vector2 bCenter(2.0f, 0.0f);
+        const Vector2 bAxisX = Vector2::UnitX;
+        const Vector2 bAxisY = Vector2::UnitY;
+        const Vector2 bHalf(1.0f, 1.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbObb(aCenter, aAxisX, aAxisY, aHalf, bCenter, bAxisX, bAxisY, bHalf, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionObbObbSecondObbOnLeftMovesFirstObbRight)
+    {
+        const Vector2 aCenter = Vector2::Zero;
+        const Vector2 aAxisX = Vector2::UnitX;
+        const Vector2 aAxisY = Vector2::UnitY;
+        const Vector2 aHalf(2.0f, 2.0f);
+        const Vector2 bCenter(-3.0f, 0.0f);
+        const Vector2 bAxisX = Vector2::UnitX;
+        const Vector2 bAxisY = Vector2::UnitY;
+        const Vector2 bHalf(2.0f, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbObb(aCenter, aAxisX, aAxisY, aHalf, bCenter, bAxisX, bAxisY, bHalf, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionObbConvexPolygon ----
+
+    TEST(Collision2DTests, TryGetCollisionObbConvexPolygonOverlappingReturnsTrueAndCollisionResult)
+    {
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(2.0f, 2.0f);
+        const std::vector<Vector2> vertices{Vector2(1.0f, -2.0f), Vector2(5.0f, -2.0f), Vector2(5.0f, 2.0f), Vector2(1.0f, 2.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbConvexPolygon(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, vertices, normals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionObbConvexPolygonSeparatedReturnsFalseAndNone)
+    {
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(1.0f, 1.0f);
+        const std::vector<Vector2> vertices{Vector2(4.0f, -1.0f), Vector2(6.0f, -1.0f), Vector2(6.0f, 1.0f), Vector2(4.0f, 1.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbConvexPolygon(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, vertices, normals, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionObbConvexPolygonTouchingReturnsTrueAndZeroDepth)
+    {
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(1.0f, 1.0f);
+        const std::vector<Vector2> vertices{Vector2(1.0f, -1.0f), Vector2(3.0f, -1.0f), Vector2(3.0f, 1.0f), Vector2(1.0f, 1.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbConvexPolygon(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, vertices, normals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionObbConvexPolygonPolygonOnLeftMovesObbRight)
+    {
+        const Vector2 obbCenter = Vector2::Zero;
+        const Vector2 obbAxisX = Vector2::UnitX;
+        const Vector2 obbAxisY = Vector2::UnitY;
+        const Vector2 obbHalfExtents(2.0f, 2.0f);
+        const std::vector<Vector2> vertices{Vector2(-5.0f, -2.0f), Vector2(-1.0f, -2.0f), Vector2(-1.0f, 2.0f), Vector2(-5.0f, 2.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionObbConvexPolygon(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, vertices, normals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    // ---- Intersection Methods: TryGetCollisionConvexPolygonConvexPolygon ----
+
+    TEST(Collision2DTests, TryGetCollisionConvexPolygonConvexPolygonOverlappingReturnsTrueAndCollisionResult)
+    {
+        const std::vector<Vector2> aVertices{Vector2(-2.0f, -2.0f), Vector2(2.0f, -2.0f), Vector2(2.0f, 2.0f), Vector2(-2.0f, 2.0f)};
+        const std::vector<Vector2> aNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const std::vector<Vector2> bVertices{Vector2(1.0f, -2.0f), Vector2(5.0f, -2.0f), Vector2(5.0f, 2.0f), Vector2(1.0f, 2.0f)};
+        const std::vector<Vector2> bNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(-1.0f, 0.0f), result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionConvexPolygonConvexPolygonSeparatedReturnsFalseAndNone)
+    {
+        const std::vector<Vector2> aVertices{Vector2(-1.0f, -1.0f), Vector2(1.0f, -1.0f), Vector2(1.0f, 1.0f), Vector2(-1.0f, 1.0f)};
+        const std::vector<Vector2> aNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const std::vector<Vector2> bVertices{Vector2(4.0f, -1.0f), Vector2(6.0f, -1.0f), Vector2(6.0f, 1.0f), Vector2(4.0f, 1.0f)};
+        const std::vector<Vector2> bNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(Vector2::Zero, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionConvexPolygonConvexPolygonTouchingReturnsTrueAndZeroDepth)
+    {
+        const std::vector<Vector2> aVertices{Vector2(-1.0f, -1.0f), Vector2(1.0f, -1.0f), Vector2(1.0f, 1.0f), Vector2(-1.0f, 1.0f)};
+        const std::vector<Vector2> aNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const std::vector<Vector2> bVertices{Vector2(1.0f, -1.0f), Vector2(3.0f, -1.0f), Vector2(3.0f, 1.0f), Vector2(1.0f, 1.0f)};
+        const std::vector<Vector2> bNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(-Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(0.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2::Zero, result.MinimumTranslationVector);
+    }
+
+    TEST(Collision2DTests, TryGetCollisionConvexPolygonConvexPolygonSecondPolygonOnLeftMovesFirstPolygonRight)
+    {
+        const std::vector<Vector2> aVertices{Vector2(-2.0f, -2.0f), Vector2(2.0f, -2.0f), Vector2(2.0f, 2.0f), Vector2(-2.0f, 2.0f)};
+        const std::vector<Vector2> aNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const std::vector<Vector2> bVertices{Vector2(-5.0f, -2.0f), Vector2(-1.0f, -2.0f), Vector2(-1.0f, 2.0f), Vector2(-5.0f, 2.0f)};
+        const std::vector<Vector2> bNormals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+
+        CollisionResult2D result;
+        const bool intersects = Collision2D::TryGetCollisionConvexPolygonConvexPolygon(aVertices, aNormals, bVertices, bNormals, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_EQ(Vector2::UnitX, result.Normal);
+        EXPECT_FLOAT_EQ(1.0f, result.PenetrationDepth);
+        EXPECT_EQ(Vector2(1.0f, 0.0f), result.MinimumTranslationVector);
     }
 }

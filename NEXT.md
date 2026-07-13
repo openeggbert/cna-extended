@@ -6,6 +6,66 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (20) — `Collision2D` fully ported (last 15 methods + tests); real test-parity gap discovered
+
+Completed `Collision2D`'s remaining 15 methods from entry (19): `SolveParametricIntersectionWithImplicitLine`,
+`SolveParametricIntersection2D`, `ClosestPointRaySegment`, `RayCircleIntersectionInterval`,
+`RayCapsuleIntersectionInterval`, and all 10 `TryGetCollision*(..., CollisionResult2D&)`
+overloads (`AabbAabb`, `AabbConvexPolygon`, `AabbObb`, `CircleCircle`, `CircleAabb`, `CircleObb`,
+`CircleCapsule`, `ObbObb`, `ObbConvexPolygon`, `ConvexPolygonConvexPolygon`).
+
+**Verification discipline applied**: read every one of the 15 upstream method bodies in full
+from `Collision2D.cs` and diffed my C++ translation against them line-by-line *after* writing
+them (not just before) — all 15 are faithful 1:1 translations, confirmed byte-for-byte against
+upstream algorithm structure, not just "looks similar." Ran a `grep -oP` self-check diff of every
+`public static` method name in upstream `Collision2D.cs` against every `static` method name in
+`Collision2D.hpp`: **exact match, 79/79, zero missing, zero extra** — `Collision2D` is now 100%
+ported. Zero upstream bugs found in these 15 methods.
+
+**Real test-parity gap discovered (flagged prominently, not silently patched over)**: while
+porting tests for these 15 methods, found that entry (19)'s chunk-1 fork had implemented
+`Projection Methods`, `Distance Calculations`, `ClosestPointRaySegment`, `ClipLineToAabb`/
+`ClipLineToConvexPolygon`, `Overlap Methods`, and all 15 plain-`bool` `Intersects*` methods —
+but **never ported their tests**; the chunk-1 test file's own header comment said as much
+("Tests from Projection Methods onward are out of scope for this chunk"), but that scope note
+was never satisfied by a follow-up. This means real, already-merged implementation code
+(`ProjectOntoAxis`, `ProjectAabbOntoAxis`, `ProjectObbOntoAxis`, all 7 `DistanceSquared*`
+methods, `ClosestPointRaySegment`, `ClipLineToAabb`, `ClipLineToConvexPolygon`, `OverlapOnAxis`,
+`OverlapOnAxisAabbPolygon`, and 15 `Intersects*` methods) currently has **zero test coverage**,
+even though upstream has full coverage for all of it in `Collision2DTest.cs` (regions spanning
+source lines 1905–5053, roughly 2000 lines of C# test code). This is a pre-existing gap, not
+something introduced this session — flagged here per the "port tests alongside implementation,
+do not defer 'add tests later'" rule so it doesn't get lost.
+
+**This session's own ported tests**: 68 new `TEST()` cases for the 15 methods above (Parametric
+Solvers ×7, RayCircleIntersectionInterval ×4, RayCapsuleIntersectionInterval ×5, all 10
+`TryGetCollision*` sub-regions ×~4 each, `CollisionResult2D MTV Separation Tests` ×5,
+`CollisionResult2D Reversed Input Tests` ×3), ported 1:1 from `Collision2DTest.cs`. One
+translation snag: `CollisionResult2D` has no `operator==` (upstream relies on C#'s
+auto-generated `readonly struct` value equality, which C++ has no equivalent for), so
+`Assert.Equal(CollisionResult2D.None, result)` became 4 field-by-field `EXPECT_*` calls
+(`Intersects` false, `Normal`/`MinimumTranslationVector` == `Vector2::Zero`, `PenetrationDepth`
+== 0) rather than a single struct comparison — not a fidelity gap, just a mechanical C++
+adaptation.
+
+**Verification**: genuinely clean `rm -rf build` + rebuild for both CMake configs (linked and
+headers-only), zero warnings in either. `ctest` → **100% passed, 843/843** (was 772 before this
+entry; 174 of the 843 are `Collision2DTests.*`). Headers-only build also verified clean, then
+its build dir was removed per the standing headers-only-check convention.
+
+**State / next step**: two things remain before Phase 2 task 1 can be checked off in `plan.md`:
+(1) close the test-parity gap just discovered — port the missing `Collision2DTest.cs` regions
+(`Projection Methods`, `Distance Calculations`, `ClosestPointRaySegment Tests`, `Clipping
+Methods`, `Overlap Methods`, all 15 `Intersects*` sub-regions) into `Collision2DTests.cpp`; (2)
+port `CollisionShape2D` (713 lines, the last piece of task 1 — depends on the now-complete
+`Collision2D::TryGetCollision*` overloads for its own shape-kind-pair dispatch). No dedicated
+upstream test file exists for `CollisionShape2D`. Recommend doing (1) before (2) so `plan.md`'s
+task-1 checkbox is backed by genuinely complete test coverage, not just complete implementation
+coverage. Commit this session's work (the 15-method `Collision2D` completion + its 68 tests)
+before starting either.
+
+---
+
 ## 2026-07-13 (19) — Phase 2 task 1 IN PROGRESS: Collision2D chunk 1 of ~2, CollisionResult2D, CollisionShapeKind2D
 
 Phase 2 ("Collisions 2D") started. Task 1 is "Root types: `Collision2D`, `CollisionResult2D`,

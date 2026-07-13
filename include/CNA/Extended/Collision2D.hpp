@@ -8,20 +8,25 @@
 // port (3,809 lines upstream) and is being ported in several sequential chunks, each appending
 // to this same file -- see plan.md/NEXT.md for the chunk breakdown.
 //
-// This chunk covers: Constants, Helpers, the full Containment region (all 5 shape-pair
+// Chunk 1 covered: Constants, Helpers, the full Containment region (all 5 shape-pair
 // sub-regions), and every dependency those methods transitively require to be genuinely
 // self-sufficient and correct -- which, in this tightly-coupled file, turned out to mean nearly
-// everything except the Parametric Solvers region, the Ray Interval methods
-// (RayCircleIntersectionInterval/RayCapsuleIntersectionInterval), and all 13
-// TryGetCollision*(..., out CollisionResult2D) methods (which build CollisionResult2D-producing
-// logic on top of the plain bool Intersects* methods ported here, but are never themselves
-// depended on by anything ported in this chunk). Specifically, in addition to the originally-
-// scoped Constants/Helpers/Containment, this chunk also includes: the full Projection region;
-// the full Distance/ClosestPoint region; `ClipLineToAabb`/`ClipLineToConvexPolygon` from the
-// Clipping & Ray Intervals region (needed by the Distance region, not the Ray Interval methods
-// in that same region); and every plain-bool `Intersects*` method from the Intersections region
-// (but none of the `CollisionResult2D`-producing `TryGetCollision*` overloads). See NEXT.md for
-// the full account of why the originally-planned narrower scope wasn't achievable in isolation.
+// everything except the Parametric Solvers region, the Ray Interval methods, and the
+// `TryGetCollision*` overloads. Specifically it included: Constants/Helpers/Containment; the
+// full Projection region; the full Distance/ClosestPoint region; `ClipLineToAabb`/
+// `ClipLineToConvexPolygon` from the Clipping & Ray Intervals region (needed by the Distance
+// region, not the Ray Interval methods in that same region); and every plain-bool `Intersects*`
+// method from the Intersections region. See NEXT.md for the full account of why the
+// originally-planned narrower scope wasn't achievable in isolation.
+//
+// Chunk 2 (this one) completes the file: the Parametric Solvers region
+// (`SolveParametricIntersectionWithImplicitLine`, `SolveParametricIntersection2D`);
+// `ClosestPointRaySegment` (a leaf dependency of `RayCapsuleIntersectionInterval` below -- its
+// only caller, confirmed by reading the whole file) and the two Ray Interval methods
+// (`RayCircleIntersectionInterval`, `RayCapsuleIntersectionInterval`); and all 10
+// `CollisionResult2D`-producing `TryGetCollision*` overloads, each pairing with an
+// already-ported plain-`bool` `Intersects*` sibling from chunk 1. `Collision2D.cs` is now
+// 100% ported.
 //
 // `Vector2[]` array parameters -> `const std::vector<Vector2>&`, matching every other C#
 // array/`IList<T>` translation in this project. C#'s `out` parameters -> C++ reference
@@ -29,6 +34,7 @@
 // references.
 #pragma once
 
+#include "CNA/Extended/CollisionResult2D.hpp"
 #include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
@@ -263,5 +269,87 @@ namespace CNA::Extended
             const Vector2& a0, const Vector2& a1, float aRadius, const Vector2& b0, const Vector2& b1, float bRadius);
         [[nodiscard]] static bool IntersectsConvexPolygonConvexPolygon(const std::vector<Vector2>& aVertices, const std::vector<Vector2>& aNormals,
             const std::vector<Vector2>& bVertices, const std::vector<Vector2>& bNormals);
+
+        // ---- Parametric Solvers ----
+
+        /**
+         * @brief Solves the parametric intersection between an implicit line (dot(lineNormal, x) = lineDistance) and a
+         * parametric line/ray/segment (origin + t * direction).
+         * @return true if a unique solution exists; false if the parametric line is parallel to the implicit line.
+         */
+        static bool SolveParametricIntersectionWithImplicitLine(
+            const Vector2& lineNormal, float lineDistance, const Vector2& origin, const Vector2& direction, float& t);
+
+        /**
+         * @brief Solves the parametric intersection of two 2D lines in point-direction form.
+         * @return true if the directions are not parallel; false for parallel/collinear lines (no single-point intersection).
+         */
+        static bool SolveParametricIntersection2D(
+            const Vector2& origin1, const Vector2& direction1, const Vector2& origin2, const Vector2& direction2, float& t1, float& t2);
+
+        // ---- Ray Interval methods (ClosestPointRaySegment is a leaf dependency used only by RayCapsuleIntersectionInterval) ----
+
+        /** @brief Computes the closest points between a ray and a line segment, and the squared distance between them. */
+        static void ClosestPointRaySegment(
+            const Vector2& rayOrigin, const Vector2& rayDirection, const Vector2& segA, const Vector2& segB, float& sRay, float& tSeg, float& distanceSquared);
+
+        /** @brief Computes the parametric intersection interval between a ray and a circle. */
+        static bool RayCircleIntersectionInterval(const Vector2& origin, const Vector2& direction, const Vector2& center, float radius, float& tMin, float& tMax);
+
+        /** @brief Computes the parametric intersection interval between a ray and a capsule. */
+        static bool RayCapsuleIntersectionInterval(
+            const Vector2& rayOrigin, const Vector2& rayDirection, const Vector2& segA, const Vector2& segB, float radius, float& tMin, float& tMax);
+
+        // ---- Intersections (CollisionResult2D-producing TryGetCollision* overloads) ----
+
+        /** @brief Determines whether two AABBs intersect, and computes collision resolution data (normal moves A out of B). */
+        static bool TryGetCollisionAabbAabb(const Vector2& aMin, const Vector2& aMax, const Vector2& bMin, const Vector2& bMax, CollisionResult2D& result);
+
+        /** @brief Determines whether an AABB intersects a convex polygon, and computes collision resolution data (normal moves the AABB out of the polygon). */
+        static bool TryGetCollisionAabbConvexPolygon(const Vector2& aabbCenter, const Vector2& aabbHalfExtents, const std::vector<Vector2>& pVertices,
+            const std::vector<Vector2>& pNormals, CollisionResult2D& result);
+
+        /** @brief Determines whether an AABB intersects an OBB, and computes collision resolution data (normal moves the AABB out of the OBB). */
+        static bool TryGetCollisionAabbObb(const Vector2& aabbCenter, const Vector2& aabbHalfExtents, const Vector2& obbCenter, const Vector2& obbAxisX,
+            const Vector2& obbAxisY, const Vector2& obbHalfExtents, CollisionResult2D& result);
+
+        /** @brief Determines whether two OBBs intersect, and computes collision resolution data (normal moves the first OBB out of the second). */
+        static bool TryGetCollisionObbObb(const Vector2& aCenter, const Vector2& aAxisX, const Vector2& aAxisY, const Vector2& aHalf, const Vector2& bCenter,
+            const Vector2& bAxisX, const Vector2& bAxisY, const Vector2& bHalf, CollisionResult2D& result);
+
+        /** @brief Determines whether an OBB intersects a convex polygon, and computes collision resolution data (normal moves the OBB out of the polygon). */
+        static bool TryGetCollisionObbConvexPolygon(const Vector2& obbCenter, const Vector2& obbAxisX, const Vector2& obbAxisY, const Vector2& obbHalfExtents,
+            const std::vector<Vector2>& pVertices, const std::vector<Vector2>& pNormals, CollisionResult2D& result);
+
+        /**
+         * @brief Determines whether two circles intersect, and computes collision resolution data (normal points from B's
+         * center toward A's center; Vector2::UnitX when centers coincide).
+         */
+        static bool TryGetCollisionCircleCircle(const Vector2& aCenter, float aRadius, const Vector2& bCenter, float bRadius, CollisionResult2D& result);
+
+        /**
+         * @brief Determines whether a circle intersects an AABB, and computes collision resolution data (normal points from
+         * the closest AABB point toward the circle center, or through the nearest face when the center is inside the AABB).
+         */
+        static bool TryGetCollisionCircleAabb(const Vector2& cCenter, float cRadius, const Vector2& boxMin, const Vector2& boxMax, CollisionResult2D& result);
+
+        /**
+         * @brief Determines whether a circle intersects an OBB, and computes collision resolution data (normal points from
+         * the closest OBB point toward the circle center, or through the nearest face when the center is inside the OBB).
+         */
+        static bool TryGetCollisionCircleObb(const Vector2& cCenter, float cRadius, const Vector2& obbCenter, const Vector2& obbAxisX, const Vector2& obbAxisY,
+            const Vector2& obbHalfExtents, CollisionResult2D& result);
+
+        /**
+         * @brief Determines whether a circle intersects a capsule, and computes collision resolution data (normal points
+         * from the capsule's medial segment toward the circle center; perpendicular to the segment when centered on it;
+         * Vector2::UnitX for a degenerate capsule).
+         */
+        static bool TryGetCollisionCircleCapsule(
+            const Vector2& circleCenter, float circleRadius, const Vector2& capsuleA, const Vector2& capsuleB, float capsuleRadius, CollisionResult2D& result);
+
+        /** @brief Determines whether two convex polygons intersect, and computes collision resolution data (normal moves the first polygon out of the second). */
+        static bool TryGetCollisionConvexPolygonConvexPolygon(const std::vector<Vector2>& aVertices, const std::vector<Vector2>& aNormals,
+            const std::vector<Vector2>& bVertices, const std::vector<Vector2>& bNormals, CollisionResult2D& result);
     };
 }

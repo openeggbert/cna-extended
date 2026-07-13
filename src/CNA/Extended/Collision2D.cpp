@@ -3,6 +3,7 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/Collision2D.hpp"
 
+#include "CNA/Extended/Vector2Extensions.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
 
 #include <algorithm>
@@ -1792,6 +1793,915 @@ namespace CNA::Extended
             }
         }
 
+        return true;
+    }
+
+    // ---- Parametric Solvers ----
+
+    bool Collision2D::SolveParametricIntersectionWithImplicitLine(
+        const Vector2& lineNormal, const float lineDistance, const Vector2& origin, const Vector2& direction, float& t)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Derived from Section 5.3.1 "Intersecting Segment Against Plane" (2D reduction)
+        //
+        // Solves the intersection between:
+        //   Implicit line: dot(n, x) = d
+        //   Parametric line: x = origin + t * direction
+        // yielding:
+        //   t = (d - dot(n, origin)) / dot(n, direction)
+
+        const float denom = Vector2::Dot(lineNormal, direction);
+        if (std::abs(denom) < Epsilon)
+        {
+            t = 0.0f;
+            return false;
+        }
+
+        t = (lineDistance - Vector2::Dot(lineNormal, origin)) / denom;
+        return true;
+    }
+
+    bool Collision2D::SolveParametricIntersection2D(
+        const Vector2& origin1, const Vector2& direction1, const Vector2& origin2, const Vector2& direction2, float& t1, float& t2)
+    {
+        // Standard 2D line intersection in point-direction form.
+        // Uses 2D cross product (perp-dot): cross(a,b) = perpDot(a,b).
+        // Solve: o1 + t1*d1 = o2 + t2*d2
+        // => t1 = cross(o2 - o1, d2) / cross(d1, d2)
+        // => t2 = cross(o2 - o1, d1) / cross(d1, d2)
+
+        const float cross = PerpDot(direction1, direction2);
+
+        // Check if parallel
+        if (std::abs(cross) < Epsilon)
+        {
+            // Parallel or coincident, no intersection
+            t1 = 0.0f;
+            t2 = 0.0f;
+            return false;
+        }
+
+        const Vector2 diff = origin2 - origin1;
+
+        // Standard 2D line intersection parameters using perp-dot.
+        t1 = PerpDot(diff, direction2) / cross;
+        t2 = PerpDot(diff, direction1) / cross;
+        return true;
+    }
+
+    // ---- Ray Interval methods ----
+
+    void Collision2D::ClosestPointRaySegment(const Vector2& rayOrigin, const Vector2& rayDirection, const Vector2& segA, const Vector2& segB, float& sRay,
+        float& tSeg, float& distanceSquared)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.1.9 "Closest Points of Two Line Segments" (ray vs segment adaptation)
+        // Solve closest points on the supporting lines, then clamp to ray/segment parameter domains.
+
+        const Vector2 d1 = rayDirection;
+        const Vector2 d2 = segB - segA;
+        const Vector2 r = rayOrigin - segA;
+
+        const float a = Vector2::Dot(d1, d1);
+        const float e = Vector2::Dot(d2, d2);
+
+        // Degenerate ray (treat as point)
+        if (a <= Epsilon)
+        {
+            // Ray is a point at rayOrigin, clamp to segment
+            if (e <= Epsilon)
+            {
+                tSeg = 0.0f;
+            }
+            else
+            {
+                tSeg = MathHelper::Clamp(Vector2::Dot(-r, d2) / e, 0.0f, 1.0f);
+            }
+
+            const Vector2 q = segA + d2 * tSeg;
+            sRay = 0.0f;
+            distanceSquared = Vector2::DistanceSquared(rayOrigin, q);
+            return;
+        }
+
+        // Degenerate segment (treat as point)
+        if (e <= Epsilon)
+        {
+            // Segment is a point at segA, clamp ray to s >= 0
+            const float c = Vector2::Dot(d1, r);
+            sRay = std::max(-c / a, 0.0f);
+            tSeg = 0.0f;
+            const Vector2 p = rayOrigin + d1 * sRay;
+            distanceSquared = Vector2::DistanceSquared(p, segA);
+            return;
+        }
+
+        const float b = Vector2::Dot(d1, d2);
+        const float c2 = Vector2::Dot(d1, r);
+        const float f = Vector2::Dot(d2, r);
+
+        const float denom = a * e - b * b;
+
+        float s = 0.0f;
+        float t = 0.0f;
+
+        // If not parallel, compute closest point on infinite lines first
+        if (std::abs(denom) > Epsilon)
+        {
+            s = (b * f - c2 * e) / denom;
+        }
+        else
+        {
+            // Parallel-ish, pick s=0 initially, we'll clamp below
+            s = 0.0f;
+        }
+
+        // Clamp s to ray domain [0, +inf]
+        if (s < 0.0f)
+        {
+            s = 0.0f;
+            t = MathHelper::Clamp(f / e, 0.0f, 1.0f);
+        }
+        else
+        {
+            // Compute t from s
+            t = (b * s + f) / e;
+
+            // Clamp t to segment [0,1] and recompute s if needed
+            if (t < 0.0f)
+            {
+                t = 0.0f;
+                s = std::max(-c2 / a, 0.0f);
+            }
+            else if (t > 1.0f)
+            {
+                t = 1.0f;
+                s = std::max((b - c2) / a, 0.0f);
+            }
+        }
+
+        const Vector2 pClosest = rayOrigin + d1 * s;
+        const Vector2 qClosest = segA + d2 * t;
+
+        sRay = s;
+        tSeg = t;
+        distanceSquared = Vector2::DistanceSquared(pClosest, qClosest);
+    }
+
+    bool Collision2D::RayCircleIntersectionInterval(
+        const Vector2& origin, const Vector2& direction, const Vector2& center, const float radius, float& tMin, float& tMax)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.3.2 "Intersecting Ray or Segment Against Sphere" (2D reduction).
+        // Solves the quadratic |origin + t*direction - center|^2 = radius^2.
+
+        const Vector2 m = origin - center;
+
+        const float a = Vector2::Dot(direction, direction);
+        if (a <= EpsilonSq)
+        {
+            tMin = tMax = 0.0f;
+            return false;
+        }
+
+        const float b = Vector2::Dot(m, direction);
+        const float c = Vector2::Dot(m, m) - radius * radius;
+
+        // Ray origin outside circle (c > 0)
+        // and ray pointing away from circle (b > 0)
+        if (c > 0.0f && b > 0.0f)
+        {
+            tMin = tMax = 0.0f;
+            return false;
+        }
+
+        const float discriminant = b * b - a * c;
+
+        // Negative discriminant means ray misses circle
+        if (discriminant < 0.0f)
+        {
+            tMin = tMax = 0.0f;
+            return false;
+        }
+
+        const float sqrtD = std::sqrt(discriminant);
+        const float invA = 1.0f / a;
+
+        tMin = (-b - sqrtD) * invA;
+        tMax = (-b + sqrtD) * invA;
+
+        if (tMin > tMax)
+        {
+            std::swap(tMin, tMax);
+        }
+
+        // Clamp tMin to 0 for ray semantics
+        if (tMin < 0.0f)
+        {
+            tMin = 0.0f;
+        }
+
+        return true;
+    }
+
+    bool Collision2D::RayCapsuleIntersectionInterval(
+        const Vector2& rayOrigin, const Vector2& rayDirection, const Vector2& segA, const Vector2& segB, const float radius, float& tMin, float& tMax)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Capsule as swept sphere / Minkowski sum of segment and disk (concept).
+        // Built from these Ericson primitives (2D reductions / domain adaptations):
+        // - Section 5.3.2 "Intersecting Ray or Segment Against Sphere"  (ray-circle interval)
+        // - Section 5.1.2 "Closest Point on Line Segment to Point"      (point-segment distance; degenerate ray)
+        // - Section 5.1.9 "Closest Points of Two Line Segments"         (adapted to closest points of ray vs segment)
+        // The returned interval is formed by expanding around the closest-approach parameter using the available radial slack.
+
+        const float a = Vector2::Dot(rayDirection, rayDirection);
+        const float radiusSq = radius * radius;
+
+        // Check for degenerate ray
+        if (a <= EpsilonSq)
+        {
+            // Ray is degenerate, treat as a point
+            tMin = tMax = 0.0f;
+            float discardedT;
+            Vector2 discardedClosestPoint;
+            const float distSq = DistanceSquaredPointSegment(rayOrigin, segA, segB, discardedT, discardedClosestPoint);
+            return distSq <= radiusSq;
+        }
+
+        const Vector2 segDir = segB - segA;
+
+        // Check for degenerate capsule
+        if (segDir.LengthSquared() <= EpsilonSq)
+        {
+            // Capsule is degenerate, treat as a circle
+            return RayCircleIntersectionInterval(rayOrigin, rayDirection, segA, radius, tMin, tMax);
+        }
+
+        // Check if parallel or colinear with capsule medial line segment
+        const float cross = PerpDot(rayDirection, segDir);
+        if (std::abs(cross) <= Epsilon)
+        {
+            // Parallel/colinear case: build interval by projecting segment endpoints
+            const float invA = 1.0f / a;
+
+            const Vector2 toA = segA - rayOrigin;
+            const float tA = Vector2::Dot(toA, rayDirection) * invA;
+            const float tB = Vector2::Dot(segB - rayOrigin, rayDirection) * invA;
+
+            // Perpendicular distance from segA to ray line
+            const Vector2 perp = toA - rayDirection * (Vector2::Dot(toA, rayDirection) * invA);
+            const float perpDistSq = Vector2::Dot(perp, perp);
+
+            if (perpDistSq > radiusSq)
+            {
+                tMin = tMax = 0.0f;
+                return false;
+            }
+
+            const float minProj = std::min(tA, tB);
+            const float maxProj = std::max(tA, tB);
+
+            // Expand interval by how far we can move along the ray while staying within radius
+            // For non-unit direction: delta = sqrt((R^2 - perp^2) / Dot(d,d))
+            const float delta = std::sqrt((radiusSq - perpDistSq) * invA);
+
+            tMin = minProj - delta;
+            tMax = maxProj + delta;
+
+            // Clamp tMin to 0 for ray semantics
+            if (tMin < 0.0f)
+            {
+                tMin = 0.0f;
+            }
+            return true;
+        }
+
+        // General case: closest approach to capsule medial line segment
+        float sRay;
+        float discardedTSeg;
+        float distSqToAxis;
+        ClosestPointRaySegment(rayOrigin, rayDirection, segA, segB, sRay, discardedTSeg, distSqToAxis);
+
+        if (distSqToAxis > radiusSq)
+        {
+            tMin = tMax = 0.0f;
+            return false;
+        }
+
+        // Convert "radial slack" into parameter offset along the ray
+        const float offset = std::sqrt((radiusSq - distSqToAxis) / a);
+
+        tMin = sRay - offset;
+        tMax = sRay + offset;
+
+        if (tMin > tMax)
+        {
+            std::swap(tMin, tMax);
+        }
+
+        // Clamp tMin to 0 for ray semantics
+        if (tMin < 0.0f)
+        {
+            tMin = 0.0f;
+        }
+
+        return true;
+    }
+
+    // ---- Intersections (CollisionResult2D-producing TryGetCollision* overloads) ----
+
+    bool Collision2D::TryGetCollisionAabbAabb(const Vector2& aMin, const Vector2& aMax, const Vector2& bMin, const Vector2& bMax, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 4.2.1 "AABB-AABB Intersection" (2D interval-overlap test)
+        // Project-level adaptation: computes MTV from the shortest axis-aligned separating translation.
+        if (aMax.X < bMin.X || aMin.X > bMax.X || aMax.Y < bMin.Y || aMin.Y > bMax.Y)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        const float moveLeft = bMin.X - aMax.X;
+        const float moveRight = bMax.X - aMin.X;
+        const float moveDown = bMin.Y - aMax.Y;
+        const float moveUp = bMax.Y - aMin.Y;
+
+        float penetrationDepth = std::abs(moveLeft);
+        Vector2 normal = -Vector2::UnitX;
+
+        float candidateDepth = std::abs(moveRight);
+        if (candidateDepth < penetrationDepth)
+        {
+            penetrationDepth = candidateDepth;
+            normal = Vector2::UnitX;
+        }
+
+        candidateDepth = std::abs(moveDown);
+        if (candidateDepth < penetrationDepth)
+        {
+            penetrationDepth = candidateDepth;
+            normal = -Vector2::UnitY;
+        }
+
+        candidateDepth = std::abs(moveUp);
+        if (candidateDepth < penetrationDepth)
+        {
+            penetrationDepth = candidateDepth;
+            normal = Vector2::UnitY;
+        }
+
+        const Vector2 minimumTranslationVector = normal * penetrationDepth;
+        result = CollisionResult2D(true, normal, penetrationDepth, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionAabbConvexPolygon(const Vector2& aabbCenter, const Vector2& aabbHalfExtents, const std::vector<Vector2>& pVertices,
+        const std::vector<Vector2>& pNormals, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.2.1 "Separating-axis Test" (2D adaptation)
+        // Project-level adaptation: computes MTV and normal from the minimum-overlap axis.
+        if (!IsValidPolygon(pVertices, pNormals))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        float minimumOverlap = std::numeric_limits<float>::max();
+        Vector2 minimumOverlapAxis = Vector2::Zero;
+
+        for (std::size_t i = 0; i < pNormals.size(); i++)
+        {
+            const Vector2& axis = pNormals[i];
+            float minA;
+            float maxA;
+            float minB;
+            float maxB;
+            ProjectAabbOntoAxis(aabbCenter, aabbHalfExtents, axis, minA, maxA);
+            ProjectOntoAxis(pVertices, axis, minB, maxB);
+            float overlap;
+            if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+            {
+                result = CollisionResult2D::None;
+                return false;
+            }
+
+            UpdateMinimumOverlap(overlap, axis, minimumOverlap, minimumOverlapAxis);
+        }
+
+        float aabbMin;
+        float aabbMax;
+        float polygonMin;
+        float polygonMax;
+        ProjectAabbOntoAxis(aabbCenter, aabbHalfExtents, Vector2::UnitX, aabbMin, aabbMax);
+        ProjectOntoAxis(pVertices, Vector2::UnitX, polygonMin, polygonMax);
+        float axisOverlap;
+        if (!TryGetProjectionOverlap(aabbMin, aabbMax, polygonMin, polygonMax, axisOverlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(axisOverlap, Vector2::UnitX, minimumOverlap, minimumOverlapAxis);
+
+        ProjectAabbOntoAxis(aabbCenter, aabbHalfExtents, Vector2::UnitY, aabbMin, aabbMax);
+        ProjectOntoAxis(pVertices, Vector2::UnitY, polygonMin, polygonMax);
+        if (!TryGetProjectionOverlap(aabbMin, aabbMax, polygonMin, polygonMax, axisOverlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(axisOverlap, Vector2::UnitY, minimumOverlap, minimumOverlapAxis);
+
+        Vector2 polygonCenter = Vector2::Zero;
+        for (std::size_t i = 0; i < pVertices.size(); i++)
+        {
+            polygonCenter = polygonCenter + pVertices[i];
+        }
+        polygonCenter = polygonCenter / static_cast<float>(pVertices.size());
+
+        const Vector2 normal = OrientNormal(minimumOverlapAxis, aabbCenter, polygonCenter);
+        const Vector2 minimumTranslationVector = normal * minimumOverlap;
+        result = CollisionResult2D(true, normal, minimumOverlap, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionAabbObb(const Vector2& aabbCenter, const Vector2& aabbHalfExtents, const Vector2& obbCenter, const Vector2& obbAxisX,
+        const Vector2& obbAxisY, const Vector2& obbHalfExtents, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.2.1 "Separating-axis Test" (2D adaptation)
+        // Project-level adaptation: computes MTV and normal from the minimum-overlap axis.
+        float minimumOverlap = std::numeric_limits<float>::max();
+        Vector2 minimumOverlapAxis = Vector2::Zero;
+
+        float minA;
+        float maxA;
+        float minB;
+        float maxB;
+        float overlap;
+
+        ProjectAabbOntoAxis(aabbCenter, aabbHalfExtents, Vector2::UnitX, minA, maxA);
+        ProjectObbOntoAxis(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, Vector2::UnitX, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, Vector2::UnitX, minimumOverlap, minimumOverlapAxis);
+
+        ProjectAabbOntoAxis(aabbCenter, aabbHalfExtents, Vector2::UnitY, minA, maxA);
+        ProjectObbOntoAxis(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, Vector2::UnitY, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, Vector2::UnitY, minimumOverlap, minimumOverlapAxis);
+
+        ProjectAabbOntoAxis(aabbCenter, aabbHalfExtents, obbAxisX, minA, maxA);
+        ProjectObbOntoAxis(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, obbAxisX, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, obbAxisX, minimumOverlap, minimumOverlapAxis);
+
+        ProjectAabbOntoAxis(aabbCenter, aabbHalfExtents, obbAxisY, minA, maxA);
+        ProjectObbOntoAxis(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, obbAxisY, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, obbAxisY, minimumOverlap, minimumOverlapAxis);
+
+        const Vector2 normal = OrientNormal(minimumOverlapAxis, aabbCenter, obbCenter);
+        const Vector2 minimumTranslationVector = normal * minimumOverlap;
+        result = CollisionResult2D(true, normal, minimumOverlap, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionObbObb(const Vector2& aCenter, const Vector2& aAxisX, const Vector2& aAxisY, const Vector2& aHalf, const Vector2& bCenter,
+        const Vector2& bAxisX, const Vector2& bAxisY, const Vector2& bHalf, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.2.1 "Separating-axis Test" (2D adaptation)
+        // Project-level adaptation: computes MTV and normal from the minimum-overlap axis.
+        float minimumOverlap = std::numeric_limits<float>::max();
+        Vector2 minimumOverlapAxis = Vector2::Zero;
+
+        float minA;
+        float maxA;
+        float minB;
+        float maxB;
+        float overlap;
+
+        ProjectObbOntoAxis(aCenter, aAxisX, aAxisY, aHalf, aAxisX, minA, maxA);
+        ProjectObbOntoAxis(bCenter, bAxisX, bAxisY, bHalf, aAxisX, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, aAxisX, minimumOverlap, minimumOverlapAxis);
+
+        ProjectObbOntoAxis(aCenter, aAxisX, aAxisY, aHalf, aAxisY, minA, maxA);
+        ProjectObbOntoAxis(bCenter, bAxisX, bAxisY, bHalf, aAxisY, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, aAxisY, minimumOverlap, minimumOverlapAxis);
+
+        ProjectObbOntoAxis(aCenter, aAxisX, aAxisY, aHalf, bAxisX, minA, maxA);
+        ProjectObbOntoAxis(bCenter, bAxisX, bAxisY, bHalf, bAxisX, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, bAxisX, minimumOverlap, minimumOverlapAxis);
+
+        ProjectObbOntoAxis(aCenter, aAxisX, aAxisY, aHalf, bAxisY, minA, maxA);
+        ProjectObbOntoAxis(bCenter, bAxisX, bAxisY, bHalf, bAxisY, minB, maxB);
+        if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(overlap, bAxisY, minimumOverlap, minimumOverlapAxis);
+
+        const Vector2 normal = OrientNormal(minimumOverlapAxis, aCenter, bCenter);
+        const Vector2 minimumTranslationVector = normal * minimumOverlap;
+        result = CollisionResult2D(true, normal, minimumOverlap, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionObbConvexPolygon(const Vector2& obbCenter, const Vector2& obbAxisX, const Vector2& obbAxisY, const Vector2& obbHalfExtents,
+        const std::vector<Vector2>& pVertices, const std::vector<Vector2>& pNormals, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.2.1 "Separating-axis Test" (2D adaptation)
+        // Project-level adaptation: computes MTV and normal from the minimum-overlap axis.
+        if (!IsValidPolygon(pVertices, pNormals))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        float minimumOverlap = std::numeric_limits<float>::max();
+        Vector2 minimumOverlapAxis = Vector2::Zero;
+
+        for (std::size_t i = 0; i < pNormals.size(); i++)
+        {
+            const Vector2& axis = pNormals[i];
+            float minA;
+            float maxA;
+            float minB;
+            float maxB;
+            ProjectObbOntoAxis(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, axis, minA, maxA);
+            ProjectOntoAxis(pVertices, axis, minB, maxB);
+            float overlap;
+            if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+            {
+                result = CollisionResult2D::None;
+                return false;
+            }
+
+            UpdateMinimumOverlap(overlap, axis, minimumOverlap, minimumOverlapAxis);
+        }
+
+        float obbMin;
+        float obbMax;
+        float polygonMin;
+        float polygonMax;
+        ProjectObbOntoAxis(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, obbAxisX, obbMin, obbMax);
+        ProjectOntoAxis(pVertices, obbAxisX, polygonMin, polygonMax);
+        float axisOverlap;
+        if (!TryGetProjectionOverlap(obbMin, obbMax, polygonMin, polygonMax, axisOverlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(axisOverlap, obbAxisX, minimumOverlap, minimumOverlapAxis);
+
+        ProjectObbOntoAxis(obbCenter, obbAxisX, obbAxisY, obbHalfExtents, obbAxisY, obbMin, obbMax);
+        ProjectOntoAxis(pVertices, obbAxisY, polygonMin, polygonMax);
+        if (!TryGetProjectionOverlap(obbMin, obbMax, polygonMin, polygonMax, axisOverlap))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+        UpdateMinimumOverlap(axisOverlap, obbAxisY, minimumOverlap, minimumOverlapAxis);
+
+        Vector2 polygonCenter = Vector2::Zero;
+        for (std::size_t i = 0; i < pVertices.size(); i++)
+        {
+            polygonCenter = polygonCenter + pVertices[i];
+        }
+        polygonCenter = polygonCenter / static_cast<float>(pVertices.size());
+
+        const Vector2 normal = OrientNormal(minimumOverlapAxis, obbCenter, polygonCenter);
+        const Vector2 minimumTranslationVector = normal * minimumOverlap;
+        result = CollisionResult2D(true, normal, minimumOverlap, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionCircleCircle(const Vector2& aCenter, const float aRadius, const Vector2& bCenter, const float bRadius, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 4.3.1 "Sphere-sphere Intersection" (2D reduction: circle-circle)
+        // Project-level adaptation: computes MTV and normal for CollisionResult2D.
+        if (aRadius < 0.0f || bRadius < 0.0f)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        const float radiusSum = aRadius + bRadius;
+        const Vector2 centerDelta = aCenter - bCenter;
+        const float distanceSquared = centerDelta.LengthSquared();
+        if (distanceSquared > radiusSum * radiusSum)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        const float distance = std::sqrt(distanceSquared);
+        Vector2 normal = Vector2::UnitX;
+        if (distance > Epsilon)
+        {
+            normal = centerDelta / distance;
+        }
+
+        const float penetrationDepth = std::max(0.0f, radiusSum - distance);
+        const Vector2 minimumTranslationVector = normal * penetrationDepth;
+        result = CollisionResult2D(true, normal, penetrationDepth, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionCircleAabb(const Vector2& cCenter, const float cRadius, const Vector2& boxMin, const Vector2& boxMax, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.1.3 "Closest Point on AABB to Point"
+        // Related: Section 5.2.5 "Testing Sphere Against AABB" (2D reduction: circle vs AABB)
+        if (cRadius < 0.0f)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        const float closestX = MathHelper::Clamp(cCenter.X, boxMin.X, boxMax.X);
+        const float closestY = MathHelper::Clamp(cCenter.Y, boxMin.Y, boxMax.Y);
+        const Vector2 closestPoint(closestX, closestY);
+        const Vector2 delta = cCenter - closestPoint;
+        const float distanceSquared = delta.LengthSquared();
+
+        if (distanceSquared > cRadius * cRadius)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        Vector2 normal;
+        float penetrationDepth;
+        if (distanceSquared > EpsilonSq)
+        {
+            const float distance = std::sqrt(distanceSquared);
+            normal = delta / distance;
+            penetrationDepth = std::max(0.0f, cRadius - distance);
+        }
+        else
+        {
+            const float distanceToLeft = cCenter.X - boxMin.X;
+            const float distanceToRight = boxMax.X - cCenter.X;
+            const float distanceToBottom = cCenter.Y - boxMin.Y;
+            const float distanceToTop = boxMax.Y - cCenter.Y;
+
+            normal = -Vector2::UnitX;
+            float distanceToNearestFace = distanceToLeft;
+
+            if (distanceToRight < distanceToNearestFace)
+            {
+                normal = Vector2::UnitX;
+                distanceToNearestFace = distanceToRight;
+            }
+
+            if (distanceToBottom < distanceToNearestFace)
+            {
+                normal = -Vector2::UnitY;
+                distanceToNearestFace = distanceToBottom;
+            }
+
+            if (distanceToTop < distanceToNearestFace)
+            {
+                normal = Vector2::UnitY;
+                distanceToNearestFace = distanceToTop;
+            }
+
+            penetrationDepth = cRadius + distanceToNearestFace;
+        }
+
+        const Vector2 minimumTranslationVector = normal * penetrationDepth;
+        result = CollisionResult2D(true, normal, penetrationDepth, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionCircleObb(const Vector2& cCenter, const float cRadius, const Vector2& obbCenter, const Vector2& obbAxisX,
+        const Vector2& obbAxisY, const Vector2& obbHalfExtents, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.1.4 "Closest Point on OBB to Point"
+        // Related: Section 5.2.6 "Testing Sphere Against OBB" (2D reduction: circle vs OBB)
+        if (cRadius < 0.0f)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        const Vector2 offset = cCenter - obbCenter;
+        const float localX = Vector2::Dot(offset, obbAxisX);
+        const float localY = Vector2::Dot(offset, obbAxisY);
+        const float closestX = MathHelper::Clamp(localX, -obbHalfExtents.X, obbHalfExtents.X);
+        const float closestY = MathHelper::Clamp(localY, -obbHalfExtents.Y, obbHalfExtents.Y);
+
+        const Vector2 localDelta(localX - closestX, localY - closestY);
+        const float distanceSquared = localDelta.LengthSquared();
+        if (distanceSquared > cRadius * cRadius)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        Vector2 normal;
+        float penetrationDepth;
+        if (distanceSquared > EpsilonSq)
+        {
+            const float distance = std::sqrt(distanceSquared);
+            const Vector2 localNormal = localDelta / distance;
+            normal = obbAxisX * localNormal.X + obbAxisY * localNormal.Y;
+            penetrationDepth = std::max(0.0f, cRadius - distance);
+        }
+        else
+        {
+            const float distanceToLeft = localX + obbHalfExtents.X;
+            const float distanceToRight = obbHalfExtents.X - localX;
+            const float distanceToBottom = localY + obbHalfExtents.Y;
+            const float distanceToTop = obbHalfExtents.Y - localY;
+
+            normal = -obbAxisX;
+            float distanceToNearestFace = distanceToLeft;
+
+            if (distanceToRight < distanceToNearestFace)
+            {
+                normal = obbAxisX;
+                distanceToNearestFace = distanceToRight;
+            }
+
+            if (distanceToBottom < distanceToNearestFace)
+            {
+                normal = -obbAxisY;
+                distanceToNearestFace = distanceToBottom;
+            }
+
+            if (distanceToTop < distanceToNearestFace)
+            {
+                normal = obbAxisY;
+                distanceToNearestFace = distanceToTop;
+            }
+
+            penetrationDepth = cRadius + distanceToNearestFace;
+        }
+
+        const Vector2 minimumTranslationVector = normal * penetrationDepth;
+        result = CollisionResult2D(true, normal, penetrationDepth, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionCircleCapsule(
+        const Vector2& circleCenter, const float circleRadius, const Vector2& capsuleA, const Vector2& capsuleB, const float capsuleRadius, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 4.5.1 "Sphere-swept Volume Intersection" (sphere-swept line / capsule framing)
+        // Related: Section 5.1.2 "Closest Point on Line Segment to Point" (distance to capsule medial segment)
+        if (circleRadius < 0.0f || capsuleRadius < 0.0f)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        const float radiusSum = circleRadius + capsuleRadius;
+        float discardedT;
+        Vector2 closestPoint;
+        const float distanceSquared = DistanceSquaredPointSegment(circleCenter, capsuleA, capsuleB, discardedT, closestPoint);
+        if (distanceSquared > radiusSum * radiusSum)
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        Vector2 normal;
+        float distance;
+        if (distanceSquared > EpsilonSq)
+        {
+            distance = std::sqrt(distanceSquared);
+            normal = (circleCenter - closestPoint) / distance;
+        }
+        else
+        {
+            distance = 0.0f;
+            const Vector2 segment = capsuleB - capsuleA;
+            const float segmentLengthSquared = segment.LengthSquared();
+            if (segmentLengthSquared > EpsilonSq)
+            {
+                const float inverseLength = 1.0f / std::sqrt(segmentLengthSquared);
+                normal = Vector2(-segment.Y * inverseLength, segment.X * inverseLength);
+            }
+            else
+            {
+                normal = Vector2::UnitX;
+            }
+        }
+
+        const float penetrationDepth = std::max(0.0f, radiusSum - distance);
+        const Vector2 minimumTranslationVector = normal * penetrationDepth;
+        result = CollisionResult2D(true, normal, penetrationDepth, minimumTranslationVector);
+        return true;
+    }
+
+    bool Collision2D::TryGetCollisionConvexPolygonConvexPolygon(const std::vector<Vector2>& aVertices, const std::vector<Vector2>& aNormals,
+        const std::vector<Vector2>& bVertices, const std::vector<Vector2>& bNormals, CollisionResult2D& result)
+    {
+        // C. Ericson, Real-Time Collision Detection, Morgan Kaufmann, 2005
+        // Section 5.2.1 "Separating-axis Test" (2D adaptation)
+        // Project-level adaptation: computes MTV and normal from the minimum-overlap axis.
+        if (!IsValidPolygon(aVertices, aNormals) || !IsValidPolygon(bVertices, bNormals))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        float minimumOverlap = std::numeric_limits<float>::max();
+        Vector2 minimumOverlapAxis = Vector2::Zero;
+
+        for (std::size_t i = 0; i < aNormals.size(); i++)
+        {
+            const Vector2& axis = aNormals[i];
+            float minA;
+            float maxA;
+            float minB;
+            float maxB;
+            ProjectOntoAxis(aVertices, axis, minA, maxA);
+            ProjectOntoAxis(bVertices, axis, minB, maxB);
+            float overlap;
+            if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+            {
+                result = CollisionResult2D::None;
+                return false;
+            }
+
+            UpdateMinimumOverlap(overlap, axis, minimumOverlap, minimumOverlapAxis);
+        }
+
+        for (std::size_t i = 0; i < bNormals.size(); i++)
+        {
+            const Vector2& axis = bNormals[i];
+            float minA;
+            float maxA;
+            float minB;
+            float maxB;
+            ProjectOntoAxis(aVertices, axis, minA, maxA);
+            ProjectOntoAxis(bVertices, axis, minB, maxB);
+            float overlap;
+            if (!TryGetProjectionOverlap(minA, maxA, minB, maxB, overlap))
+            {
+                result = CollisionResult2D::None;
+                return false;
+            }
+
+            UpdateMinimumOverlap(overlap, axis, minimumOverlap, minimumOverlapAxis);
+        }
+
+        Vector2 centerA = Vector2::Zero;
+        for (std::size_t i = 0; i < aVertices.size(); i++)
+        {
+            centerA = centerA + aVertices[i];
+        }
+        centerA = centerA / static_cast<float>(aVertices.size());
+
+        Vector2 centerB = Vector2::Zero;
+        for (std::size_t i = 0; i < bVertices.size(); i++)
+        {
+            centerB = centerB + bVertices[i];
+        }
+        centerB = centerB / static_cast<float>(bVertices.size());
+
+        const Vector2 normal = OrientNormal(minimumOverlapAxis, centerA, centerB);
+        const Vector2 minimumTranslationVector = normal * minimumOverlap;
+        result = CollisionResult2D(true, normal, minimumOverlap, minimumTranslationVector);
         return true;
     }
 }

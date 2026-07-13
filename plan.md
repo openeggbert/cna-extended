@@ -740,7 +740,18 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
 Depends on Phase 1 (math/shapes).
 
 - [ ] Root types: `Collision2D`, `CollisionResult2D`, `CollisionShape2D`,
-      `CollisionShapeKind2D`
+      `CollisionShapeKind2D` — **IN PROGRESS (2026-07-13)**. `CollisionShapeKind2D` and
+      `CollisionResult2D` fully ported. `Collision2D` (3,809 upstream lines) is now 100%
+      ported — all 79 `public static` methods present, self-check diff confirms zero
+      missing/extra — but its test suite is NOT at parity yet: `Projection Methods`,
+      `Distance Calculations`, `ClosestPointRaySegment Tests`, `ClipLineToAabb`/
+      `ClipLineToConvexPolygon` tests, `Overlap Methods`, and all 15 plain-`bool`
+      `Intersects*` sub-regions from upstream `Collision2DTest.cs` still need porting
+      (implementations exist and are exercised transitively, but have no direct test
+      coverage). `CollisionShape2D` (713 lines) not yet started — depends on
+      `Collision2D::TryGetCollision*`, now unblocked. See `NEXT.md` entry (20) for the
+      full breakdown. Do not check this task off until both the test-parity gap is
+      closed and `CollisionShape2D` lands.
 - [ ] `CollisionWorld2D`, `ICollisionActor`, `ICollisionBroadphase2D`,
       `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey`
 - [ ] Broadphase: `QuadTree/*`, `SpatialHash`
