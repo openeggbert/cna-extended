@@ -770,7 +770,10 @@ Depends on Phase 1 (math/shapes).
       sub-tasks below land — it genuinely depends on `Layer`/`LayerPair` and the
       broadphase implementations, a real forward dependency despite being listed here
       first; see `NEXT.md` entry (25) for why this task's internal order was changed.
-- [ ] Broadphase: `QuadTree/*`, `SpatialHash`
+- [x] Broadphase: `QuadTree/*`, `SpatialHash` — **COMPLETE (2026-07-13)**. `QuadtreeData`,
+      `QuadTree`, `QuadTreeSpace`, and `SpatialHash` (both implementing
+      `ICollisionBroadphase2D`) all ported, with 44 tests ported 1:1 from upstream. See
+      `NEXT.md` entry (26).
 - [ ] `Layers/*`, `LayerPair`
 - [ ] Port `tests/MonoGame.Extended.Tests/Collisions/**` (partially done alongside each
       piece above/below as it lands, per this project's "port tests alongside

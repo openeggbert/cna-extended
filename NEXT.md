@@ -6,6 +6,71 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (26) — Phase 2 task 3 (Broadphase: QuadTree/*, SpatialHash) COMPLETE
+
+Two independent broadphase implementations of `ICollisionBroadphase2D`, ported via two parallel
+forks (genuinely separate files, safe to parallelize unlike `Collision2D`/`Ray2D`+`Line2D`+
+`LineSegment2D`): the QuadTree cluster (`QuadtreeData`, `QuadTree`, `QuadTreeSpace` — 538 upstream
+lines) and `SpatialHash` (209 upstream lines).
+
+**Shared prerequisite ported by me first, not left to either fork**: `BasicActor` (upstream's
+`tests/.../Collisions/Implementation/BasicActor.cs`), a minimal `ICollisionActor` test fixture
+used across the QuadTree/QuadTreeSpace/SpatialHash/CollisionWorld2D upstream test suites — ported
+once to `tests/CNA/Extended/Collisions/Implementation/BasicActor.hpp` before launching either
+fork, avoiding a duplicate-fixture conflict between two forks that both needed it.
+
+**Both forks verified compliant** (`git status` showed only expected files, nothing committed,
+`plan.md`/`NEXT.md`/`NOTICE.md` untouched).
+
+**Real, non-trivial ownership-model decisions had to be made explicit in C++** (upstream's GC
+makes all of this invisible) — verified against upstream's actual `HashSet`/reference-equality
+semantics, not guessed:
+- `QuadTree::Children` genuinely owns its child nodes → `std::vector<std::unique_ptr<QuadTree>>`.
+- `QuadTree::Contents` and `QuadtreeData`'s `_parents` are non-owning identity sets (C#'s default
+  `HashSet<T>` for an un-overridden reference type uses reference equality, not value equality) →
+  `sharp-runtime`'s `HashSet<T*>`, no `std::hash` specialization needed since pointer identity
+  already is the intended equality.
+- `QuadTreeSpace` owns every `QuadtreeData` it creates → `std::unordered_map<ICollisionActor*,
+  std::unique_ptr<QuadtreeData>>`; tree nodes hold only non-owning `QuadtreeData*`.
+
+**`SpatialHash`'s upstream-nested `private readonly struct CellKey` had to be hoisted to a
+free-standing `SpatialHashCellKey` at namespace scope** — a structural C++ requirement, not a
+style choice: its `std::hash` specialization must be fully visible before `SpatialHash`'s own
+`unordered_map` members are declared, which a type nested inside that very class cannot satisfy
+(C++ class bodies can't be interrupted by a `namespace std {}` block and resumed). Kept public but
+documented as an implementation detail, matching the `internal`-has-no-C++-equivalent precedent.
+
+**One real translation bug found and fixed during a fork's own verification** (not an upstream
+bug): `QuadTreeSpace`'s implicit destructor initially failed to compile in any translation unit
+lacking `QuadtreeData`'s complete definition (incomplete-type `std::unique_ptr` destruction) —
+fixed via the standard forward-declared-`unique_ptr`-member pattern (explicit destructor/move-ctor/
+move-assign declared in the header, defined `= default` in the `.cpp` where the type is complete).
+
+**One real test-infrastructure gap found and fixed**: neither `CnaExtendedTests` nor
+`CnaExtendedTests_compilecheck` had `tests/` as an include root, so `#include "CNA/Extended/
+Collisions/Implementation/BasicActor.hpp"` couldn't resolve from any test file — would have
+blocked every test in this task, not just one fork's own. Fixed via `target_include_directories`
+in `tests/CMakeLists.txt`.
+
+**Verification**: independently confirmed both forks' claims — cross-referenced upstream
+public/protected members via `grep` for all 4 types, spot-checked `SpatialHash`'s
+`TryGetCollision(BoundingCapsule2D)`-adjacent `Query` dedup logic and `QuadTree::Split()`'s
+quadrant math line-by-line against upstream (`Split()`: exact match). Genuinely clean `rm -rf
+build` rebuild + both CMake configs (linked and headers-only), zero warnings in either. `ctest` →
+**1095/1095 passing** (was 1051 — 44 net new tests: 34 QuadTree/QuadTreeSpace + 10 SpatialHash).
+
+Committed in 2 pieces (`5f187e7`: `SpatialHash` + shared `BasicActor` fixture + the
+`tests/CMakeLists.txt` fix; `7d554ae`: the QuadTree cluster) — kept separate since they're
+independently-reviewable/revertable units, even though verification happened together.
+
+**State / next step**: Phase 2 task 4 (`Layers/*`, `LayerPair`) is next — small files (`Layer.cs`
+~42 lines, `LayerPair.cs` ~42 lines, `UndefinedLayerException.cs` ~32 lines, ~116 lines total),
+planned to be ported directly rather than via fork given the size. Once task 4 lands,
+`CollisionWorld2D` (504 lines, deferred in entry (25)) can finally be ported to close out task 2,
+since both of its real dependencies (broadphase, now done; `Layer`/`LayerPair`, next) will exist.
+
+---
+
 ## 2026-07-13 (25) — Phase 2 task 2 started: standalone Collisions-module pieces ported; CollisionWorld2D deferred (task-internal reorder)
 
 Started Phase 2 task 2. Read all 6 upstream files under `Collisions/` for this task
