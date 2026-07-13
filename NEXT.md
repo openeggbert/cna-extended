@@ -6,6 +6,53 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (16) — Collections: ObjectPool<T>, Pool<T>, IPoolable, ItemEventArgs ported (Phase 1 task 28)
+
+Continued straight through, no check-in pause.
+
+**Ported directly** (no fork; small, 244 lines of C# total). All four fully ported, no
+deferrals. `IPoolable::NextNode`/`PreviousNode` → `IPoolable*` (`ObjectPool<T>` casts to
+`T*` wherever upstream does an unchecked `(T)node.NextNode` cast). `event Action<T>
+ItemUsed`/`ItemReturned` → `System::MulticastAction<T*>` (the multicast-delegate type
+extended in `sharp-runtime` earlier in this session, exactly for this kind of need).
+
+**Found and preserved this session's fourth confirmed upstream bug, by far the most
+severe — a genuine infinite loop, not just a wrong value.** Found this one directly
+while hand-tracing `CreateObject()`/`Use()` myself during the port (not delegated, not a
+fork's claim I had to re-verify): `CreateObject()` unconditionally sets `_tailNode = item`
+as its last step, right before `New()` calls `Use(item)` on that same item. `Use()`'s
+`if (_tailNode is null)` check — meant to detect "is this the pool's very first node" —
+is therefore always false for every freshly-created item, so `Use()` always links the
+item to point to **itself** (`item.PreviousNode == item`, `item.NextNode == item`). For a
+pool's very first item, `GetEnumerator()`'s `while (node != null) { yield return node;
+node = node.NextNode; }` then never terminates. Confirmed byte-for-byte against the C#
+source (not assumed) before trusting it.
+
+Given the bug is a literal infinite loop, took explicit precautions so the regression
+tests demonstrating it can never accidentally hang the test suite: they assert on
+`getNextNodeProperty()`/`getPreviousNodeProperty()` directly, never by iterating the pool
+in the exact state that triggers the bug — with a prominent warning in both
+`ObjectPool.hpp` and `ObjectPoolTests.cpp` so a future session doesn't "simplify" a test
+into iteration and reintroduce a hang. Also re-ran the entire suite under `timeout 60`
+as an explicit extra safety net before trusting a clean pass.
+
+**Caught and fixed one of my own test-authoring mistakes**: initially assumed the
+full-pool policy applies as soon as `TotalCount > Capacity` at the very next `New()`
+call, but upstream's actual guard is `TotalCount <= Capacity` (allowing `Capacity + 1`
+total creations before the policy ever triggers) — traced and corrected before
+committing.
+
+**Verification**: both build modes clean, `ctest` (under `timeout 60`) → **100% passed,
+608/608, no hang** (was 589 — 19 net new tests).
+
+**State / next step:** Phase 1 is 28 of ~30 tasks in. Next per `plan.md` §5 Phase 1: task
+29, Collections: `KeyedCollection`, `DictionaryExtensions`, `ListExtensions`. No known
+blockers. Continue without pausing for a status update, per the standing correction,
+unless a genuine blocker requiring the user's judgment comes up. **Commit AND push to
+`develop`** after this task.
+
+---
+
 ## 2026-07-13 (15) — Collections: Bag<T>, Deque<T> ported (Phase 1 task 27)
 
 Continued straight through, no check-in pause.

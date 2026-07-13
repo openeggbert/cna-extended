@@ -621,7 +621,52 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       configurations verified clean from a fully clean rebuild (not a cached one), zero
       new compiler warnings, independently re-confirmed (not just trusting the fork's
       self-report).
-- [ ] Collections: `ObjectPool<T>`, `Pool<T>`, `IPoolable`, `ItemEventArgs`
+- [x] Collections: `ObjectPool<T>`, `Pool<T>`, `IPoolable`, `ItemEventArgs` (2026-07-13,
+      ported directly, no fork; small, 244 lines of C# total). All four fully ported, no
+      deferrals; header-only templates. `IPoolable::NextNode`/`PreviousNode` -> `IPoolable*`
+      (`ObjectPool<T>` `static_cast`s to `T*` at every point upstream does an unchecked
+      `(T)node.NextNode` cast, trusting the same invariant upstream does — only
+      T-implementing instances are ever linked into a given pool's list). `event Action<T>
+      ItemUsed`/`ItemReturned` -> `System::MulticastAction<T*>` (a true multicast delegate,
+      unlike `EventHandler<TEventArgs>`'s (sender, args) shape — `MulticastAction<Args...>`
+      was added to `sharp-runtime` earlier in this project specifically for this kind of
+      need). `Pool<T>`/`ObjectPool<T>`'s `where T : class` reference-type constraints map
+      to working in `T*` throughout, consistent with `GameComponentCollectionExtensions.hpp`.
+      **Found and preserved a severe, genuine upstream bug in `ObjectPool<T>` — an actual
+      infinite loop, not just a wrong value, confirmed by hand-tracing the C# source
+      byte-for-byte myself (not delegated, not assumed)**: `CreateObject()` unconditionally
+      sets `_tailNode = item` as its last step, immediately before `New()` calls `Use(item)`
+      on that exact same item; `Use()`'s `if (_tailNode is null)` check — meant to detect
+      "is this the pool's first-ever node" — is therefore always false for every
+      freshly-created item, so `Use()` always takes the branch that sets
+      `item.PreviousNode = _tailNode` and `_tailNode.NextNode = item` — but since
+      `_tailNode` IS `item` at that point, the node ends up pointing to **itself**.
+      For a pool's very first item, this means `GetEnumerator()`'s `while (node != null) {
+      yield return node; node = node.NextNode; }` never terminates, because
+      `node.NextNode == node`. The self-reference is only retroactively fixed by a later
+      `CreateObject()` call (for `NextNode`) or a `Return()` call (which unconditionally
+      resets the current tail's `NextNode` to null) — so enumerating a pool whose items
+      were obtained purely via `New()`, with none ever `Return()`ed, hangs on the current
+      tail. Reproduced exactly (not fixed), documented prominently in `ObjectPool.hpp`'s
+      header comment, and covered by regression tests that deliberately assert on
+      `getNextNodeProperty()`/`getPreviousNodeProperty()` directly rather than by
+      iterating the pool — iterating in the exact scenario being tested is the bug itself
+      and would hang the test process. Smaller preserved quirk: `Pool<T>::Free()` calls
+      `resetItem` unconditionally, even when the item wasn't actually kept because the
+      pool was already at its `maximum`. Ported upstream's one active `ObjectPoolTests.cs`
+      test 1:1 (its own name is stale/misleading — it says
+      "ThrowsNullReferenceException" but actually asserts no exception is thrown); fresh
+      tests for everything else including both `Pool<T>` (no upstream coverage at all)
+      and the `ObjectPool<T>` full/policy paths (`ReturnNull`/`IncreaseSize`/
+      `KillExisting`) and the infinite-loop-bug regressions. One of my own test-authoring
+      mistakes caught before landing: an initial test assumed `Capacity`'s full-pool
+      policy applies once `TotalCount > Capacity` naively at the second `New()` call, but
+      upstream's actual guard is `TotalCount <= Capacity` (note `<=`), which allows
+      `Capacity + 1` total items to be freely created before the policy switch ever
+      triggers — traced and corrected before committing, not just assumed correct. Test
+      suite grew from 589 to 608 (19 net new tests). Both build modes verified clean, and
+      the full suite explicitly re-run under a 60-second `timeout` wrapper as an extra
+      safety net given the infinite-loop bug under test, confirming no hang.
 - [ ] Collections: `KeyedCollection`, `DictionaryExtensions`, `ListExtensions`
 - [ ] Port `tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` as
       GoogleTest suites
@@ -993,6 +1038,30 @@ implementations — confirm and reuse rather than re-rolling).
   self-check-plus-spot-read pass. Also re-ran the full build from a genuinely clean `rm
   -rf build` (not reusing the fork's already-built directory) for both CMake
   configurations before trusting the reported 589/589 pass count.
+- 2026-07-13 — `ObjectPool<T>`/`Pool<T>`/`IPoolable`/`ItemEventArgs` ported directly (no
+  fork; small, 244 lines of C# total). Found this session's fourth confirmed upstream
+  bug, and by far the most severe: a genuine infinite loop in `ObjectPool<T>.
+  GetEnumerator()` for the single most basic usage pattern (create one pooled object,
+  enumerate the pool) — see the Phase 1 checklist entry above for the full mechanism.
+  Unlike the `Deque<T>` bugs (found by a fork, then independently re-verified by me),
+  this one was found by me directly while hand-tracing `CreateObject()`/`Use()` during
+  the port itself — a useful reminder that reading upstream source line-by-line during
+  direct (non-forked) porting surfaces real bugs just as often as adversarial
+  re-verification of a fork's claims does; the "verify carefully" discipline this
+  session established isn't only for reviewing other agents' work. Given the bug is a
+  literal infinite loop, took explicit care that the regression tests demonstrating it
+  can never accidentally hang the test suite: they assert on `getNextNodeProperty()`/
+  `getPreviousNodeProperty()` directly rather than ever iterating the pool in the exact
+  state that triggers the bug (a prominent warning to this effect is in both
+  `ObjectPool.hpp`'s header and `ObjectPoolTests.cpp`'s header, so a future session
+  doesn't "simplify" a test into iteration and reintroduce a hang) — and re-ran the
+  entire suite under `timeout 60` as an explicit extra safety net before trusting a
+  clean pass, on top of the normal build+test verification. Also caught and fixed my own
+  test-authoring mistake: initially assumed `ObjectPool<T>`'s full-pool policy applies as
+  soon as `TotalCount > Capacity` at the very next `New()` call, but upstream's actual
+  guard is `TotalCount <= Capacity` (allowing `Capacity + 1` total creations before the
+  policy ever triggers) — traced and corrected before committing, the same "verify, don't
+  assume, even for my own test code" discipline applied throughout this session.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
