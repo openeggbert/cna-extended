@@ -28,6 +28,10 @@ if(CNA_EXTENDED_CNA_LINKED)
             CNA_EXTENDED
             gtest_main
     )
+    target_include_directories(CnaExtendedTests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+    )
     if(MSVC)
         target_compile_options(CnaExtendedTests PRIVATE /W4 /WX)
     else()
@@ -44,6 +48,10 @@ else()
         PRIVATE
             CNA_EXTENDED
             gtest_main
+    )
+    target_include_directories(CnaExtendedTests_compilecheck
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
     )
     if(MSVC)
         target_compile_options(CnaExtendedTests_compilecheck PRIVATE /W4 /WX)
