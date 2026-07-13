@@ -785,17 +785,35 @@ Depends on Phase 1 (math/shapes).
       `LayerTests`, `LayerPairTests`, `UndefinedLayerExceptionTests`). **Phase 2 is now
       fully complete** — 1138 tests passing total for the whole project.
 
-### Phase 3 — Input, Timers, Tweening, ViewportAdapters, VectorDraw
+### Phase 3 — Input, Timers, Tweening, ViewportAdapters, VectorDraw — **COMPLETE (2026-07-13)**
 
 Independent of each other; depends only on Phase 1 and CNA's `Microsoft::Xna::Framework::Input`.
 
-- [ ] `Input/` listeners (keyboard/mouse/gamepad/touch) and their event-args/settings types
-- [ ] `Timers/*`
-- [ ] `Tweening/*` (easing functions + `Tweener`)
-- [ ] `ViewportAdapters/*` (`BoxingViewportAdapter`, `ScalingViewportAdapter`,
-      `DefaultViewportAdapter`, etc.)
-- [ ] `VectorDraw/*` (debug line/shape drawing)
-- [ ] Port `tests/MonoGame.Extended.Tests/{ViewportAdapters,Tweening}`
+- [x] `Input/` listeners (keyboard/mouse/gamepad/touch) and their event-args/settings types —
+      24 upstream files, `CNA::Extended::Input`/`::InputListeners` namespace. 32 fresh tests
+      (no upstream test files exist). Cross-depends on `ViewportAdapters` (forward-declared,
+      non-owning pointer). See `NEXT.md` entry (29).
+- [x] `Timers/*` — `GameTimer`, `ContinuousClock`, `CountdownTimer`, `TimerState`. Same
+      `UpdateOrder`/`EnabledChanged` copy-paste bug as `FramesPerSecondCounter` (Phase 1),
+      preserved and documented. 11 fresh tests. Ported directly (small).
+- [x] `Tweening/*` (easing functions + `Tweener`) — **genuine C++ redesign, user-approved**:
+      upstream's reflection/expression-tree-based member access (`x => x.Property`) has no
+      C++ equivalent; replaced with pointer-to-member syntax
+      (`tweener.TweenTo(&target, &T::Member, ...)`). See `NEXT.md` entry (29) for the full
+      design rationale (`TypedTween` renaming, `LinearOperations<T>` elimination, etc.).
+      6 tests ported from upstream.
+- [x] `ViewportAdapters/*` (`BoxingViewportAdapter`, `ScalingViewportAdapter`,
+      `DefaultViewportAdapter`, etc.) — all 5 types ported directly (small). One likely
+      upstream bug preserved (`BoxingViewportAdapter`'s Letterbox condition compares width
+      against the wrong dimension). No fresh tests — upstream's own 2 test files are
+      entirely commented-out dead code, and every method needs a live `GraphicsDevice&`.
+- [x] `VectorDraw/*` (debug line/shape drawing) — `PrimitiveBatch`/`PrimitiveDrawing`, full
+      1:1 port, no CNA graphics-API mismatches found. No upstream tests exist and no
+      GPU-free logic surface to test in isolation.
+- [x] Port `tests/MonoGame.Extended.Tests/{ViewportAdapters,Tweening}` — `Tweening`'s test
+      file ported (adapted to the new calling convention); `ViewportAdapters`' 2 test files
+      are dead code upstream, nothing to port. 49 total fresh/ported tests across Phase 3.
+      1187 tests passing total for the whole project.
 
 ### Phase 4 — Screens
 

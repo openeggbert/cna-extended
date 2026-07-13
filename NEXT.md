@@ -6,6 +6,123 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (29) — Phase 3 (Input, Timers, Tweening, ViewportAdapters, VectorDraw) COMPLETE
+
+Started fresh after Phase 2's completion (entry (28)). All 5 Phase 3 modules are independent of
+each other (per `plan.md`), so `Timers` and `ViewportAdapters` (small) were ported directly while
+`Tweening`, `Input`, and `VectorDraw` (larger) ran as 3 parallel forks.
+
+**Design decision requiring the user's input, asked via `AskUserQuestion` before starting
+`Tweening`**: upstream's `Tweener.TweenTo<TTarget,TMember>(target, x => x.Property, toValue,
+duration)` uses C# expression trees and reflection (`PropertyInfo`/`FieldInfo`,
+`Activator.CreateInstance` with a private constructor) to animate an arbitrary member by parsing a
+lambda at runtime — C++ has neither expression trees nor runtime reflection, so a literal port is
+impossible. Presented 3 options (pointer-to-member redesign / explicit get-set-lambda-pair
+redesign / defer `Tweening` and do the other 4 modules first); **user chose the pointer-to-member
+redesign** (`tweener.TweenTo(&target, &TargetType::Position, endValue, duration)`).
+
+**`Timers`** (ported directly): `GameTimer` (abstract, implements CNA's `IUpdateable`),
+`ContinuousClock`, `CountdownTimer`, `TimerState`. Found the exact same `UpdateOrder`/
+`EnabledChanged` copy-paste bug already documented in `FramesPerSecondCounter.hpp` (Phase 1) —
+preserved, not fixed. **Real C#/C++ construction-order difference, not a fidelity gap**: upstream's
+`GameTimer` constructor calls `Restart()`, which calls the abstract `OnStopped()` through `Stop()`
+— C# dispatches virtual calls during base construction to the most-derived override, but C++
+cannot (calling a pure virtual during base construction is undefined behavior, since the vtable is
+still the base class's). Moved the `Restart()` call to each concrete subclass's own constructor
+instead — the observable end state is identical, since neither subclass's `OnStopped()` touches
+anything the derived constructor body would have set. 11 fresh tests (no upstream test files
+exist).
+
+**`Tweening`** (forked, with an extremely detailed prompt specifying the approved redesign):
+- `TweenMember<TTarget,TMember>` replaces the whole 4-class reflection hierarchy
+  (`TweenMember`/`TweenMember<T>`/`TweenFieldMember<T>`/`TweenPropertyMember<T>`) with one class
+  wrapping a pointer-to-data-member. Documented limitation vs. upstream: only public data fields
+  are tweenable, not `getXProperty()`/`setXProperty()` method pairs.
+- **The fork made a real, well-reasoned design call beyond my prompt**: upstream's non-generic
+  `Tween` and generic `Tween<T>` cannot both be named `Tween` in C++ (no arity-based overloading
+  for class names, unlike C# generics) — renamed the generic counterpart to
+  `TypedTween<TTarget,TMember>`. Also correctly identified that `Tweener::TweenTo`'s return type
+  should be `TypedTween<T,M>*` (matching upstream's actual `Tween<TMember>` return type), not
+  `LinearTween<T,M>*` as my own prompt had suggested — a genuine improvement over my directive,
+  verified correct by independent review.
+- `LinearOperations<T>` (expression-tree-compiled `+`/`-`/`*` delegates) is eliminated entirely —
+  C++ template code uses `operator+`/`-`/`*(T,float)` directly, a compile-time-checked equivalent.
+- Member cache eliminated (nothing expensive left to cache once construction is a trivial
+  pointer-pair copy). `FindTween`/cancel-existing-tween-on-same-member now compares `(target
+  pointer, pointer-to-member value)` directly via `dynamic_cast` + `==`, replacing upstream's
+  `(target, member-name-string)` comparison that reflection made necessary.
+- **Verified independently, not just trusted**: `Tween::Update()` and `LinearTween::Interpolate()`
+  checked line-by-line against upstream — exact match. `EasingFunctions`' full 30-function list
+  (plus `Invert`/`Follow`) diffed against upstream — exact match, nothing missing or extra.
+- 6 tests ported from upstream's `TweenerTests.cs`, adapted to the new calling convention.
+
+**`VectorDraw`** (forked): `PrimitiveBatch`/`PrimitiveDrawing`, full 1:1 port — the fork confirmed
+every graphics primitive needed (`BasicEffect`, an exact-signature
+`GraphicsDevice::DrawUserPrimitives` overload, `BlendState`/`SamplerState`, `Effect` pass
+application) already exists in CNA with a matching shape, so **no re-authoring was needed**,
+unlike `plan.md`'s flagged concern about `Graphics/Effects/*` in a later phase. No upstream tests
+exist and no GPU-free logic surface exists to test in isolation (every method needs `Begin()`,
+which needs a real `GraphicsDevice`) — documented, not silently skipped.
+
+**`ViewportAdapters`** (ported directly, small): `ViewportAdapter` (abstract), `DefaultViewportAdapter`,
+`ScalingViewportAdapter`, `WindowViewportAdapter`, `BoxingViewportAdapter`. Had to add
+`System::Object` to the hierarchy (matching the `GameTimer` fix) so `this` converts to
+`System::Object*` for `EventHandler<T>::Raise()`. Also hit a real API-shape gap: sharp-runtime's
+`EventHandler<T>` has no `operator-=` (only token-based `Remove(Token)`) — `BoxingViewportAdapter`
+now stores the `Token` from its constructor's subscription and passes it to `Remove()` in
+`Dispose()`. **Likely upstream bug found and preserved**: `BoxingViewportAdapter`'s Letterbox-vs-
+None branch compares `width >= clientBounds.Height` (the width against the *height* dimension),
+not `clientBounds.Width` as the Pillarbox branch above it does — looks like a copy-paste error,
+documented in both the header and inline, not fixed. No fresh tests: both upstream test files
+(`DefaultViewportAdapterTests.cs`, `BoxingViewportAdapterTests.cs`) are entirely commented-out
+dead code, never compiled or run upstream — and every method needs a live `GraphicsDevice&`, so
+there's no GPU-free logic to test in isolation (same finding as `VectorDraw`).
+
+**`Input`** (forked, largest module — 24 files, 1936 lines): `ExtendedPlayerIndex`,
+`KeyboardExtended`/`KeyboardStateExtended`, `MouseButton`/`MouseExtended`/`MouseStateExtended`,
+and the full `InputListeners` subfolder (GamePad/Keyboard/Mouse/Touch listeners, their
+EventArgs/Settings types, `IInputService`, `InputListenerComponent`). **Genuine cross-module
+dependency, handled correctly**: `MouseEventArgs`/`MouseListenerSettings`/`TouchEventArgs`/
+`TouchListenerSettings`/`TouchListener` all depend on `CNA::Extended::ViewportAdapters::ViewportAdapter`
+(a sibling parallel fork's own output) — forward-declared, referenced as a non-owning pointer;
+confirmed this actually compiles and links against the real header, not just assumed compatible.
+Two real translation decisions: (1) `InputListenerSettings<T>`'s generic constraint couldn't be a
+compile-time `static_assert` since every `XListenerSettings`/`XListener` pair has a genuine
+circular reference (`T` is incomplete at the assert point) — removed, documented as structural,
+not a shortcut; (2) `GamePadListener::CheckAllButtons()`'s `break` (not `continue`) on excluded
+buttons was verified empirically harmless for CNA's actual `Buttons` enum ordering (all excluded
+buttons are the highest-valued flags, clustered contiguously) before deciding to preserve it
+as-is, rather than guessing. Self-check: all 24 files' public/protected members individually
+cross-referenced; nothing silently dropped except two justified exceptions where CNA's own API
+already covers the need more directly. 32 fresh tests (no upstream test files exist for `Input`
+at all).
+
+**Verification discipline**: all 3 forks were given the standing no-commit/no-push/no-plan.md
+instruction and independently verified via `git status` before being trusted — all 3 fully
+compliant this time (no repeat of entry (21)'s incident or entry (23)'s milder self-report gap).
+A genuine build-directory race occurred mid-session (my own `rm -rf build && cmake ...` colliding
+with a fork's concurrent `cmake --build build`, producing a spurious "cannot find X.o" linker
+error) — recognized as a race, not a real bug, and resolved by simply retrying the build once the
+forks' own build activity had settled.
+
+**Final verification**: genuinely clean `rm -rf build` rebuild + both CMake configs (linked and
+headers-only), zero warnings in either, done once after all 5 modules' work was combined in the
+working tree. `ctest` → **1187/1187 passing** (was 1149 before Phase 3 — 38 net new tests: 11
+Timers + 6 Tweening + 32 Input, with ViewportAdapters/VectorDraw contributing 0 each per their
+documented no-GPU-free-logic rationale).
+
+Committed in 5 pieces, each independently reviewable: `46685a4` (Tweening), `05e71e7` (VectorDraw),
+`1e2e715` (ViewportAdapters), `134f433` (Input, committed last since it depends on
+ViewportAdapters).
+
+**State / next step**: Phase 3 is now fully complete. Phase 4 (Screens: `Screen`, `ScreenManager`,
+transitions) is next per `plan.md` §5 — depends on Phase 1 and CNA's `GameComponent`/`Game`.
+Nothing about Phase 4's scope has been read yet this session — start fresh by reading `plan.md`'s
+Phase 4 task list and the relevant upstream sources before committing to any implementation
+approach, per the standing "read first" discipline.
+
+---
+
 ## 2026-07-13 (28) — `CollisionWorld2D` ported; **Phase 2 (Collisions 2D) FULLY COMPLETE**
 
 Ported `CollisionWorld2D` (504 upstream lines) directly, not via fork — one cohesive class where
