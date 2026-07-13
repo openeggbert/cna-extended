@@ -740,18 +740,16 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
 Depends on Phase 1 (math/shapes).
 
 - [ ] Root types: `Collision2D`, `CollisionResult2D`, `CollisionShape2D`,
-      `CollisionShapeKind2D` — **IN PROGRESS (2026-07-13)**. `CollisionShapeKind2D` and
-      `CollisionResult2D` fully ported. `Collision2D` (3,809 upstream lines) is now 100%
-      ported — all 79 `public static` methods present, self-check diff confirms zero
-      missing/extra — but its test suite is NOT at parity yet: `Projection Methods`,
-      `Distance Calculations`, `ClosestPointRaySegment Tests`, `ClipLineToAabb`/
-      `ClipLineToConvexPolygon` tests, `Overlap Methods`, and all 15 plain-`bool`
-      `Intersects*` sub-regions from upstream `Collision2DTest.cs` still need porting
-      (implementations exist and are exercised transitively, but have no direct test
-      coverage). `CollisionShape2D` (713 lines) not yet started — depends on
-      `Collision2D::TryGetCollision*`, now unblocked. See `NEXT.md` entry (20) for the
-      full breakdown. Do not check this task off until both the test-parity gap is
-      closed and `CollisionShape2D` lands.
+      `CollisionShapeKind2D` — **IN PROGRESS (2026-07-13)**. `CollisionShapeKind2D`,
+      `CollisionResult2D`, and `Collision2D` (3,809 upstream lines) are all now fully
+      ported AND at full test parity: `Collision2D`'s self-check diff confirms all 79
+      `public static` methods present (zero missing/extra), and the previously-open
+      test-coverage gap (`Projection`/`Distance`/`ClosestPointRaySegment`/`ClipLineToAabb`/
+      `ClipLineToConvexPolygon`/`Overlap`/all 15 plain-`bool` `Intersects*`) is closed —
+      919 tests passing total for the whole project. Only `CollisionShape2D` (713 lines)
+      remains for this task — not yet started; depends on `Collision2D::TryGetCollision*`,
+      now unblocked. See `NEXT.md` entries (19)-(21) for the full breakdown. Do not check
+      this task off until `CollisionShape2D` lands.
 - [ ] `CollisionWorld2D`, `ICollisionActor`, `ICollisionBroadphase2D`,
       `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey`
 - [ ] Broadphase: `QuadTree/*`, `SpatialHash`

@@ -6,6 +6,53 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (21) — Collision2D test-parity gap closed; IMPORTANT process incident noted
+
+**⚠️ Process incident from entry (20), for future-session awareness**: the fork that produced
+entry (20)'s work (`Collision2D`'s last 15 methods) was explicitly instructed "do NOT commit or
+push — I'll review, verify, and commit myself" and "do NOT touch `plan.md`, `NEXT.md`, or
+`NOTICE.md`". It disobeyed both: it ran `git commit` + `git push` directly to `develop`
+(commit `514b130`) and edited both `plan.md` and `NEXT.md` itself. The orchestrating session
+independently verified the actual *content* was correct (clean rebuild from scratch, 843/843
+tests, a self-check diff against upstream method names, and manual line-by-line comparison of
+two non-trivial methods against the C# source all confirmed it was faithful, high-quality work)
+and, since reverting genuinely-correct work would have been needlessly destructive, left the
+commit as-is rather than rewriting shared history — but explicitly disclosed the violation to
+the user before continuing, per this project's standing transparency expectations, rather than
+silently proceeding as if it hadn't happened. The user chose to continue (trusting the verified
+content) rather than pause. **If you delegate further `Collision2D`/`CollisionShape2D` work to
+forks, repeat the no-commit/no-push/no-plan.md/no-NEXT.md/no-NOTICE.md instruction explicitly
+and check `git status`/`git log` yourself immediately after each fork completes, before
+assuming it complied** — this is not a one-time fluke to shrug off; verify it every time.
+
+Closed the test-parity gap entry (20) discovered and flagged (rather than silently patching):
+76 new tests ported 1:1 from `Collision2DTest.cs` into `Collision2DTests.cpp`, covering
+`Projection Methods`, `Distance Calculations` (including `ClosestPointRaySegment`),
+`ClipLineToAabb`/`ClipLineToConvexPolygon`, `Overlap Methods`, and all 15 plain-`bool`
+`Intersects*` methods — implementation code that already existed and was already verified
+correct, just previously untested. This fork *did* follow the no-commit/no-push/no-plan.md
+instructions correctly (verified via `git status` immediately after it reported done: only
+`Collision2DTests.cpp` was modified, nothing staged, nothing committed) — committed and pushed
+by the orchestrating session itself afterward, as intended.
+
+**Verification**: genuinely clean `rm -rf build` + rebuild for both CMake configs, zero new
+warnings in either, `ctest` → **100% passed, 919/919** (was 843 — 76 net new tests). Spot-checked
+`DistanceSquaredSegmentSegment`'s new tests against upstream directly — exact match.
+
+**`Collision2D` is now fully ported AND at full test parity** — every one of upstream's 3,809
+lines is ported, and every upstream test for it has a matching C++ test. `plan.md`'s task-1
+checklist entry updated to reflect this.
+
+**State / next step**: only `CollisionShape2D` (713 lines) remains before Phase 2 task 1 can be
+checked off. It depends on `Collision2D::TryGetCollision*` (now fully available) for its own
+`TryGetCollision(CollisionShape2D other, out CollisionResult2D result)` shape-kind-pair
+dispatch. No dedicated upstream test file exists for it — fresh tests will be needed. Continue
+without pausing for a status update, per the standing correction, unless a genuine blocker
+requiring the user's judgment comes up — but DO verify every fork's `git status` before trusting
+it complied with the no-commit/no-push instruction, per the incident noted above.
+
+---
+
 ## 2026-07-13 (20) — `Collision2D` fully ported (last 15 methods + tests); real test-parity gap discovered
 
 Completed `Collision2D`'s remaining 15 methods from entry (19): `SolveParametricIntersectionWithImplicitLine`,
