@@ -6,6 +6,65 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (27) — Phase 2 task 4 (Layers/*, LayerPair) COMPLETE; CollisionWorld2D now unblocked
+
+Ported `Layer`, `LayerPair`, `UndefinedLayerException` directly (not via fork — small combined
+size, ~116 upstream lines across 3 files, and this session has already established the pattern of
+reserving forks for genuinely large/parallelizable work).
+
+**Ownership decision**: `Layer`'s upstream `public readonly ICollisionBroadphase2D Space` field is
+a reference-type handoff — the caller constructs a broadphase implementation specifically for this
+Layer, and nothing else in upstream ever holds a second reference to that same instance afterward.
+Ported as exclusive ownership via `std::unique_ptr<ICollisionBroadphase2D>`, matching the real
+intent GC leaves invisible in the C# original.
+
+**`LayerPair` translation note, worth remembering for any future `internal readonly struct ... :
+IEquatable<T>` port**: upstream orders `First`/`Second` using `first.GetHashCode() <=
+second.GetHashCode()` — NOT a meaningful value comparison. `Layer` never overrides
+`GetHashCode()`, so this is just C#'s default per-object identity hash, used purely to get an
+arbitrary-but-consistent order for any two references (so `(a, b)` and `(b, a)` compare/hash
+identically). Recognized this was NOT the same pattern as `ActorPairKey` (which orders by a real
+`Id` field with real comparison semantics) before translating — ported using raw pointer address
+as the ordering key instead of fabricating a fake `GetHashCode()` override for `Layer`, which
+serves the identical "arbitrary but consistent identity" role C++ already provides for free.
+`Equals()`/`GetHashCode()` compare/hash the stored `Layer*` pointers directly (pointer equality =
+C#'s `ReferenceEquals`). Needed a `std::hash` specialization for `std::unordered_set`/`HashSet<T>`
+key usability, matching the `ActorPairKey`/`SpatialHashCellKey` precedent.
+
+**`UndefinedLayerException`**: derives from `sharp-runtime`'s `System::Exception`, not
+`std::exception` directly, matching this project's established BCL-reuse convention. The
+validate-then-format-then-throw ordering (`CreateMessage`'s `ArgumentException.ThrowIfNullOrWhiteSpace`
+must run, and potentially throw, before `LayerName` is ever set) is preserved exactly via C++
+member-initializer-list evaluation order — base class constructor arguments are evaluated before
+any member initializers, giving the identical throw-before-any-state-is-set guarantee as
+upstream's `base(CreateMessage(layerName))` call, with no extra work needed to replicate it.
+
+**No upstream test files exist for any of these 3 types** (all only exercised indirectly through
+`CollisionWorld2DTests.cs`, not yet ported) — added 12 fresh tests across
+`LayerTests.cpp`/`LayerPairTests.cpp`/`UndefinedLayerExceptionTests.cpp`, using a minimal
+`ICollisionBroadphase2D` fake (`FakeBroadphase`, tracks whether `Reset()` was called) for `Layer`'s
+constructor/`Reset()` tests.
+
+**Build verification**: genuinely clean `rm -rf build` rebuild + both CMake configs (linked and
+headers-only), zero warnings in either. `ctest` → **1107/1107 passing** (was 1095 — 12 net new
+tests).
+
+**State / next step**: Phase 2 task 4 is now fully complete. `CollisionWorld2D` (504 upstream
+lines, deferred in entry (25) pending exactly these two dependencies) is now unblocked — both
+broadphase (task 3) and `Layer`/`LayerPair` (this entry) exist. Porting it closes out Phase 2 task
+2 entirely. Given its size and the amount of layer/broadphase-interaction logic it coordinates
+(`Insert`/`Remove`/`MoveToLayer`/`QueryCandidates`/`QueryCollisions`/`QueryCollisionPairs`/
+`EnableCollisionBetweenLayers`/etc.), read it fresh rather than relying on this entry's summary —
+`CollisionWorld2D.cs` was read in full back in entry (25) but that was several entries ago now.
+Also still needed: `DuplicateNameException` (from `System.Data`, used in `AddLayer`) — check
+whether `sharp-runtime` has an equivalent before assuming one exists; if not, this may need a
+fresh `System::Data::DuplicateNameException`-style addition or a documented substitution decision.
+`CollisionWorld2DTests.cs` (upstream test file, not yet read) should be ported alongside it per
+this project's "port tests alongside implementation" rule, using the shared `BasicActor` fixture
+from entry (26).
+
+---
+
 ## 2026-07-13 (26) — Phase 2 task 3 (Broadphase: QuadTree/*, SpatialHash) COMPLETE
 
 Two independent broadphase implementations of `ICollisionBroadphase2D`, ported via two parallel

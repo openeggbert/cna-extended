@@ -774,7 +774,10 @@ Depends on Phase 1 (math/shapes).
       `QuadTree`, `QuadTreeSpace`, and `SpatialHash` (both implementing
       `ICollisionBroadphase2D`) all ported, with 44 tests ported 1:1 from upstream. See
       `NEXT.md` entry (26).
-- [ ] `Layers/*`, `LayerPair`
+- [x] `Layers/*`, `LayerPair` — **COMPLETE (2026-07-13)**. `Layer`, `LayerPair`,
+      `UndefinedLayerException` all ported. 12 fresh tests (no upstream test files exist
+      for any of these 3 types). See `NEXT.md` entry (27). `CollisionWorld2D` (deferred
+      in entry (25)) is now unblocked — both of its real dependencies exist.
 - [ ] Port `tests/MonoGame.Extended.Tests/Collisions/**` (partially done alongside each
       piece above/below as it lands, per this project's "port tests alongside
       implementation" rule; this checkbox tracks the final sweep for anything not yet
