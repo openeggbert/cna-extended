@@ -248,10 +248,11 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
         `RectangleF`) needed no `SizeF` and **are** ported. Kept as a C++ aggregate
         (no user-declared constructor) rather than adding one upstream doesn't have, since
         C++20 parenthesized-aggregate-init covers both the default and 2-arg cases.
-      - `OrientedRectangle` — **entirely deferred, no file created.** Its `Orientation`
-        field is `Matrix3x2` itself (not just used in a method) — a deep structural
-        dependency like `OrthographicCamera`→`ViewportAdapter`, not a narrow one. Port it
-        immediately after `Matrix3x2` lands (task below), not standalone.
+      - `OrientedRectangle` — **entirely deferred, no file created** at the time this task
+        landed. Its `Orientation` field is `Matrix3x2` itself (not just used in a method) —
+        a deep structural dependency like `OrthographicCamera`→`ViewportAdapter`, not a
+        narrow one. **Update (2026-07-13, follow-up task after `Matrix3x2` landed): now
+        ported**, minus what's still transitively blocked — see the dedicated entry below.
       Follow-ups landed in the same pass (verified unblocked, not assumed — see §6):
       `IRectangularF` in `IRectangular.hpp` (test added to `InterfaceTests.cpp`); `Camera<T>`
       in `Camera.hpp` (forward-declare replaced with a real `#include`, `CameraTests.cpp`
@@ -321,13 +322,13 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
         blocked** on `PrimitivesHelper.TransformRectangle`, Matrix3x2 alone wasn't enough.
       - `CircleF`/`Segment2`'s existing deferrals: confirmed `PrimitivesHelper`-only,
         unaffected by Matrix3x2 landing.
-      - **`OrientedRectangle`: still not ported**, but its blocker changed — its
-        constructor and `Orientation` field only need `SizeF`+`Matrix3x2`, both now
-        available. Only its `Transform` method needs the still-missing
-        `PrimitivesHelper.TransformOrientedRectangle`. **Follow-up task**: port
-        `OrientedRectangle` minus `Transform` (narrow deferral, same pattern used
-        elsewhere), rather than continuing the current whole-type deferral. Not done in
-        this pass — flagged as the natural next small task.
+      - `OrientedRectangle`: at the time this task landed, still not ported, but its
+        blocker had changed — its constructor and `Orientation` field only needed
+        `SizeF`+`Matrix3x2`, both now available; only its `Transform` method needed the
+        still-missing `PrimitivesHelper.TransformOrientedRectangle`. **Update
+        (2026-07-13, picked up immediately as its own small follow-up task): now ported**
+        — see the dedicated checklist entry below for exactly what landed vs. what's
+        still deferred.
       **Bug found — this session's own, not upstream's**: `Matrix3x2::Identity` was
       initially built from `Vector2::UnitX`/`UnitY`/`Zero` (CNA statics in a different
       translation unit) — a static-initialization-order fiasco that silently zeroed
@@ -339,6 +340,25 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       Test coverage: `Math/Matrix3x2.cs`'s 2 tests + `Vector2ExtensionsTests.cs`'s 10
       tests ported 1:1; `MatrixExtensions` has no upstream test file; wrote ~19 fresh
       tests for the rest of `Matrix3x2`'s large, mostly-untested-upstream surface.
+- [x] `OrientedRectangle` (2026-07-13, follow-up task picked up immediately after
+      `Matrix3x2` landed, ported directly without a fork) — fields, constructor, `Points`,
+      `Position` (get; set throws `std::logic_error`, matching upstream's
+      `NotImplementedException`), `Equals`/`GetHashCode`/`ToString`/operators, the
+      `OrientedRectangle(RectangleF)` converting constructor, and the self-contained SAT
+      `Intersects(OrientedRectangle, OrientedRectangle)` (returns a named
+      `OrientedRectangleIntersection{bool Intersects, Vector2
+      MinimumTranslationVector}` struct — C++'s closest faithful equivalent to upstream's
+      named-tuple return type). **Correction found while scoping this task**: the
+      previous task's fork report said only `Transform` was blocked, but `BoundingRectangle`
+      (the property) and `explicit operator RectangleF(OrientedRectangle)` are **also**
+      transitively blocked — both call `RectangleF::Transform` internally, which is
+      itself still blocked on `PrimitivesHelper`. All three (the static `Transform`
+      method, the `BoundingRectangle` property, and the `RectangleF` conversion operator)
+      are deferred together, documented in the header. Test coverage: upstream's
+      `Initializes_oriented_rectangle`/`Equals_comparison` tests ported 1:1; the entire
+      nested `Transform` test class (11 tests) is inapplicable (all test the deferred
+      method); wrote fresh tests for `Position`/the `RectangleF` conversion/`Intersects`
+      (no upstream coverage for that SAT algorithm specifically).
 - [ ] `FastRandom`, `RandomExtensions`
 - [ ] `PrimitivesHelper`, `ShapeExtensions`
 - [ ] `Math/Triangulation/*` (polygon triangulation helpers)
@@ -563,6 +583,16 @@ implementations — confirm and reuse rather than re-rolling).
   tests and fixed with literal values. Worth remembering as a general C++ hazard for any
   future `static const Type X = Type(other-class's-statics...)` pattern, not just this
   one instance.
+- 2026-07-13 — Picked up the `OrientedRectangle` follow-up immediately (ported directly,
+  no fork — small enough by this point). Re-scoping it turned up a correction to the
+  previous task's fork report: `BoundingRectangle` (the property) and
+  `explicit operator RectangleF(OrientedRectangle)` are *also* transitively blocked on
+  `PrimitivesHelper` (both call `RectangleF::Transform` internally), not just the static
+  `Transform` method as previously reported. A reminder that "only X is blocked" claims
+  from a fork (or from this session's own prior notes) are worth re-verifying by reading
+  the actual dependency chain, not just trusting the most recent summary — the same
+  discipline already applied to fork self-reports applies to this session's own carried-
+  forward notes too.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

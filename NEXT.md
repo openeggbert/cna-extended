@@ -6,6 +6,52 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (8) — OrientedRectangle follow-up picked up immediately; corrected a prior report
+
+Continued straight through from task 11 without a check-in pause — picked up the
+`OrientedRectangle` follow-up flagged at the end of the last entry, since it was now
+small and well-scoped. Ported directly (no fork needed at this point — I already had
+full context on the file from scoping it).
+
+**Correction found while re-scoping** (worth remembering as its own lesson, separate from
+the fork-report-verification lessons already documented): the previous task's fork report
+said only `OrientedRectangle::Transform` was blocked on `PrimitivesHelper`. Reading the
+actual C# source myself before porting found that's incomplete — `BoundingRectangle` (the
+property, `=> (RectangleF)this`) and `explicit operator RectangleF(OrientedRectangle)`
+are **also** transitively blocked, since both call `RectangleF::Transform` internally,
+which is itself still blocked. All three deferred together now, documented in
+`OrientedRectangle.hpp`'s header comment. **Lesson**: re-verify "only X is blocked"
+claims by reading the dependency chain yourself before starting a follow-up task, even
+when the claim comes from this session's own prior notes, not just from a fresh fork
+report — carried-forward summaries can be incomplete too.
+
+**Ported**: `Center`/`Radii`/`Orientation` fields, constructor, `Points`, `Position`
+(getter works; setter throws `std::logic_error`, matching upstream's
+`NotImplementedException` — a real "always throws" API preserved faithfully, not
+softened), `Equals`/`GetHashCode`/`ToString`/operators, the `OrientedRectangle(RectangleF)`
+converting constructor (doesn't need `Transform`), and the self-contained SAT
+`Intersects(OrientedRectangle, OrientedRectangle)`. C#'s named-tuple return
+`(bool Intersects, Vector2 MinimumTranslationVector)` became a small named
+`OrientedRectangleIntersection` struct — closer to upstream's actual named-field
+semantics than an unnamed `std::pair`.
+
+**Test coverage**: upstream's `Initializes_oriented_rectangle` and `Equals_comparison`
+tests ported 1:1. The entire nested `Transform` test class (11 tests) is inapplicable —
+every one of them exercises the deferred `Transform` method. Wrote fresh tests for
+`Position`, the `RectangleF` conversion, and `Intersects` (no upstream coverage of that
+SAT algorithm specifically either way).
+
+**Verification**: both build modes clean on the first try (no build/test iteration needed
+this time), `ctest` → **100% passed, 389/389** (was 380 before this task).
+
+**State / next step:** Phase 1 is now 11 of ~20 tasks complete per the numbered task list,
+plus this OrientedRectangle follow-up. Next per `plan.md` §5 Phase 1: `FastRandom`,
+`RandomExtensions`. Continue without pausing for a status update, per the standing
+correction, unless a genuine blocker requiring the user's judgment comes up. **Commit AND
+push to `develop`** after this task, same as every task since the workflow change.
+
+---
+
 ## 2026-07-13 (7) — Matrix3x2 ported (Phase 1 task 11); Transform2 landed as a bonus; second bug found
 
 Continued straight through, no check-in pause.
