@@ -6,18 +6,14 @@
 // Detection", Christer Ericson, 2005, Ch. 4.4 -- an algorithm citation, not a third-party
 // code/license dependency; see plan.md). This type was previously deferred in full (task 17,
 // "RectangleF family") because its Orientation field is Matrix3x2 itself; Matrix3x2 landed in
-// task 20, unblocking most of this type.
-//
-// Still deferred (transitively, via RectangleF::Transform, which itself needs
-// PrimitivesHelper.TransformRectangle -- not ported yet):
-//   - `BoundingRectangle` property (upstream: `(RectangleF)this`)
-//   - `static Transform(OrientedRectangle, ref Matrix3x2)` (upstream's private overload calls
-//     PrimitivesHelper.TransformOrientedRectangle directly)
-//   - `explicit operator RectangleF(OrientedRectangle)` (calls RectangleF::Transform internally)
-// Everything else -- fields, constructor, Points, Position (get; set throws, matching
-// upstream), Equals/GetHashCode/ToString/operators, the OrientedRectangle(RectangleF)
-// conversion (does NOT need Transform), and the self-contained SAT Intersects(...) -- is fully
-// portable now and ported below.
+// task 20, unblocking most of this type. All members are now ported: `BoundingRectangle`
+// property, `static Transform(OrientedRectangle, ref Matrix3x2)`, and
+// `explicit operator RectangleF(OrientedRectangle)` landed once `RectangleF::Transform` (via
+// `PrimitivesHelper.TransformRectangle`) was ported (task 22 -- verified genuinely unblocked,
+// not assumed, before landing these). Upstream's `private static Transform(ref OrientedRectangle,
+// ref Matrix3x2, out OrientedRectangle)` overload is not part of the public API contract; its
+// logic is inlined directly into the public static `Transform` below, matching how other
+// upstream-private implementation details have been handled elsewhere in this port.
 #pragma once
 
 #include "CNA/Extended/Matrix3x2.hpp"
@@ -84,6 +80,15 @@ namespace CNA::Extended
         /** @brief Setting the position is not supported by upstream MonoGame.Extended either. */
         void setPositionProperty(const Vector2& value);
 
+        /** @brief Gets the axis-aligned RectangleF that bounds this OrientedRectangle (upstream: `(RectangleF)this`). */
+        [[nodiscard]] RectangleF getBoundingRectangleProperty() const;
+
+        /**
+         * @brief Computes the OrientedRectangle from the specified OrientedRectangle transformed
+         * by the specified Matrix3x2.
+         */
+        [[nodiscard]] static OrientedRectangle Transform(OrientedRectangle rectangle, Matrix3x2& transformMatrix);
+
         [[nodiscard]] bool Equals(const OrientedRectangle& other) const;
         [[nodiscard]] int GetHashCode() const;
         [[nodiscard]] std::string ToString() const;
@@ -96,6 +101,9 @@ namespace CNA::Extended
          * orientation).
          */
         explicit OrientedRectangle(const RectangleF& rectangle);
+
+        /** @brief Explicitly converts this OrientedRectangle to the axis-aligned RectangleF that bounds it. */
+        [[nodiscard]] explicit operator RectangleF() const;
 
         /**
          * @brief Tests two OrientedRectangle instances for intersection using the separating

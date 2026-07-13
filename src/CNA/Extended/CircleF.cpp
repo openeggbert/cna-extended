@@ -101,6 +101,19 @@ namespace CNA::Extended
         return Intersects(*this, circle);
     }
 
+    bool CircleF::Intersects(const CircleF& circle, const BoundingRectangle& rectangle)
+    {
+        // Real-Time Collision Detection, Christer Ericson, 2005. Chapter 5.2.5; Basic Primitives
+        // Test - Testing Sphere Against AABB. pg 165-166
+        const float distanceSquared = rectangle.SquaredDistanceTo(circle.Center);
+        return distanceSquared <= circle.Radius * circle.Radius;
+    }
+
+    bool CircleF::Intersects(const BoundingRectangle& rectangle) const
+    {
+        return Intersects(*this, rectangle);
+    }
+
     bool CircleF::Contains(const CircleF& circle, const Vector2& point)
     {
         const float dx = circle.Center.X - point.X;

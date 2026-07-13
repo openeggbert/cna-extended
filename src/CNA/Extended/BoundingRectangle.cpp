@@ -4,6 +4,7 @@
 #include "CNA/Extended/BoundingRectangle.hpp"
 
 #include "CNA/Extended/MathExtended.hpp"
+#include "CNA/Extended/PrimitivesHelper.hpp"
 
 #include <cmath>
 
@@ -26,6 +27,54 @@ namespace CNA::Extended
     {
         BoundingRectangle result;
         CreateFrom(minimum, maximum, result);
+        return result;
+    }
+
+    void BoundingRectangle::CreateFrom(const std::vector<Vector2>& points, BoundingRectangle& result)
+    {
+        Vector2 minimum;
+        Vector2 maximum;
+        PrimitivesHelper::CreateRectangleFromPoints(points, minimum, maximum);
+        CreateFrom(minimum, maximum, result);
+    }
+
+    BoundingRectangle BoundingRectangle::CreateFrom(const std::vector<Vector2>& points)
+    {
+        BoundingRectangle result;
+        CreateFrom(points, result);
+        return result;
+    }
+
+    void BoundingRectangle::Transform(BoundingRectangle& boundingRectangle, Matrix3x2& transformMatrix, BoundingRectangle& result)
+    {
+        PrimitivesHelper::TransformRectangle(boundingRectangle.Center, boundingRectangle.HalfExtents, transformMatrix);
+        result.Center = boundingRectangle.Center;
+        result.HalfExtents = boundingRectangle.HalfExtents;
+    }
+
+    BoundingRectangle BoundingRectangle::Transform(BoundingRectangle boundingRectangle, Matrix3x2& transformMatrix)
+    {
+        BoundingRectangle result;
+        Transform(boundingRectangle, transformMatrix, result);
+        return result;
+    }
+
+    void BoundingRectangle::UpdateFromPoints(const std::vector<Vector2>& points)
+    {
+        const BoundingRectangle boundingRectangle = CreateFrom(points);
+        Center = boundingRectangle.Center;
+        HalfExtents = boundingRectangle.HalfExtents;
+    }
+
+    float BoundingRectangle::SquaredDistanceTo(const Vector2& point) const
+    {
+        return PrimitivesHelper::SquaredDistanceToPointFromRectangle(Center - HalfExtents, Center + HalfExtents, point);
+    }
+
+    Vector2 BoundingRectangle::ClosestPointTo(const Vector2& point) const
+    {
+        Vector2 result;
+        PrimitivesHelper::ClosestPointToPointFromRectangle(Center - HalfExtents, Center + HalfExtents, point, result);
         return result;
     }
 

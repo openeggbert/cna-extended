@@ -6,9 +6,11 @@
 // active test (the rest is commented out upstream itself, not disabled by this port) -- ported
 // 1:1 below (CircCircIntersectionDiagonalCircleTest). Everything else here is a fresh test
 // covering what's actually ported, matching the depth of BoundingCircle2DTests.cpp. The
-// Intersects(CircleF, BoundingRectangle) overloads are deferred (see CircleF.hpp) so not tested.
+// Intersects(CircleF, BoundingRectangle) overloads (upstream's own coverage for these is also
+// entirely commented out) landed once PrimitivesHelper was ported (task 22) -- fresh tests added.
 #include "CNA/Extended/CircleF.hpp"
 
+#include "CNA/Extended/BoundingRectangle.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
 
 #include <gtest/gtest.h>
@@ -161,5 +163,23 @@ namespace CNA::Extended
         const CircleF circle(RectangleF(0.0f, 0.0f, 50.0f, 50.0f));
         EXPECT_EQ(circle.Center, Vector2(25, 25));
         EXPECT_FLOAT_EQ(circle.Radius, 25.0f);
+    }
+
+    TEST(CircleFTests, IntersectsBoundingRectangleWhenOverlapping)
+    {
+        const CircleF circle(Vector2(5, 5), 5.0f);
+        const BoundingRectangle rectangle(Vector2(10, 5), Vector2(5, 5));
+
+        EXPECT_TRUE(circle.Intersects(rectangle));
+        EXPECT_TRUE(CircleF::Intersects(circle, rectangle));
+    }
+
+    TEST(CircleFTests, DoesNotIntersectBoundingRectangleWhenApart)
+    {
+        const CircleF circle(Vector2(0, 0), 1.0f);
+        const BoundingRectangle rectangle(Vector2(50, 50), Vector2(5, 5));
+
+        EXPECT_FALSE(circle.Intersects(rectangle));
+        EXPECT_FALSE(CircleF::Intersects(circle, rectangle));
     }
 }

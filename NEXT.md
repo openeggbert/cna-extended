@@ -6,6 +6,82 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (10) — PrimitivesHelper, ShapeExtensions ported; big follow-up sweep (Phase 1 task 22)
+
+Continued straight through, no check-in pause.
+
+**Ported directly** (no fork; ~145 lines, fully self-contained) — `PrimitivesHelper` (an
+upstream-`internal` static utility class: `IntersectsSlab`, `CreateRectangleFromPoints`,
+`TransformRectangle`, `TransformOrientedRectangle`, `SquaredDistanceToPointFromRectangle`,
+`ClosestPointToPointFromRectangle`). No deferrals.
+
+**`ShapeExtensions` deferred in full to Phase 5** — it's pure `SpriteBatch` debug-drawing
+code (`DrawPolygon`/`DrawLine`/`DrawCircle`/etc.), not a math utility, despite living in
+upstream's `Math/` folder.
+
+**Gap found and closed while scoping `ShapeExtensions`**: it depends on
+`MonoGame.Extended.Shapes.Polygon`/`Polyline` (`source/MonoGame.Extended/Shapes/`), an
+entire upstream folder never tracked anywhere in `plan.md`. Both types were small and
+self-contained (only need `Vector2`/`RectangleF`, already ported), so ported them here
+rather than leaving the gap open — first use of a `CNA::Extended::Shapes` sub-namespace.
+
+**The big part of this task: a verified follow-up sweep**, not assumption-based. Landing
+`PrimitivesHelper` was flagged across several earlier sessions as *the* recurring blocker.
+Rather than trusting those earlier notes, re-verified each flagged type by reading its
+current header's deferral comment plus the actual upstream `.cs` source before touching
+any code:
+- **Confirmed still blocked (left deferred)**: `Line2D`/`LineSegment2D`'s `Intersects`/
+  `DistanceSquared*` overloads — these need `Collision2D` (a different, larger Phase-2
+  type), not `PrimitivesHelper`, despite both citing overlapping "Real-Time Collision
+  Detection" algorithm sources. Don't assume these are unblocked next time either, without
+  re-checking against `Collision2D` landing specifically.
+- **Confirmed unblocked and landed**: `RectangleF` (`Transform` x2, `CreateFrom(points)`
+  x2, `UpdateFromPoints`, `SquaredDistanceTo`, `DistanceTo`, `ClosestPointTo`);
+  `BoundingRectangle` (the equivalent set, `Transform` faithfully preserving upstream's
+  mutate-input-in-place semantics); `OrientedRectangle` (`getBoundingRectangleProperty()`,
+  `static Transform`, `operator RectangleF()` — upstream's `private` ref-taking Transform
+  overload isn't public API, inlined into the public one instead).
+- **Widened the sweep further** by grepping the whole tree for "PrimitivesHelper" in
+  deferral comments (not just the types named in prior notes) and found 2 more:
+  `CircleF::Intersects(CircleF, BoundingRectangle)` and
+  `Segment2::Intersects(RectangleF|BoundingRectangle, out Vector2)`. Landed both too.
+
+**Testing nuance found and preserved (not a code bug)**: porting `OrientedRectangle`'s
+upstream `Transform` test class 1:1, 2 of the 9 tests failed even though the underlying
+math was correct. Root cause: those 2 upstream tests use upstream's own
+`CollectionAssert.Equal` test helper, which does an order-*insensitive* containment check,
+not a sequence comparison like gtest's `EXPECT_EQ` on a `std::vector` — upstream's own
+hand-written expected point order doesn't actually match its own `Points` getter's
+algorithmic order either; it only passes upstream because the helper ignores order. Fixed
+by adding a small `ExpectUnorderedPointsEqual` helper replicating that exact upstream
+semantics for just those 2 tests, rather than silently reordering the expected values.
+**Lesson for future test ports**: a literal `EXPECT_EQ` translation of a C# assertion can
+be *stricter* than what the C# test actually checks if the C# side used a custom
+assert-helper — check the helper's actual semantics, not just its call syntax, before
+assuming a failing ported test means the ported code is wrong.
+
+**Test coverage**: `RectangleFTests.cpp` gained upstream's 2 constructor tests + 5
+`Transform` tests from the previously-unported `Primitives/RectangleFTests.cs` (that file's
+`Rectangle_Intersects_Test` intentionally NOT ported — it exercises base XNA/FNA
+`Rectangle.Intersects`, not a MonoGame.Extended addition), plus fresh
+`CreateFrom(points)`/`UpdateFromPoints`/distance tests. `BoundingRectangleTests.cpp` and
+`CircleFTests.cpp`/`Segment2Tests.cpp` gained fresh tests (upstream's own coverage for
+`BoundingRectangle`, `CircleF`-vs-`BoundingRectangle`, and `Segment2` is entirely commented
+out in its own test suite). `OrientedRectangleTests.cpp` gained upstream's full 9-test
+`Transform` class. `PrimitivesHelperTests.cpp`/`PolygonTests.cpp`/`PolylineTests.cpp` are
+new files.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 464/464** (was 429
+before this task — 35 net new tests).
+
+**State / next step:** Phase 1 is 22 of ~30 tasks in. Next per `plan.md` §5 Phase 1: task
+23, `Math/Triangulation/*` (polygon triangulation helpers). No known blockers for it.
+Continue without pausing for a status update, per the standing correction, unless a genuine
+blocker requiring the user's judgment comes up. **Commit AND push to `develop`** after this
+task.
+
+---
+
 ## 2026-07-13 (9) — FastRandom, RandomExtensions ported (Phase 1 task 12)
 
 Continued straight through, no check-in pause.

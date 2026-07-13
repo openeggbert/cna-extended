@@ -4,8 +4,10 @@
 #include "CNA/Extended/RectangleF.hpp"
 
 #include "CNA/Extended/MathExtended.hpp"
+#include "CNA/Extended/PrimitivesHelper.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace CNA::Extended
 {
@@ -33,6 +35,65 @@ namespace CNA::Extended
     {
         RectangleF result;
         CreateFrom(minimum, maximum, result);
+        return result;
+    }
+
+    void RectangleF::CreateFrom(const std::vector<Vector2>& points, RectangleF& result)
+    {
+        Vector2 minimum;
+        Vector2 maximum;
+        PrimitivesHelper::CreateRectangleFromPoints(points, minimum, maximum);
+        CreateFrom(minimum, maximum, result);
+    }
+
+    RectangleF RectangleF::CreateFrom(const std::vector<Vector2>& points)
+    {
+        RectangleF result;
+        CreateFrom(points, result);
+        return result;
+    }
+
+    void RectangleF::Transform(RectangleF& rectangle, Matrix3x2& transformMatrix, RectangleF& result)
+    {
+        Vector2 center = rectangle.getCenterProperty();
+        Vector2 halfExtents = Vector2(rectangle.Width, rectangle.Height) * 0.5f;
+        PrimitivesHelper::TransformRectangle(center, halfExtents, transformMatrix);
+        result.X = center.X - halfExtents.X;
+        result.Y = center.Y - halfExtents.Y;
+        result.Width = halfExtents.X * 2;
+        result.Height = halfExtents.Y * 2;
+    }
+
+    RectangleF RectangleF::Transform(RectangleF rectangle, Matrix3x2& transformMatrix)
+    {
+        RectangleF result;
+        Transform(rectangle, transformMatrix, result);
+        return result;
+    }
+
+    void RectangleF::UpdateFromPoints(const std::vector<Vector2>& points)
+    {
+        const RectangleF rectangle = CreateFrom(points);
+        X = rectangle.X;
+        Y = rectangle.Y;
+        Width = rectangle.Width;
+        Height = rectangle.Height;
+    }
+
+    float RectangleF::SquaredDistanceTo(const Vector2& point) const
+    {
+        return PrimitivesHelper::SquaredDistanceToPointFromRectangle(getTopLeftProperty(), getBottomRightProperty(), point);
+    }
+
+    float RectangleF::DistanceTo(const Vector2& point) const
+    {
+        return std::sqrt(SquaredDistanceTo(point));
+    }
+
+    Vector2 RectangleF::ClosestPointTo(const Vector2& point) const
+    {
+        Vector2 result;
+        PrimitivesHelper::ClosestPointToPointFromRectangle(getTopLeftProperty(), getBottomRightProperty(), point, result);
         return result;
     }
 

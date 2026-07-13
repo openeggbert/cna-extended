@@ -2,22 +2,22 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Ported from MonoGame.Extended's Math/BoundingRectangle.cs. `BoundingRectangle(Vector2 center,
-// SizeF halfExtents)` and the two `implicit operator BoundingRectangle(Rectangle|RectangleF)`
-// conversions were deferred pending `SizeF` (Phase 1, "Size, SizeF, Interval, Thickness") -- now
-// ported. Remaining deferrals:
-//   - The two `Transform(...)` overloads: need `Matrix3x2` + `PrimitivesHelper.TransformRectangle`.
-//   - `CreateFrom(IReadOnlyList<Vector2> points, ...)` (both overloads) and `UpdateFromPoints`:
-//     need `PrimitivesHelper.CreateRectangleFromPoints`.
-//   - `SquaredDistanceTo`/`ClosestPointTo`: need `PrimitivesHelper`.
+// Ported from MonoGame.Extended's Math/BoundingRectangle.cs. All members are now ported --
+// `BoundingRectangle(Vector2 center, SizeF halfExtents)` and the two
+// `implicit operator BoundingRectangle(Rectangle|RectangleF)` conversions landed once `SizeF`
+// was ported; `Transform`, `CreateFrom(points, ...)`, `UpdateFromPoints`, `SquaredDistanceTo`,
+// and `ClosestPointTo` landed once `Matrix3x2` and `PrimitivesHelper` were ported (verified
+// genuinely unblocked, not assumed, before landing these -- see plan.md Task 22).
 #pragma once
 
+#include "CNA/Extended/Matrix3x2.hpp"
 #include "CNA/Extended/RectangleF.hpp"
 #include "CNA/Extended/SizeF.hpp"
 #include "Microsoft/Xna/Framework/Rectangle.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
 #include <string>
+#include <vector>
 
 namespace CNA::Extended
 {
@@ -61,6 +61,38 @@ namespace CNA::Extended
 
         /** @brief Computes the BoundingRectangle from a minimum Vector2 and maximum Vector2. */
         [[nodiscard]] static BoundingRectangle CreateFrom(const Vector2& minimum, const Vector2& maximum);
+
+        /**
+         * @brief Computes the BoundingRectangle from a list of Vector2 structures.
+         * @param result Receives the resulting bounding rectangle.
+         */
+        static void CreateFrom(const std::vector<Vector2>& points, BoundingRectangle& result);
+
+        /** @brief Computes the BoundingRectangle from a list of Vector2 structures. */
+        [[nodiscard]] static BoundingRectangle CreateFrom(const std::vector<Vector2>& points);
+
+        /**
+         * @brief Computes the BoundingRectangle from the specified BoundingRectangle transformed
+         * by the specified Matrix3x2. Note: mutates @p boundingRectangle's Center/HalfExtents in
+         * place (matches upstream, which passes @p boundingRectangle by `ref`).
+         * @param result Receives the resulting bounding rectangle.
+         */
+        static void Transform(BoundingRectangle& boundingRectangle, Matrix3x2& transformMatrix, BoundingRectangle& result);
+
+        /**
+         * @brief Computes the BoundingRectangle from the specified BoundingRectangle transformed
+         * by the specified Matrix3x2.
+         */
+        [[nodiscard]] static BoundingRectangle Transform(BoundingRectangle boundingRectangle, Matrix3x2& transformMatrix);
+
+        /** @brief Updates Center and HalfExtents from a list of Vector2 structures. */
+        void UpdateFromPoints(const std::vector<Vector2>& points);
+
+        /** @brief Computes the squared distance from this BoundingRectangle to the specified Vector2. */
+        [[nodiscard]] float SquaredDistanceTo(const Vector2& point) const;
+
+        /** @brief Computes the closest Vector2 on this BoundingRectangle to the specified Vector2. */
+        [[nodiscard]] Vector2 ClosestPointTo(const Vector2& point) const;
 
         /**
          * @brief Computes the BoundingRectangle that contains the two specified

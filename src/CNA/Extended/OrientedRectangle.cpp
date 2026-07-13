@@ -3,6 +3,7 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/OrientedRectangle.hpp"
 
+#include "CNA/Extended/PrimitivesHelper.hpp"
 #include "System/HashCode.hpp"
 
 #include <algorithm>
@@ -84,6 +85,23 @@ namespace CNA::Extended
         throw std::logic_error("OrientedRectangle::setPositionProperty is not implemented (matches upstream MonoGame.Extended)");
     }
 
+    RectangleF OrientedRectangle::getBoundingRectangleProperty() const
+    {
+        return static_cast<RectangleF>(*this);
+    }
+
+    OrientedRectangle OrientedRectangle::Transform(OrientedRectangle rectangle, Matrix3x2& transformMatrix)
+    {
+        // Matches upstream's private ref-taking overload, inlined here since it is not part of
+        // upstream's public API contract (see header comment).
+        PrimitivesHelper::TransformOrientedRectangle(rectangle.Center, rectangle.Orientation, transformMatrix);
+        OrientedRectangle result;
+        result.Center = rectangle.Center;
+        result.Radii = rectangle.Radii;
+        result.Orientation = rectangle.Orientation;
+        return result;
+    }
+
     bool OrientedRectangle::Equals(const OrientedRectangle& other) const
     {
         return Center == other.Center && Radii == other.Radii && Orientation == other.Orientation;
@@ -107,6 +125,14 @@ namespace CNA::Extended
         Center = centre;
         Radii = radii;
         Orientation = Matrix3x2::Identity;
+    }
+
+    OrientedRectangle::operator RectangleF() const
+    {
+        const Vector2 topLeft = -Radii;
+        RectangleF rectangle(topLeft, Radii * 2.0f);
+        Matrix3x2 orientation = Orientation * Matrix3x2::CreateTranslation(Center);
+        return RectangleF::Transform(rectangle, orientation);
     }
 
     OrientedRectangleIntersection OrientedRectangle::Intersects(const OrientedRectangle& rectangle, const OrientedRectangle& other)

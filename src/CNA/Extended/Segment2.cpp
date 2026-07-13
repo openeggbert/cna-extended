@@ -3,8 +3,13 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/Segment2.hpp"
 
+#include "CNA/Extended/BoundingRectangle.hpp"
+#include "CNA/Extended/PrimitivesHelper.hpp"
+#include "CNA/Extended/RectangleF.hpp"
+
 #include <cmath>
 #include <functional>
+#include <limits>
 
 namespace CNA::Extended
 {
@@ -73,6 +78,80 @@ namespace CNA::Extended
     float Segment2::DistanceTo(const Vector2& point) const
     {
         return std::sqrt(SquaredDistanceTo(point));
+    }
+
+    bool Segment2::Intersects(const RectangleF& rectangle, Vector2& intersectionPoint) const
+    {
+        // Real-Time Collision Detection, Christer Ericson, 2005. Chapter 5.3; Basic Primitive
+        // Tests - Intersecting Lines, Rays, and (Directed Segments). pg 179-181
+        const Vector2 minimumPoint = rectangle.getTopLeftProperty();
+        const Vector2 maximumPoint = rectangle.getBottomRightProperty();
+        float minimumDistance = std::numeric_limits<float>::lowest();
+        float maximumDistance = std::numeric_limits<float>::max();
+
+        const Vector2 direction = End - Start;
+        if (!PrimitivesHelper::IntersectsSlab(Start.X, direction.X, minimumPoint.X, maximumPoint.X, minimumDistance, maximumDistance))
+        {
+            intersectionPoint = Vector2(std::numeric_limits<float>::quiet_NaN());
+            return false;
+        }
+
+        if (!PrimitivesHelper::IntersectsSlab(Start.Y, direction.Y, minimumPoint.Y, maximumPoint.Y, minimumDistance, maximumDistance))
+        {
+            intersectionPoint = Vector2(std::numeric_limits<float>::quiet_NaN());
+            return false;
+        }
+
+        // Segment intersects the 2 slabs.
+        if (minimumDistance <= 0)
+        {
+            intersectionPoint = Start;
+        }
+        else
+        {
+            intersectionPoint = minimumDistance * direction;
+            intersectionPoint.X += Start.X;
+            intersectionPoint.Y += Start.Y;
+        }
+
+        return true;
+    }
+
+    bool Segment2::Intersects(const BoundingRectangle& boundingRectangle, Vector2& intersectionPoint) const
+    {
+        // Real-Time Collision Detection, Christer Ericson, 2005. Chapter 5.3; Basic Primitive
+        // Tests - Intersecting Lines, Rays, and (Directed Segments). pg 179-181
+        const Vector2 minimumPoint = boundingRectangle.Center - boundingRectangle.HalfExtents;
+        const Vector2 maximumPoint = boundingRectangle.Center + boundingRectangle.HalfExtents;
+        float minimumDistance = std::numeric_limits<float>::lowest();
+        float maximumDistance = std::numeric_limits<float>::max();
+
+        const Vector2 direction = End - Start;
+        if (!PrimitivesHelper::IntersectsSlab(Start.X, direction.X, minimumPoint.X, maximumPoint.X, minimumDistance, maximumDistance))
+        {
+            intersectionPoint = Vector2(std::numeric_limits<float>::quiet_NaN());
+            return false;
+        }
+
+        if (!PrimitivesHelper::IntersectsSlab(Start.Y, direction.Y, minimumPoint.Y, maximumPoint.Y, minimumDistance, maximumDistance))
+        {
+            intersectionPoint = Vector2(std::numeric_limits<float>::quiet_NaN());
+            return false;
+        }
+
+        // Segment intersects the 2 slabs.
+        if (minimumDistance <= 0)
+        {
+            intersectionPoint = Start;
+        }
+        else
+        {
+            intersectionPoint = minimumDistance * direction;
+            intersectionPoint.X += Start.X;
+            intersectionPoint.Y += Start.Y;
+        }
+
+        return true;
     }
 
     bool Segment2::Equals(const Segment2& segment) const

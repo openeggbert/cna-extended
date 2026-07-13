@@ -5,14 +5,19 @@
 // MonoGame.Extended's own tests/MonoGame.Extended.Tests/Primitives/Segment2DTests.cs is entirely
 // commented out upstream itself -- nothing active to port 1:1. All tests below are fresh,
 // covering what's actually ported (ClosestPointTo/SquaredDistanceTo/DistanceTo/Equals/
-// GetHashCode/ToString/operators). Intersects(RectangleF|BoundingRectangle, out) are deferred
-// (see Segment2.hpp) so not tested. One test specifically demonstrates the known-upstream-bug
-// behavior in SquaredDistanceTo documented in Segment2.hpp's header comment.
+// GetHashCode/ToString/operators/Intersects). One test specifically demonstrates the
+// known-upstream-bug behavior in SquaredDistanceTo documented in Segment2.hpp's header comment.
+// Intersects(RectangleF|BoundingRectangle, out Vector2) landed once PrimitivesHelper was ported
+// (task 22) -- fresh tests added.
 #include "CNA/Extended/Segment2.hpp"
+
+#include "CNA/Extended/BoundingRectangle.hpp"
+#include "CNA/Extended/RectangleF.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
 
 namespace CNA::Extended
 {
@@ -111,5 +116,57 @@ namespace CNA::Extended
     {
         const Segment2 segment(Vector2(0, 0), Vector2(0, 0));
         EXPECT_NE(segment.ToString().find("->"), std::string::npos);
+    }
+
+    TEST(Segment2Tests, IntersectsRectangleFWhenCrossingThroughIt)
+    {
+        const Segment2 segment(Vector2(-10, 5), Vector2(10, 5));
+        const RectangleF rectangle(0, 0, 10, 10);
+
+        Vector2 intersectionPoint;
+        EXPECT_TRUE(segment.Intersects(rectangle, intersectionPoint));
+        EXPECT_EQ(intersectionPoint, Vector2(0, 5));
+    }
+
+    TEST(Segment2Tests, DoesNotIntersectRectangleFWhenMissingIt)
+    {
+        const Segment2 segment(Vector2(-10, 50), Vector2(10, 50));
+        const RectangleF rectangle(0, 0, 10, 10);
+
+        Vector2 intersectionPoint;
+        EXPECT_FALSE(segment.Intersects(rectangle, intersectionPoint));
+        EXPECT_TRUE(std::isnan(intersectionPoint.X));
+        EXPECT_TRUE(std::isnan(intersectionPoint.Y));
+    }
+
+    TEST(Segment2Tests, IntersectsRectangleFStartingInsideReturnsStart)
+    {
+        const Segment2 segment(Vector2(5, 5), Vector2(50, 5));
+        const RectangleF rectangle(0, 0, 10, 10);
+
+        Vector2 intersectionPoint;
+        EXPECT_TRUE(segment.Intersects(rectangle, intersectionPoint));
+        EXPECT_EQ(intersectionPoint, Vector2(5, 5));
+    }
+
+    TEST(Segment2Tests, IntersectsBoundingRectangleWhenCrossingThroughIt)
+    {
+        const Segment2 segment(Vector2(-10, 5), Vector2(10, 5));
+        const BoundingRectangle rectangle(Vector2(5, 5), Vector2(5, 5));
+
+        Vector2 intersectionPoint;
+        EXPECT_TRUE(segment.Intersects(rectangle, intersectionPoint));
+        EXPECT_EQ(intersectionPoint, Vector2(0, 5));
+    }
+
+    TEST(Segment2Tests, DoesNotIntersectBoundingRectangleWhenMissingIt)
+    {
+        const Segment2 segment(Vector2(-10, 50), Vector2(10, 50));
+        const BoundingRectangle rectangle(Vector2(5, 5), Vector2(5, 5));
+
+        Vector2 intersectionPoint;
+        EXPECT_FALSE(segment.Intersects(rectangle, intersectionPoint));
+        EXPECT_TRUE(std::isnan(intersectionPoint.X));
+        EXPECT_TRUE(std::isnan(intersectionPoint.Y));
     }
 }

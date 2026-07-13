@@ -20,9 +20,9 @@
 // the ported test file for a case demonstrating the resulting wrong answer for a point beyond
 // End. Recommend the user decide whether to file this upstream or diverge from it locally.
 //
-// The two Intersects(RectangleF|BoundingRectangle, out Vector2) overloads are deferred: both
-// call PrimitivesHelper.IntersectsSlab, and PrimitivesHelper is not ported yet (Phase 1, later
-// task). ClosestPointTo/SquaredDistanceTo/DistanceTo are self-contained and fully ported.
+// All members are now ported. The two Intersects(RectangleF|BoundingRectangle, out Vector2)
+// overloads call PrimitivesHelper.IntersectsSlab, landed once PrimitivesHelper was ported
+// (task 22 -- verified genuinely unblocked, not assumed).
 //
 // IEquatable<Segment2>/IEquatableByRef<Segment2> are not implemented as C++ interfaces (matches
 // the precedent set by the bounding-volume types) -- just a plain Equals(const Segment2&).
@@ -35,6 +35,9 @@
 namespace CNA::Extended
 {
     using Microsoft::Xna::Framework::Vector2;
+
+    struct RectangleF;
+    struct BoundingRectangle;
 
     /** @brief A two dimensional line segment defined by a starting and an ending Vector2. */
     struct Segment2
@@ -74,6 +77,21 @@ namespace CNA::Extended
 
         /** @brief Computes the distance from this Segment2 to a specified Vector2. */
         [[nodiscard]] float DistanceTo(const Vector2& point) const;
+
+        /**
+         * @brief Determines whether this Segment2 intersects with the specified RectangleF.
+         * @param intersectionPoint Receives the point of intersection if found, otherwise
+         * Vector2(NaN, NaN).
+         */
+        [[nodiscard]] bool Intersects(const RectangleF& rectangle, Vector2& intersectionPoint) const;
+
+        /**
+         * @brief Determines whether this Segment2 intersects with the specified
+         * BoundingRectangle.
+         * @param intersectionPoint Receives the point of intersection if found, otherwise
+         * Vector2(NaN, NaN).
+         */
+        [[nodiscard]] bool Intersects(const BoundingRectangle& boundingRectangle, Vector2& intersectionPoint) const;
 
         [[nodiscard]] bool Equals(const Segment2& segment) const;
         [[nodiscard]] int GetHashCode() const;

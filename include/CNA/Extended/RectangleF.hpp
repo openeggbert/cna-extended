@@ -2,28 +2,21 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Ported from MonoGame.Extended's Math/RectangleF.cs. `Size` property and the
-// `RectangleF(Vector2 position, SizeF size)` constructor were deferred pending `SizeF` (Phase 1,
-// "Size, SizeF, Interval, Thickness") -- now ported, since SizeF has landed. Remaining
-// deferrals:
-//   - The two `Transform(...)` overloads: need `Matrix3x2` (Phase 1, "Matrix3x2,
-//     MatrixExtensions, Vector2Extensions") and `PrimitivesHelper.TransformRectangle`
-//     (Phase 1, "PrimitivesHelper, ShapeExtensions").
-//   - `CreateFrom(IReadOnlyList<Vector2> points, ...)` (both overloads) and `UpdateFromPoints`:
-//     need `PrimitivesHelper.CreateRectangleFromPoints`.
-//   - `SquaredDistanceTo`/`DistanceTo`/`ClosestPointTo`: need
-//     `PrimitivesHelper.SquaredDistanceToPointFromRectangle`/`ClosestPointToPointFromRectangle`.
-// Everything else (fields, Left/Right/Top/Bottom/IsEmpty/Position/Center/TopLeft/TopRight/
-// BottomLeft/BottomRight/Size, the (x,y,w,h) and (Vector2,SizeF) constructors, CreateFrom(min,max),
-// Union, Intersect, Intersects, Normalize, Contains, Inflate, Offset, Equals/GetHashCode/ToString,
-// and the Rectangle<->RectangleF conversions) is fully ported.
+// Ported from MonoGame.Extended's Math/RectangleF.cs. All members are now ported -- `Size`
+// property and the `RectangleF(Vector2 position, SizeF size)` constructor landed once `SizeF`
+// was ported; `Transform`, `CreateFrom(points, ...)`, `UpdateFromPoints`, `SquaredDistanceTo`,
+// `DistanceTo`, and `ClosestPointTo` landed once `Matrix3x2` and `PrimitivesHelper` were ported
+// (Phase 1, "PrimitivesHelper, ShapeExtensions" -- verified genuinely unblocked, not assumed,
+// before landing these).
 #pragma once
 
+#include "CNA/Extended/Matrix3x2.hpp"
 #include "CNA/Extended/SizeF.hpp"
 #include "Microsoft/Xna/Framework/Rectangle.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
 #include <string>
+#include <vector>
 
 namespace CNA::Extended
 {
@@ -121,6 +114,36 @@ namespace CNA::Extended
 
         /** @brief Computes the RectangleF from a minimum Vector2 and maximum Vector2. */
         [[nodiscard]] static RectangleF CreateFrom(const Vector2& minimum, const Vector2& maximum);
+
+        /**
+         * @brief Computes the smallest RectangleF that contains the specified points.
+         * @param result Receives the resulting rectangle.
+         */
+        static void CreateFrom(const std::vector<Vector2>& points, RectangleF& result);
+
+        /** @brief Computes the smallest RectangleF that contains the specified points. */
+        [[nodiscard]] static RectangleF CreateFrom(const std::vector<Vector2>& points);
+
+        /**
+         * @brief Transforms a RectangleF by the specified Matrix3x2.
+         * @param result Receives the resulting rectangle.
+         */
+        static void Transform(RectangleF& rectangle, Matrix3x2& transformMatrix, RectangleF& result);
+
+        /** @brief Transforms a RectangleF by the specified Matrix3x2. */
+        [[nodiscard]] static RectangleF Transform(RectangleF rectangle, Matrix3x2& transformMatrix);
+
+        /** @brief Updates X, Y, Width and Height from the smallest rectangle that contains the specified points. */
+        void UpdateFromPoints(const std::vector<Vector2>& points);
+
+        /** @brief Computes the squared distance from the specified Vector2 to the closest edge/corner of this RectangleF. */
+        [[nodiscard]] float SquaredDistanceTo(const Vector2& point) const;
+
+        /** @brief Computes the distance from the specified Vector2 to the closest edge/corner of this RectangleF. */
+        [[nodiscard]] float DistanceTo(const Vector2& point) const;
+
+        /** @brief Computes the point on this RectangleF closest to the specified Vector2. */
+        [[nodiscard]] Vector2 ClosestPointTo(const Vector2& point) const;
 
         /**
          * @brief Computes the RectangleF that contains the two specified RectangleF structures.

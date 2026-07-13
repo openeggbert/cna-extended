@@ -7,11 +7,11 @@
 // methods -- an academic citation in a comment, not a third-party code/license dependency like
 // the SlimMath case in Angle.cs (this file's code itself is still 100% Craftwork Games MIT).
 //
-// The 4 Intersects(CircleF, BoundingRectangle) overloads (static ref, static value, instance
-// ref, instance value) are deferred: they call BoundingRectangle::SquaredDistanceTo, which is
-// itself deferred pending PrimitivesHelper (see BoundingRectangle.hpp). CircleF-vs-CircleF
-// Intersects, Contains, ClosestPointTo, BoundaryPointAt, and the Rectangle/RectangleF
-// conversions are all self-contained and fully ported.
+// All members are now ported. The Intersects(CircleF, BoundingRectangle) overloads (collapsed
+// from upstream's 4 ref/value variants into one static + one instance overload, matching the
+// convention already used for CircleF-vs-CircleF Intersects) call
+// BoundingRectangle::SquaredDistanceTo, landed once PrimitivesHelper was ported (task 22 --
+// verified genuinely unblocked, not assumed).
 //
 // IEquatable<CircleF>/IEquatableByRef<CircleF> are not implemented as C++ interfaces (matching
 // the precedent set by the bounding-volume types) -- just a plain Equals(const CircleF&).
@@ -91,6 +91,12 @@ namespace CNA::Extended
 
         /** @brief Determines whether the specified CircleF intersects with this one. */
         [[nodiscard]] bool Intersects(const CircleF& circle) const;
+
+        /** @brief Determines whether the specified CircleF and BoundingRectangle intersect. */
+        [[nodiscard]] static bool Intersects(const CircleF& circle, const BoundingRectangle& rectangle);
+
+        /** @brief Determines whether this CircleF intersects with the specified BoundingRectangle. */
+        [[nodiscard]] bool Intersects(const BoundingRectangle& rectangle) const;
 
         /** @brief Determines whether the specified CircleF contains the specified Vector2. */
         [[nodiscard]] static bool Contains(const CircleF& circle, const Vector2& point);

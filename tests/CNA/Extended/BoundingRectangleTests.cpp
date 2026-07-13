@@ -5,10 +5,14 @@
 // MonoGame.Extended's tests/MonoGame.Extended.Tests/Primitives/BoundingRectangleTests.cs is
 // entirely commented out upstream (a disabled NUnit-style test file, not currently run by
 // upstream's own test suite) -- there is nothing active to port 1:1. These tests cover what was
-// actually ported in this task (CreateFrom, Union, Intersection, Intersects, Contains,
-// Equals/GetHashCode/ToString, the Rectangle/RectangleF conversions that don't need SizeF),
-// written fresh but informed by the disabled upstream cases' intent where still applicable.
+// actually ported (CreateFrom, Union, Intersection, Intersects, Contains,
+// Equals/GetHashCode/ToString, the Rectangle/RectangleF conversions), written fresh but informed
+// by the disabled upstream cases' intent where still applicable. CreateFrom(points), Transform,
+// UpdateFromPoints, SquaredDistanceTo, and ClosestPointTo were added once Matrix3x2 and
+// PrimitivesHelper landed (task 22).
 #include "CNA/Extended/BoundingRectangle.hpp"
+
+#include "CNA/Extended/Matrix3x2.hpp"
 
 #include <gtest/gtest.h>
 
@@ -123,5 +127,47 @@ namespace CNA::Extended
         const std::string text = rectangle.ToString();
         EXPECT_NE(text.find("Centre"), std::string::npos);
         EXPECT_NE(text.find("Radii"), std::string::npos);
+    }
+
+    TEST(BoundingRectangleTests, CreateFromPointsComputesBoundingRectangle)
+    {
+        const std::vector<Vector2> points = {Vector2(3, 4), Vector2(1, 8), Vector2(6, 2)};
+        const BoundingRectangle result = BoundingRectangle::CreateFrom(points);
+
+        const BoundingRectangle expected = BoundingRectangle::CreateFrom(Vector2(1, 2), Vector2(6, 8));
+        EXPECT_EQ(expected, result);
+    }
+
+    TEST(BoundingRectangleTests, UpdateFromPointsMutatesRectangle)
+    {
+        const std::vector<Vector2> points = {Vector2(3, 4), Vector2(1, 8), Vector2(6, 2)};
+        BoundingRectangle rectangle;
+        rectangle.UpdateFromPoints(points);
+
+        const BoundingRectangle expected = BoundingRectangle::CreateFrom(Vector2(1, 2), Vector2(6, 8));
+        EXPECT_EQ(expected, rectangle);
+    }
+
+    TEST(BoundingRectangleTests, TransformTranslatesCenter)
+    {
+        BoundingRectangle rectangle(Vector2(0, 0), Vector2(10, 15));
+        Matrix3x2 transform = Matrix3x2::CreateTranslation(1, 2);
+
+        const BoundingRectangle result = BoundingRectangle::Transform(rectangle, transform);
+
+        EXPECT_EQ(result.Center, Vector2(1, 2));
+        EXPECT_EQ(result.HalfExtents, Vector2(10, 15));
+    }
+
+    TEST(BoundingRectangleTests, SquaredDistanceToIsZeroWhenPointInside)
+    {
+        const BoundingRectangle rectangle(Vector2(0, 0), Vector2(5, 5));
+        EXPECT_FLOAT_EQ(rectangle.SquaredDistanceTo(Vector2(0, 0)), 0.0f);
+    }
+
+    TEST(BoundingRectangleTests, ClosestPointToClampsToBoundary)
+    {
+        const BoundingRectangle rectangle(Vector2(0, 0), Vector2(5, 5));
+        EXPECT_EQ(rectangle.ClosestPointTo(Vector2(20, 0)), Vector2(5, 0));
     }
 }

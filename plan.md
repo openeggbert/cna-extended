@@ -374,7 +374,78 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       from what this specific upstream file actually does. No upstream tests exist for
       either file — wrote fresh tests covering deterministic seeding, range bounds for
       every overload, and the `Shared` singleton property.
-- [ ] `PrimitivesHelper`, `ShapeExtensions`
+- [x] `PrimitivesHelper` (2026-07-13, ported directly, no fork) — fully ported, no
+      deferrals (~145 lines). Fully self-contained (only needs `Vector2`, `Matrix3x2`,
+      `MathExtended`, all already ported) — this was the single most-referenced blocker
+      across Phase 1's deferrals; see the follow-up sweep below.
+      **`ShapeExtensions` deferred in full, scope reassessed**: despite living in the
+      `Math/` folder upstream, `ShapeExtensions.cs` is entirely `SpriteBatch` debug-drawing
+      code (`DrawPolygon`/`DrawLine`/`DrawCircle`/etc., using a live `GraphicsDevice` and a
+      1x1 white-pixel `Texture2D`) — a Graphics-phase concern (Phase 5, "Graphics &
+      BitmapFonts"), not a Phase 1 math-utility concern, regardless of its upstream folder
+      location. Needs a real graphics context to test meaningfully (matches this project's
+      `CNA_EXTENDED_CNA_LINKED` test-gating pattern for anything touching
+      `GraphicsDevice`/`SpriteBatch`). Port it as part of Phase 5, not standalone here.
+      **Newly discovered while scoping this task**: `ShapeExtensions.cs` depends on
+      `MonoGame.Extended.Shapes.Polygon`/`Polyline` (`source/MonoGame.Extended/Shapes/`),
+      an entire upstream folder that was **never tracked anywhere in this plan** — a real
+      gap, not an intentional Phase-1 exclusion. Checked: both types turned out small
+      (178+41 lines) and fully self-contained (only `Vector2`/`RectangleF`, both already
+      ported), so **ported them here** rather than leaving the gap open — `Polygon`,
+      `Polyline` (`include/src/tests/CNA/Extended/Shapes/`). First use of a C++
+      sub-namespace in this phase: `CNA::Extended::Shapes`, mirroring upstream's own
+      `MonoGame.Extended.Shapes` C# sub-namespace (unlike the `Math/` folder types ported
+      so far, which all stayed in the C# root namespace despite their subfolder). 4 of
+      upstream's `PolygonTests.cs` tests ported 1:1; no upstream tests exist for
+      `Polyline` or `PrimitivesHelper` — wrote fresh tests for both.
+      **Follow-up sweep after `PrimitivesHelper` landed** (verified by reading each header's
+      deferral comment and the actual upstream `.cs` source, not assumed — see §6 for the
+      full account): `Line2D`'s deferred `Intersects(Ray2D/LineSegment2D/...)` overloads and
+      `LineSegment2D`'s `DistanceSquaredToPoint`/`DistanceSquaredToSegment` remain blocked on
+      `Collision2D` specifically (a different, larger Phase-2 type, not `PrimitivesHelper`)
+      — **not** unblocked by this task despite both citing similar "Real-Time Collision
+      Detection" algorithm sources; confirmed still blocked, left deferred. The following
+      **were** genuinely unblocked and landed in this same task/commit:
+      - `RectangleF`: `Transform` (2 overloads), `CreateFrom(points, ...)` (2 overloads),
+        `UpdateFromPoints`, `SquaredDistanceTo`, `DistanceTo`, `ClosestPointTo`. Tests added:
+        the 2 constructor tests + 5 `Transform` tests from upstream's
+        `tests/MonoGame.Extended.Tests/Primitives/RectangleFTests.cs` (ported 1:1; that
+        file's `Rectangle_Intersects_Test` was intentionally **not** ported — it exercises
+        base XNA/FNA `Rectangle.Intersects`, not anything MonoGame.Extended adds), plus fresh
+        tests for `CreateFrom(points)`/`UpdateFromPoints`/`SquaredDistanceTo`/`DistanceTo`/
+        `ClosestPointTo` (no upstream coverage for those specifically).
+      - `BoundingRectangle`: `CreateFrom(points, ...)` (2 overloads), `Transform` (2
+        overloads, matching upstream's ref-mutates-input-in-place semantics faithfully),
+        `UpdateFromPoints`, `SquaredDistanceTo`, `ClosestPointTo`. Fresh tests added (the
+        upstream `Primitives/BoundingRectangleTests.cs` is entirely commented out, as noted
+        by the pre-existing test file's header comment).
+      - `OrientedRectangle`: `getBoundingRectangleProperty()` (upstream: `(RectangleF)this`),
+        `static Transform(OrientedRectangle, ref Matrix3x2)`, and
+        `explicit operator RectangleF(OrientedRectangle)`. Upstream's `private static`
+        ref-taking `Transform` overload isn't part of its public API contract, so its logic
+        was inlined directly into the public static `Transform`. Ported upstream's full
+        nested `Transform` test class (9 tests) 1:1. **Testing nuance found and preserved
+        faithfully**: 2 of those upstream tests (`Points_are_translated`,
+        `Applies_rotation_and_translation`) use upstream's own `CollectionAssert.Equal` test
+        helper (`tests/MonoGame.Extended.Tests/CollectionAssert.cs`), which is an
+        order-*insensitive* containment check (same count + every actual element present in
+        expected), not an ordered sequence comparison — unlike gtest's `EXPECT_EQ` on a
+        `std::vector`. A literal `EXPECT_EQ` port of those two tests' expected-point lists
+        failed even though the underlying `OrientedRectangle::Transform`/`getPointsProperty()`
+        math was correct (upstream's own hand-written expected order doesn't match its own
+        `Points` getter's algorithmic order either — it only passes upstream because
+        `CollectionAssert.Equal` doesn't check order). Added a small local
+        `ExpectUnorderedPointsEqual` helper replicating that exact upstream semantics for
+        those 2 tests, rather than reordering the expected values to hide the discrepancy —
+        this is a faithful port of what upstream's test actually asserts, not merely of its
+        C# syntax.
+      - Widened the sweep past the 3 explicitly-flagged types by grepping the tree for
+        "PrimitivesHelper" in deferral comments: found and landed `CircleF`'s
+        `Intersects(CircleF, BoundingRectangle)` (collapsed from upstream's 4 ref/value
+        overloads to 1 static + 1 instance, matching the existing CircleF-vs-CircleF
+        convention) and `Segment2`'s `Intersects(RectangleF|BoundingRectangle, out
+        Vector2)` (2 overloads, using `PrimitivesHelper.IntersectsSlab` directly). Fresh
+        tests for both (upstream's own coverage is entirely commented out for both).
 - [ ] `Math/Triangulation/*` (polygon triangulation helpers)
 - [ ] `GameTimeExtensions`, `GameComponentCollectionExtensions`
 - [ ] `FramesPerSecondCounter` + `FramesPerSecondCounterComponent`
@@ -617,6 +688,46 @@ implementations — confirm and reuse rather than re-rolling).
   the existing utility's behavior actually differs from what upstream's specific file
   does. Worth keeping in mind for any future case where a sharp-runtime type has a
   same-named member that isn't a drop-in behavioral match for what's being ported.
+- 2026-07-13 — `PrimitivesHelper` ported directly (no fork; fully self-contained, ~145
+  lines). While scoping `ShapeExtensions` (deferred whole to Phase 5 — pure `SpriteBatch`
+  debug-drawing code, not a math utility despite its `Math/` folder location), discovered
+  its dependency on `MonoGame.Extended.Shapes.Polygon`/`Polyline`, an entire upstream
+  folder never tracked anywhere in this plan — a real gap, not an intentional exclusion.
+  Both types were small and fully self-contained, so ported them alongside this task
+  rather than leaving the gap open; first use of a `CNA::Extended::Shapes` sub-namespace.
+  Then, rather than assuming `PrimitivesHelper` unblocked the several `RectangleF`/
+  `BoundingRectangle`/`OrientedRectangle` deferrals flagged by name in earlier sessions'
+  notes, independently re-verified each by reading the current header's deferral comment
+  plus the actual upstream `.cs` implementation before touching any code (the same
+  discipline established in the 2026-07-13 `OrientedRectangle` entry above, now applied to
+  a 3-type sweep instead of a single correction). Confirmed `Line2D`/`LineSegment2D`'s
+  deferrals are genuinely still blocked on `Collision2D`, not `PrimitivesHelper`, despite
+  citing an overlapping algorithm source — left those deferred rather than guessing they
+  were unblocked because a plausibly-related type had just landed. Landed the genuinely-
+  unblocked follow-ups in the same commit: `RectangleF::Transform`/`CreateFrom(points)`/
+  `UpdateFromPoints`/`SquaredDistanceTo`/`DistanceTo`/`ClosestPointTo`;
+  `BoundingRectangle`'s equivalents; `OrientedRectangle::Transform`/
+  `getBoundingRectangleProperty()`/`operator RectangleF()`. Porting `OrientedRectangle`'s
+  upstream `Transform` test class surfaced a test-infrastructure fidelity question, not a
+  code one: 2 of the 9 tests use upstream's `CollectionAssert.Equal` helper, which is
+  order-*insensitive* (contains-check, not sequence-equality) — a literal `EXPECT_EQ` port
+  of those two tests' expected point lists failed the build even though the underlying
+  `Transform`/`getPointsProperty()` math was correct, because upstream's own hand-written
+  expected order doesn't match its own `Points` getter's algorithmic order either (it only
+  passes upstream *because* the helper ignores order). Resolved by writing a small
+  `ExpectUnorderedPointsEqual` helper that replicates the C# helper's actual semantics for
+  just those 2 tests, rather than silently reordering the expected values to make
+  `EXPECT_EQ` pass — porting a test faithfully means porting what it actually asserts, not
+  just its literal C# structure. Widened the sweep beyond just the 3 flagged types: grepped
+  the whole tree for "PrimitivesHelper" in deferral comments and found 2 more genuinely-
+  unblocked spots not previously called out by name — `CircleF`'s 4-overload (collapsed to
+  2) `Intersects(CircleF, BoundingRectangle)`, which calls
+  `BoundingRectangle::SquaredDistanceTo`, and `Segment2`'s
+  `Intersects(RectangleF|BoundingRectangle, out Vector2)`, which calls
+  `PrimitivesHelper.IntersectsSlab` directly — landed both in the same commit with fresh
+  tests (upstream's own coverage for all of these is entirely commented out in its test
+  suite, so nothing to port 1:1). Test suite grew from 429 to 464 (35 net new tests); both
+  `-DCNA_EXTENDED_LINK_CNA=ON` and headers-only builds verified clean.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
