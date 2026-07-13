@@ -6,6 +6,76 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (28) — `CollisionWorld2D` ported; **Phase 2 (Collisions 2D) FULLY COMPLETE**
+
+Ported `CollisionWorld2D` (504 upstream lines) directly, not via fork — one cohesive class where
+every method needs to agree on the same ownership/exception conventions, making a single coherent
+author more reliable than delegating. This was the piece deferred since entry (25); both real
+dependencies (broadphase, entry (26); `Layer`/`LayerPair`, entry (27)) now exist.
+
+**Read `CollisionWorld2DTests.cs` (654 lines, 25 tests) in full before writing any implementation
+code** — worth doing for a class this interconnected, since the test file's edge cases (layer
+self-collision defaults, cross-layer collision enable/disable, duplicate-pair suppression across
+broadphase cells, `Shape`-access-count tracking to prove short-circuiting) revealed behavioral
+requirements not obvious from the implementation source alone.
+
+**Translation decisions, each independently reasoned through rather than defaulted to a generic
+pattern**:
+- Ownership: `layers_` is `std::unordered_map<std::string, std::unique_ptr<Layer>>` —
+  `CollisionWorld2D` owns every `Layer` handed to it (matching upstream's real intent: nothing
+  else in upstream ever holds a second reference to a `Layer` after constructing a
+  `CollisionWorld2D`/calling `AddLayer` with it).
+- **Null vs. empty-string `layerName` sentinel, applied selectively, not blanket**: C#'s `null`
+  layerName parameters (→ "use the default layer") have no `std::string` equivalent. Used `""` as
+  the sentinel, but ONLY for the methods that let upstream's own `GetLayer`'s `??` null-coalescing
+  actually run (`QueryCandidates` ×2, `QueryCollisions`, `QueryCollisionPairs`,
+  `Enable`/`Disable`/`IsCollisionEnabledBetweenLayers`). `Insert`/`MoveToLayer` still reject `""`
+  outright via `ArgumentException::ThrowIfNullOrWhiteSpace`, exactly matching upstream's own
+  pre-`GetLayer` validation in those two methods — recognized this distinction by reading each
+  method's actual validation order, not assumed uniform. One narrow, explicitly-documented fidelity
+  gap remains: upstream's `??` coalesces true `null` only, not an explicitly-passed `""`, so
+  `QueryCandidates(bounds, "")` differs from real C# in this one degenerate case — no legitimate
+  caller can hit it (`AddLayer` already rejects `""` as a registrable name), and upstream's own
+  test suite never exercises it either.
+- **`System.Data.DuplicateNameException` has no `sharp-runtime` equivalent** — checked
+  `sharp-runtime`'s `include/System/` tree directly rather than assuming, confirmed missing.
+  Substituted `System::ArgumentException`, matching real .NET BCL precedent
+  (`Dictionary<TKey,TValue>.Add` itself throws `ArgumentException` for a duplicate key) —
+  documented as a deliberate, explained substitution in the header comment, not a silent scope
+  decision. `sharp-runtime` is a sibling repo this project does not modify, so adding the missing
+  type there was never an option.
+- **`RemoveLayer`'s cleanup ordering restructured** (grab the doomed `Layer`'s raw-pointer identity
+  and use it for `layerCollision_`/`actorLayerNames_` cross-referencing BEFORE erasing it from
+  `layers_`, rather than after, as upstream's GC-backed version effectively does) — avoids any
+  dangling-pointer question under C++'s stricter object-lifetime rules; same net behavior, safer
+  mechanism.
+
+**Verification**: build succeeded on the first attempt after two straightforward compile-error
+fixes (an `EXPECT_THROW` discarding a `[[nodiscard]]` return needed an explicit `(void)` cast; one
+`MathHelper::PiOver4` reference needed full namespace qualification). **All 31 ported tests passed
+on the very first test run — no logic bugs found during verification**, a strong signal the
+design-before-writing approach (reading the test file in full first) paid off. Genuinely clean
+`rm -rf build` rebuild + both CMake configs (linked and headers-only), zero warnings in either.
+`ctest` → **1138/1138 passing** (was 1107 — 31 net new tests).
+
+**Phase 2 ("Collisions 2D") is now FULLY COMPLETE** — all 5 tasks (`Collision2D`/`CollisionShape2D`
+root types, `CollisionWorld2D`+friends, broadphase, `Layers`, and all upstream Collisions tests)
+are done. This closes out a large, multi-entry effort spanning entries (19) through (28): the
+3,809-line `Collision2D`, the full `Ray2D`/`Line2D`/`LineSegment2D`/5-bounding-volume-type
+follow-up sweep, `CollisionShape2D`, and the entire `Collisions` namespace (actors, broadphase,
+layers, world). Two process incidents were handled transparently along the way (entry (21)'s
+git-command violation, entry (23)'s milder self-report-accuracy gap) — both resolved via
+independent verification rather than blind trust, and both documented for future-session
+awareness rather than swept under the rug.
+
+**State / next step**: Phase 3 is next per `plan.md` §5 — Input, Timers, Tweening,
+ViewportAdapters, VectorDraw (independent of each other; depends only on Phase 1 and CNA's
+`Microsoft::Xna::Framework::Input`). Nothing about Phase 3's scope has been read yet this session
+— start fresh by reading `plan.md`'s Phase 3 task list and the relevant upstream sources before
+committing to any implementation approach, per the standing "read first" discipline.
+
+---
+
 ## 2026-07-13 (27) — Phase 2 task 4 (Layers/*, LayerPair) COMPLETE; CollisionWorld2D now unblocked
 
 Ported `Layer`, `LayerPair`, `UndefinedLayerException` directly (not via fork — small combined

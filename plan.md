@@ -735,7 +735,7 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       trusting the fork's self-report), including the headers-only compile-check config.
       **This was the last Phase 1 task — Phase 1 is now complete.**
 
-### Phase 2 — Collisions 2D
+### Phase 2 — Collisions 2D — **COMPLETE (2026-07-13)**
 
 Depends on Phase 1 (math/shapes).
 
@@ -761,27 +761,29 @@ Depends on Phase 1 (math/shapes).
       rather than via fork, given it's one cohesive file. No upstream test file exists for
       it; 26 fresh tests added (spot-check pair per dispatch branch). 1045 tests passing
       total for the whole project. See `NEXT.md` entries (19)-(24) for the full breakdown.
-- [ ] `CollisionWorld2D`, `ICollisionActor`, `ICollisionBroadphase2D`,
-      `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey` — **IN PROGRESS (2026-07-13)**.
-      `ICollisionActor`, `ICollisionBroadphase2D`, `CollisionEvent2D`, `CollisionPair2D`,
-      `ActorPairKey` are ported (new `CNA::Extended::Collisions` sub-namespace, matching
-      upstream's own `MonoGame.Extended.Collisions` namespace split from the root types).
-      `CollisionWorld2D` itself is deliberately deferred until after the next two
-      sub-tasks below land — it genuinely depends on `Layer`/`LayerPair` and the
-      broadphase implementations, a real forward dependency despite being listed here
-      first; see `NEXT.md` entry (25) for why this task's internal order was changed.
+- [x] `CollisionWorld2D`, `ICollisionActor`, `ICollisionBroadphase2D`,
+      `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey` — **COMPLETE (2026-07-13)**. All
+      6 types ported (new `CNA::Extended::Collisions` sub-namespace, matching upstream's
+      own `MonoGame.Extended.Collisions` namespace split from the root types).
+      `CollisionWorld2D` (504 lines) was internally deferred until task 3/4 landed — see
+      `NEXT.md` entries (25) and (28) for the full breakdown, including the
+      `DuplicateNameException`→`ArgumentException` substitution (no sharp-runtime
+      equivalent exists) and the null/empty-string layerName sentinel decision.
 - [x] Broadphase: `QuadTree/*`, `SpatialHash` — **COMPLETE (2026-07-13)**. `QuadtreeData`,
       `QuadTree`, `QuadTreeSpace`, and `SpatialHash` (both implementing
       `ICollisionBroadphase2D`) all ported, with 44 tests ported 1:1 from upstream. See
       `NEXT.md` entry (26).
 - [x] `Layers/*`, `LayerPair` — **COMPLETE (2026-07-13)**. `Layer`, `LayerPair`,
       `UndefinedLayerException` all ported. 12 fresh tests (no upstream test files exist
-      for any of these 3 types). See `NEXT.md` entry (27). `CollisionWorld2D` (deferred
-      in entry (25)) is now unblocked — both of its real dependencies exist.
-- [ ] Port `tests/MonoGame.Extended.Tests/Collisions/**` (partially done alongside each
-      piece above/below as it lands, per this project's "port tests alongside
-      implementation" rule; this checkbox tracks the final sweep for anything not yet
-      covered, e.g. `CollisionWorld2DTests.cs`'s full scope once `CollisionWorld2D` lands)
+      for any of these 3 types). See `NEXT.md` entry (27).
+- [x] Port `tests/MonoGame.Extended.Tests/Collisions/**` — **COMPLETE (2026-07-13)**. All 6
+      upstream test files ported (`CollisionEvent2DTests.cs`, `CollisionWorld2DTests.cs`,
+      `QuadTreeSpaceTests.cs`, `QuadTreeTests.cs`, `SpatialHashTests.cs`, plus the shared
+      `Implementation/BasicActor.cs` fixture), landed incrementally alongside each piece
+      above per this project's "port tests alongside implementation" rule. Fresh tests
+      added where no upstream file exists (`ActorPairKeyTests`, `CollisionPair2DTests`,
+      `LayerTests`, `LayerPairTests`, `UndefinedLayerExceptionTests`). **Phase 2 is now
+      fully complete** — 1138 tests passing total for the whole project.
 
 ### Phase 3 — Input, Timers, Tweening, ViewportAdapters, VectorDraw
 
