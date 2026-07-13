@@ -6,6 +6,7 @@
 #include "CNA/Extended/BoundingBox2D.hpp"
 #include "CNA/Extended/BoundingCapsule2D.hpp"
 #include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
 #include "CNA/Extended/Collision2D.hpp"
 #include "CNA/Extended/Line2D.hpp"
 #include "CNA/Extended/OrientedBoundingBox2D.hpp"
@@ -368,6 +369,55 @@ namespace CNA::Extended
         std::optional<float> tMin;
         std::optional<float> tMax;
         return Intersects(obb, tMin, tMax);
+    }
+
+    bool LineSegment2D::Intersects(
+        const BoundingPolygon2D& polygon, std::optional<float>& tMin, std::optional<float>& tMax, std::optional<Vector2>& point) const
+    {
+        const Vector2 d = getDirectionProperty();
+        const float dd = Vector2::Dot(d, d);
+
+        // Check for degenerate segment
+        if (dd <= Collision2D::Epsilon * Collision2D::Epsilon)
+        {
+            // Segment is degenerate, treat as point
+            if (polygon.Contains(Start) == ContainmentType::Contains)
+            {
+                tMin = 0.0f;
+                tMax = 0.0f;
+                point = Start;
+                return true;
+            }
+
+            tMin = std::nullopt;
+            tMax = std::nullopt;
+            point = std::nullopt;
+            return false;
+        }
+
+        // Clip the segment's parametric line against the polygon
+        float t0 = 0.0f;
+        float t1 = 0.0f;
+        if (!Collision2D::ClipLineToConvexPolygon(Start, d, polygon.Vertices, polygon.Normals, 0.0f, 1.0f, t0, t1))
+        {
+            tMin = std::nullopt;
+            tMax = std::nullopt;
+            point = std::nullopt;
+            return false;
+        }
+
+        tMin = t0;
+        tMax = t1;
+        point = Start + d * t0;
+        return true;
+    }
+
+    bool LineSegment2D::Intersects(const BoundingPolygon2D& polygon) const
+    {
+        std::optional<float> tMin;
+        std::optional<float> tMax;
+        std::optional<Vector2> point;
+        return Intersects(polygon, tMin, tMax, point);
     }
 
     void LineSegment2D::Deconstruct(Vector2& start, Vector2& end) const

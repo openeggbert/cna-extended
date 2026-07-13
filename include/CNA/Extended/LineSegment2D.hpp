@@ -9,7 +9,7 @@
 // epsilon-based Equals -- matches upstream, which does not use Collision2D.Epsilon in this
 // type's Equals) were ported before Collision2D existed.
 //
-// Now that Collision2D is fully ported, every other deferred member except one is ported too:
+// Now that Collision2D is fully ported, every deferred member is now ported:
 //   - DistanceSquaredToPoint/DistanceToPoint -> Collision2D.DistanceSquaredPointSegment
 //   - DistanceSquaredToSegment/DistanceToSegment -> Collision2D.DistanceSquaredSegmentSegment
 //   - Intersects(Line2D, ...) -> Line2D::Intersects(LineSegment2D, ...)
@@ -17,14 +17,9 @@
 //   - Intersects(LineSegment2D, ...) -> Collision2D.SolveParametricIntersection2D
 //   - Intersects(BoundingBox2D/BoundingCircle2D/BoundingCapsule2D/OrientedBoundingBox2D, ...) ->
 //     Collision2D.ClipLineToAabb / RayCircleIntersectionInterval / RayCapsuleIntersectionInterval
-//
-// STILL DEFERRED: Intersects(BoundingPolygon2D, ...) (both the 3-out-param and bool-only
-// overloads). Its degenerate (zero-length-segment) branch calls polygon.Contains(Start), and
-// BoundingPolygon2D::Contains(...) is itself still deferred pending its own Collision2D-dependent
-// follow-up (see BoundingPolygon2D.hpp) -- this is a genuinely new, narrower blocker than
-// "Collision2D doesn't exist yet": every other line in this method's body only needs
-// already-ported Collision2D methods and BoundingPolygon2D's already-public Vertices/Normals
-// fields. Port these two overloads once BoundingPolygon2D::Contains lands.
+//   - Intersects(BoundingPolygon2D, ...) -> Collision2D.ClipLineToConvexPolygon (its degenerate
+//     branch calls BoundingPolygon2D::Contains(Vector2), which was the last remaining blocker --
+//     landed once BoundingPolygon2D's own Collision2D-dependent follow-up shipped).
 //
 // IMPORTANT correction to BoundingCapsule2D.hpp's deferred-method comment (written when
 // BoundingCapsule2D was ported, before this file existed): it assumed CreateFromSegment/
@@ -50,6 +45,7 @@ namespace CNA::Extended
     class BoundingCircle2D;
     class BoundingCapsule2D;
     class OrientedBoundingBox2D;
+    struct BoundingPolygon2D;
 
     /** @brief Represents a finite line segment connecting two endpoints in 2D space. */
     struct LineSegment2D
@@ -245,6 +241,25 @@ namespace CNA::Extended
 
         /** @brief Tests if this line segment intersects with an oriented bounding box. */
         [[nodiscard]] bool Intersects(const OrientedBoundingBox2D& obb) const;
+
+        /**
+         * @brief Tests if this line segment intersects with a polygon and computes the parametric
+         * distances to the intersection points.
+         * @param polygon The polygon to test against.
+         * @param tMin Receives the parametric distance along this segment to the entry
+         * intersection point in [0, 1], or std::nullopt if there is none.
+         * @param tMax Receives the parametric distance along this segment to the exit
+         * intersection point in [0, 1], or std::nullopt if there is none.
+         * @param point Receives the intersection point corresponding to tMin, or std::nullopt if
+         * there is none.
+         * @remark For degenerate (zero-length) segments, returns true with tMin = tMax = 0 if the
+         * start point is inside the polygon.
+         */
+        [[nodiscard]] bool Intersects(
+            const BoundingPolygon2D& polygon, std::optional<float>& tMin, std::optional<float>& tMax, std::optional<Vector2>& point) const;
+
+        /** @brief Tests if this line segment intersects with a polygon. */
+        [[nodiscard]] bool Intersects(const BoundingPolygon2D& polygon) const;
 
         /**
          * @brief Deconstructs this line segment into its component values.

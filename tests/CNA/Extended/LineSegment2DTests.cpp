@@ -7,21 +7,20 @@
 // That one test is ported faithfully below. Every other newly-ported Distance*/Intersects overload
 // (now that Collision2D exists) has no upstream test to port 1:1, so it gets a fresh true/false
 // case pair instead, spot-checking the delegation rather than re-deriving Collision2D's own
-// algorithm correctness (already covered exhaustively by Collision2DTests.cpp).
-//
-// Intersects(BoundingPolygon2D, ...) (both overloads) remains deferred -- see the blocker
-// explained in LineSegment2D.hpp's header comment (BoundingPolygon2D::Contains isn't ported yet)
-// -- so there are no tests for it here.
+// algorithm correctness (already covered exhaustively by Collision2DTests.cpp). This now includes
+// Intersects(BoundingPolygon2D, ...), unblocked once BoundingPolygon2D::Contains(Vector2) landed.
 #include "CNA/Extended/LineSegment2D.hpp"
 
 #include "CNA/Extended/BoundingBox2D.hpp"
 #include "CNA/Extended/BoundingCapsule2D.hpp"
 #include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
 #include "CNA/Extended/Line2D.hpp"
 #include "CNA/Extended/OrientedBoundingBox2D.hpp"
 #include "CNA/Extended/Ray2D.hpp"
 
 #include <gtest/gtest.h>
+#include <vector>
 
 namespace CNA::Extended
 {
@@ -345,5 +344,58 @@ namespace CNA::Extended
         const LineSegment2D segment(Vector2(-10, 5), Vector2(10, 5));
         const OrientedBoundingBox2D obb(Vector2(0, 0), Vector2::UnitX, Vector2::UnitY, Vector2(1, 1));
         EXPECT_FALSE(segment.Intersects(obb));
+    }
+
+    TEST(LineSegment2DTests, IntersectsBoundingPolygonCrossing)
+    {
+        const LineSegment2D segment(Vector2(-10, 0), Vector2(10, 0));
+        const std::vector<Vector2> vertices{Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const BoundingPolygon2D polygon(vertices, normals);
+
+        std::optional<float> tMin;
+        std::optional<float> tMax;
+        std::optional<Vector2> point;
+        EXPECT_TRUE(segment.Intersects(polygon, tMin, tMax, point));
+        ASSERT_TRUE(tMin.has_value());
+        ASSERT_TRUE(tMax.has_value());
+        ASSERT_TRUE(point.has_value());
+        EXPECT_EQ(point.value(), Vector2(-1, 0));
+    }
+
+    TEST(LineSegment2DTests, IntersectsBoundingPolygonMissReturnsFalse)
+    {
+        const LineSegment2D segment(Vector2(-10, 5), Vector2(10, 5));
+        const std::vector<Vector2> vertices{Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const BoundingPolygon2D polygon(vertices, normals);
+
+        EXPECT_FALSE(segment.Intersects(polygon));
+    }
+
+    TEST(LineSegment2DTests, IntersectsBoundingPolygonDegenerateInsideReturnsTrue)
+    {
+        const LineSegment2D segment(Vector2::Zero, Vector2::Zero);
+        const std::vector<Vector2> vertices{Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const BoundingPolygon2D polygon(vertices, normals);
+
+        std::optional<float> tMin;
+        std::optional<float> tMax;
+        std::optional<Vector2> point;
+        EXPECT_TRUE(segment.Intersects(polygon, tMin, tMax, point));
+        EXPECT_EQ(tMin.value_or(-1.0f), 0.0f);
+        EXPECT_EQ(tMax.value_or(-1.0f), 0.0f);
+        EXPECT_EQ(point.value(), Vector2::Zero);
+    }
+
+    TEST(LineSegment2DTests, IntersectsBoundingPolygonDegenerateOutsideReturnsFalse)
+    {
+        const LineSegment2D segment(Vector2(10, 10), Vector2(10, 10));
+        const std::vector<Vector2> vertices{Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const BoundingPolygon2D polygon(vertices, normals);
+
+        EXPECT_FALSE(segment.Intersects(polygon));
     }
 }
