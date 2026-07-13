@@ -147,6 +147,17 @@ else()
     endif()
     if(CNA_EXTENDED_SHARP_RUNTIME_INCLUDE_DIR)
         target_include_directories(CNA_EXTENDED PUBLIC "${CNA_EXTENDED_SHARP_RUNTIME_INCLUDE_DIR}")
+        # sharp-runtime's own CMakeLists.txt exposes its vendored single-header/two-file
+        # libraries (nlohmann/json.hpp, tinyxml2/tinyxml2.h, ...) via
+        # `target_include_directories(SHARP_RUNTIME SYSTEM PUBLIC .../vendor)` -- only
+        # reachable when SHARP_RUNTIME is actually built as a target (linked mode). Headers-
+        # only mode bypasses that target entirely, so it has to add the same vendor dir
+        # itself or any sharp-runtime header pulling in a vendored dependency (e.g.
+        # System/Xml/XmlDocument.hpp -> tinyxml2/tinyxml2.h) fails to compile here even
+        # though it compiles fine in linked mode.
+        if(EXISTS "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/vendor")
+            target_include_directories(CNA_EXTENDED SYSTEM PUBLIC "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/vendor")
+        endif()
     endif()
 endif()
 

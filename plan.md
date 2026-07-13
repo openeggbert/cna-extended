@@ -888,17 +888,33 @@ Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`
 - [x] `Content/ExternalResourceResolver(s)` (not xnb-specific) — **COMPLETE**, landed
       alongside the other small independent Graphics/Content utilities in an earlier Phase 5
       commit; checkbox was simply missed at the time.
-- [ ] `BitmapFonts/*` (runtime `BitmapFont`/`BitmapFontCharacter`/`BitmapFont.Extensions`)
-      **and** `Content/BitmapFonts/{BitmapFontFileContent,BitmapFontFileReader}` — **scope
-      correction**: the exclusion list above previously called `Content/BitmapFonts/` "the
-      xnb-side helper," which was wrong. Read both files directly: `BitmapFontFileReader.cs`
-      is a direct parser for the AngleCode BMFont `.fnt` spec (binary/text/XML variants,
-      confirmed via its own upstream test fixtures under
+- [x] `BitmapFonts/*` (runtime `BitmapFont`/`BitmapFontCharacter`/`BitmapFont.Extensions`)
+      **and** `Content/BitmapFonts/{BitmapFontFileContent,BitmapFontFileReader}` —
+      **COMPLETE (2026-07-13)**. **Scope correction**: the exclusion list above previously
+      called `Content/BitmapFonts/` "the xnb-side helper," which was wrong. Read both files
+      directly: `BitmapFontFileReader.cs` is a direct parser for the AngleCode BMFont `.fnt`
+      spec (binary/text/XML variants, confirmed via its own upstream test fixtures under
       `tests/MonoGame.Extended.Tests/BitmapFonts/files/bmfont/*.fnt`) — zero xnb/ContentReader/
       ContentManager dependency, exactly analogous to the already-in-scope direct-JSON
       TexturePacker reader above. It is the loader for the already-approved-in-scope "BMFont
       bitmap fonts" goal (see the in-scope bullet list above), not a xnb helper for it. The
       exclusion-list entry further up this file is corrected accordingly.
+      **Real `sharp-runtime` bug found and worked around, not fixed there** (sibling-repo
+      rule): `System::Xml::XmlNode::SelectSingleNode`'s doc comment claims "caller takes
+      ownership," but it returns a pointer into the live DOM tree (verified by tracing
+      `XmlNode.cpp` → `XPath::XmlDocumentNavigator::GetNode()`); `BitmapFontFileReader.cpp`
+      treats the return value as non-owning instead. **Real `cna-extended` CMake bug found
+      and fixed here** (in scope, not a sibling repo): the headers-only build branch never
+      added `sharp-runtime/vendor` to the include path, so any header pulling in a vendored
+      dependency (`tinyxml2/tinyxml2.h` for the new XML reader; `nlohmann/json.hpp` had been
+      silently working only because this dev machine happens to have a system
+      `nlohmann-json3-dev` package) failed to compile in that config — fixed in
+      `CMakeLists.txt`, verified with a genuinely clean headers-only rebuild. Independently
+      line-reviewed the runtime `BitmapFont.cpp` glyph-enumeration/`FromFile`/`FromStream`
+      logic against upstream — exact match, including two genuine, deliberately-preserved
+      upstream inconsistencies (line-height increment omits `LineSpacing` for the
+      `string` overload but not the `StringBuilder` one; newline resets `positionDelta.X`
+      to `0` for the `string` iterator but to `position.X` for the `StringBuilder` one).
 - [x] `Animations/*` (`AnimationController`, `AnimationEvent`, `AnimationEventTrigger`,
       `IAnimationController`, `IAnimation`, `IAnimationFrame`) + root `AnimationComponent` —
       **COMPLETE (2026-07-13)**, ported in parallel with the Sprite/Texture2D chain above

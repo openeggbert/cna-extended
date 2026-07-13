@@ -48,36 +48,42 @@ deliberately deferred into Phase 5, see section 8).
 
 - **Build (linked config, `-DCNA_EXTENDED_LINK_CNA=ON`)**: clean. Last verified via a
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
-- **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: last verified
-  clean at commit `685cf5c`. **Not yet re-verified** against the current working tree,
-  which has additional uncommitted files since that commit (see below).
-- **Tests**: **1316/1316 passing** (`ctest`, linked config), against the current working
-  tree including uncommitted files.
+- **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean as of this
+  session. A real gap was found and fixed: the headers-only branch of `CMakeLists.txt`
+  never added `sharp-runtime/vendor` to the include path, so any header pulling in a
+  vendored third-party dependency (`tinyxml2/tinyxml2.h`, needed by the new BMFont XML
+  reader) failed to compile in this config — `nlohmann/json.hpp` had been silently working
+  only because this dev machine happens to have a system `nlohmann-json3-dev` package
+  installed, masking the same underlying gap. Fixed in `CMakeLists.txt`; verified with a
+  genuinely clean `rm -rf build-headers` rebuild afterward.
+- **Tests**: **1316/1316 passing** (`ctest`, linked config).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
-- **Recently implemented** (landed and committed on `develop`): `Graphics/Effects/*`
+- **Recently implemented and committed on `develop`**: `Graphics/Effects/*`
   (hand-authored GLSL `DefaultEffect`/`MatrixChainEffect`, since CNA's bytecode-based
   `Effect` constructor is unimplemented), the Sprite/Texture2D/SpriteSheet/NinePatch
-  cluster, the `Animations/*` module, `Content/TexturePacker/*` (direct-JSON atlas reader).
-- **Implemented but NOT YET COMMITTED** (present in the working tree only): the
-  `BitmapFonts` module — `Content/BitmapFonts/{BitmapFontFileContent,BitmapFontFileReader}`
-  (direct BMFont `.fnt` parser: binary/text/XML variants) and runtime `BitmapFonts/*`
-  (`BitmapFont`, `BitmapFontCharacter`, `BitmapFontExtensions`). Builds clean and its tests
-  pass as part of the 1316 total above, but has not been committed, pushed, or checked off
-  in `plan.md` yet.
+  cluster, the `Animations/*` module, `Content/TexturePacker/*` (direct-JSON atlas reader),
+  and now the `BitmapFonts` module — `Content/BitmapFonts/{BitmapFontFileContent,
+  BitmapFontFileReader}` (direct BMFont `.fnt` parser: binary/text/XML variants) and
+  runtime `BitmapFonts/*` (`BitmapFont`, `BitmapFontCharacter`, `BitmapFontExtensions`).
+  The runtime `BitmapFont.cpp` logic (glyph-enumeration iterators, `FromFile`/`FromStream`,
+  UTF-8 codepoint decoding) has been independently line-reviewed against upstream — exact
+  match, see section 3.
+- **Phase 5 ("Graphics, BitmapFonts & Animations") is now functionally complete except**:
+  `FadeTransition`/`ExpandTransition` (deferred into this phase from Phase 4, still blocked
+  on `ShapeExtensions.cs`), and the upstream test-directory ports for `Animations` (only
+  `AnimationTests.cs` remains unported) plus the deferred `Animations/*` member audit.
 - **Does not work / not done yet**:
   - `FadeTransition`/`ExpandTransition` (Screens) — blocked on `ShapeExtensions.cs`
     (`SpriteBatch::FillRectangle`), which is itself not yet ported.
-  - Upstream test-directory ports for this phase are incomplete: `Texture2DAtlasTests.cs`
-    is ported; `BitmapFontTests.cs`/`BitmapFontFileReaderTests.cs` are ported but
-    uncommitted; `Animations/AnimationTests.cs` is **not yet ported**.
+  - `Animations/AnimationTests.cs` (upstream) is **not yet ported**.
   - `Animations/*` has not yet had the deferred file-by-file member audit against upstream
     that the rest of this phase's modules received (only a spot-check was done when it
     landed).
   - No headless mock `SpriteBatch`/`ISpriteBatchBackend` test double exists anywhere in
     this ecosystem yet, so `SpriteBatch.Extensions`' `Draw`/`DrawString` methods (both in
-    the Sprite cluster and in the new, uncommitted `BitmapFontExtensions`) remain
-    call-compilable but behaviorally untested.
+    the Sprite cluster and in `BitmapFontExtensions`) remain call-compilable but
+    behaviorally untested.
 
 ---
 
@@ -92,47 +98,57 @@ deliberately deferred into Phase 5, see section 8).
   and is in scope).
 - Corrected a false compliance claim that had been written into `NEXT.md`'s own history by
   a prior automated contribution, and documented that incident (commit `bf61ade`).
-- Added (working tree only, **uncommitted**): `Content/BitmapFonts/*` and runtime
-  `BitmapFonts/*` — see section 2. 10 net-new tests (1306 → 1316).
-- Behavior note: `BitmapFontFileReader.cpp` treats `System::Xml::XmlNode::SelectSingleNode`'s
-  return value as a non-owning pointer, deliberately not following that method's own doc
-  comment (which says "caller takes ownership") — see section 5.
+- Rewrote `NEXT.md` from an append-only chronological log into this snapshot-style handoff
+  format, at the project owner's explicit request (commit `1dd0360`).
+- Added `Content/BitmapFonts/*` and runtime `BitmapFonts/*` (`BitmapFontFileContent`,
+  `BitmapFontFileReader`, `BitmapFont`, `BitmapFontCharacter`, `BitmapFontExtensions`) — 10
+  net-new tests (1306 → 1316). Independently verified this session: binary `.fnt` block
+  parser checked field-by-field against upstream's `[FieldOffset]` layouts (exact match);
+  runtime `BitmapFont.cpp` glyph-enumeration/`FromFile`/`FromStream` logic line-reviewed
+  against upstream (exact match, including two genuinely-preserved upstream
+  inconsistencies — see section 6); `BitmapFontExtensions::DrawString`'s core overload
+  spot-checked against upstream (exact match).
+- Found and fixed a real `cna-extended` CMake bug while re-verifying the headers-only
+  build: the headers-only branch never added `sharp-runtime/vendor` to the include path
+  (see section 2) — fixed in `CMakeLists.txt`.
+- Found (but, per the sibling-repo rule, did not fix) a real bug in `sharp-runtime`:
+  `System::Xml::XmlNode::SelectSingleNode`'s doc comment claims "caller takes ownership,"
+  but it actually returns a pointer into the live DOM tree — `BitmapFontFileReader.cpp`
+  treats the return value as non-owning instead. See section 5.
+- All of the above (BitmapFonts module + the CMake fix + `plan.md`/`NEXT.md` updates) is
+  committed and pushed on `develop` as of this update.
 
 ---
 
 ## 4. Current blocker / main problem
 
-There is **no build-breaking or test-failing blocker** right now — the last full build and
-test run were clean. The main open problem is a **verification and integration gap**, not a
-bug:
+There is **no build-breaking or test-failing blocker**, and no unresolved verification gap
+— the BitmapFonts module (previously this section's subject) is now fully verified,
+committed, and pushed. The main open item is simply **unfinished scope**, not a defect:
 
-- **Symptom**: the BitmapFonts module (5 header files, 5 source files, 2 test files, plus 4
-  `.fnt` fixture files) exists only as untracked files in the working tree. It has not
-  received the same level of independent line-by-line review that the binary `.fnt` block
-  parser received (only that specific piece was checked in detail so far); the runtime
-  `BitmapFont.cpp` logic (glyph enumeration iterators, `FromFile`/`FromStream` texture
-  loading, UTF-8 codepoint decoding) has not yet been independently re-verified.
-- **Failing command**: none — `cmake --build build -j$(nproc)` and `ctest --test-dir build`
-  both currently succeed.
-- **Affected files/modules**: `include/CNA/Extended/BitmapFonts/*`,
-  `include/CNA/Extended/Content/BitmapFonts/*`, `src/CNA/Extended/BitmapFonts/*`,
-  `src/CNA/Extended/Content/BitmapFonts/*`, `tests/CNA/Extended/BitmapFonts/*`.
-- **Suspected cause**: this is process/sequencing, not a defect — the work was produced by
-  a delegated sub-agent and intentionally left uncommitted pending independent review
-  (standing project discipline after two prior incidents where delegated work was committed
-  without authorization; see section 5).
-- **What has already been tried / done**: `git status` confirmed nothing was committed by
-  the sub-agent (compliant this time). The binary `.fnt` parser was checked field-by-field
-  against upstream's `[FieldOffset]` struct layouts and matches exactly. A real bug was
-  found and confirmed in `sharp-runtime`'s `XmlNode::SelectSingleNode` (see section 5) and
-  worked around correctly without editing the sibling repo. A clean full rebuild (linked
-  config) and full `ctest` run both passed. **Not yet done**: headers-only config rebuild;
-  line-level review of `BitmapFont.cpp`'s runtime logic; commit/push; `plan.md` update.
+- **Symptom**: none — `cmake --build build -j$(nproc)`, `cmake --build build-headers
+  -j$(nproc)`, and `ctest --test-dir build` all currently succeed.
+- **What remains in Phase 5**: `FadeTransition`/`ExpandTransition` (blocked on
+  `ShapeExtensions.cs`, not yet ported) and two `Animations/*` test/audit items (see
+  section 5). Neither blocks the other; neither blocks starting Phase 6.
+- **What has already been tried / done this session**: independently re-verified the
+  BitmapFonts module end-to-end (binary parser field-by-field, runtime glyph/FromFile/
+  FromStream logic line-by-line, `DrawString` spot-check — all exact matches against
+  upstream), found and fixed the headers-only CMake gap, found and documented (without
+  touching) the `sharp-runtime` `SelectSingleNode` bug, then committed and pushed
+  everything together.
+- See section 8 for the ordered list of what's next.
 
 ---
 
 ## 5. Known bugs and limitations
 
+- **FIXED this session**: `cna-extended`'s own headers-only CMake build branch never added
+  `sharp-runtime/vendor` to the include path, so any header pulling in a vendored
+  third-party dependency (`tinyxml2/tinyxml2.h`) failed to compile in that config. Fixed in
+  `CMakeLists.txt` by adding `target_include_directories(CNA_EXTENDED SYSTEM PUBLIC
+  ${CNA_EXTENDED_SHARP_RUNTIME_DIR}/vendor)` alongside the existing `include` dir, matching
+  the pattern `sharp-runtime`'s own CMakeLists.txt uses for its real `SHARP_RUNTIME` target.
 - **CONFIRMED bug, in a sibling repo (`sharp-runtime`), not this repo**:
   `System::Xml::XmlNode::SelectSingleNode`'s doc comment
   (`include/System/Xml/XmlNode.hpp`) states "Caller takes ownership," but the
@@ -144,8 +160,7 @@ bug:
   in this repo already works around it by treating `SelectSingleNode`'s return as
   non-owning. Worth reporting to whoever maintains `sharp-runtime` at some point.
 - **INCOMPLETE**: `FadeTransition`/`ExpandTransition` (Screens) not ported — blocked on
-  `ShapeExtensions.cs`/`SpriteBatch::FillRectangle`, itself not yet ported (see section 8,
-  task 5).
+  `ShapeExtensions.cs`/`SpriteBatch::FillRectangle`, itself not yet ported (see section 8).
 - **INCOMPLETE**: `Animations/*` module has not had its deferred file-by-file member audit
   against upstream C# (only a spot-check was done at landing time).
 - **INCOMPLETE**: `Animations/AnimationTests.cs` (upstream) not yet ported.
@@ -155,13 +170,6 @@ bug:
   `BitmapFontExtensions`) compiles but has zero behavioral test coverage.
   Real-GPU-only example programs under `cna/examples/` exist but are not part of the
   GoogleTest suite.
-- **NEEDS VERIFICATION**: headers-only CMake build config against the current working tree
-  (including the uncommitted BitmapFonts files) — last verified clean at an earlier commit,
-  not the current state.
-- **NEEDS VERIFICATION**: `BitmapFont.cpp`'s runtime logic beyond the binary block parser
-  (glyph enumeration, `FromFile`/`FromStream`, UTF-8 decoding) — only self-reported by the
-  sub-agent that produced it, not yet independently line-checked against upstream the way
-  the binary parser was.
 - **PROCESS RISK** (not a code bug, but load-bearing context for delegating future work):
   two delegated sub-agents in this project's history committed and pushed directly to
   `origin/develop` without authorization despite explicit contrary instructions (see
@@ -262,45 +270,57 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-1. **Re-verify the headers-only build against the current working tree.**
-   - Goal: confirm the uncommitted BitmapFonts files don't break the headers-only config.
-   - Files: none modified; verification only.
-   - Command: `cmake -S . -B build-headers -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=OFF && cmake --build build-headers -j$(nproc)` — expect exit 0, zero warnings.
-
-2. **Line-review `BitmapFont.cpp`'s runtime logic against upstream `BitmapFont.cs`.**
-   - Goal: give the glyph-enumeration iterators, `FromFile`/`FromStream`, and the UTF-8
-     codepoint decoder (`DecodeUtf8CodePointAt`) the same fidelity check already done for
-     the binary `.fnt` block parser.
-   - Files: `src/CNA/Extended/BitmapFonts/BitmapFont.cpp`, upstream
-     `MonoGame.Extended/BitmapFonts/BitmapFont.cs`.
-   - Command: no code change expected if it checks out; if a fix is needed, re-run
-     `ctest --test-dir build -R BitmapFont`.
-
-3. **Commit, push, and check off the BitmapFonts work in `plan.md`.**
-   - Goal: land the verified module on `develop` and update the plan's Phase 5 checklist.
-   - Files: `include/CNA/Extended/BitmapFonts/*`, `include/CNA/Extended/Content/BitmapFonts/*`,
-     `src/CNA/Extended/BitmapFonts/*`, `src/CNA/Extended/Content/BitmapFonts/*`,
-     `tests/CNA/Extended/BitmapFonts/*`, `plan.md`.
-   - Command: `git log --oneline -3` should show the new commit(s); `git push` should
-     succeed; `ctest --test-dir build` should still be 100% passing afterward.
-
-4. **Port `Animations/AnimationTests.cs` and audit `Animations/*` against upstream.**
+1. **Port `Animations/AnimationTests.cs` and audit `Animations/*` against upstream.**
    - Goal: close the two open items noted against the `Animations/*` module in `plan.md`.
    - Files: `tests/CNA/Extended/Animations/*`, upstream
      `tests/MonoGame.Extended.Tests/Animations/AnimationTests.cs`,
      `include/CNA/Extended/Animations/*`, `src/CNA/Extended/Animations/*`.
    - Command: `ctest --test-dir build -R Animation` — expect 100% passing.
 
-5. **Port `Math/ShapeExtensions.cs` (Phase-5-scoped despite its upstream folder), then
+2. **Port `Math/ShapeExtensions.cs` (Phase-5-scoped despite its upstream folder), then
    `FadeTransition`/`ExpandTransition`.**
    - Goal: unblock the two deferred Screen transitions, which need
-     `SpriteBatch::FillRectangle`.
+     `SpriteBatch::FillRectangle`. Completes Phase 5.
    - Files: new `include/src/CNA/Extended/Graphics/ShapeExtensions.*` (or wherever
      `plan.md` currently scopes it — check first), then
      `include/CNA/Extended/Screens/Transitions/{FadeTransition,ExpandTransition}.hpp`
      + matching `.cpp`, upstream `Screens/Transitions/{FadeTransition,ExpandTransition}.cs`.
    - Command: `ctest --test-dir build -R Transition` — expect 100% passing; both CMake
      configs stay clean.
+
+3. **Phase 6 — Serialization**: `Serialization/*` (JSON converters — check
+   `sharp-runtime`'s `System::Text::Json` coverage first and reuse rather than hand-rolling
+   a parallel layer), `Serialization/Xml/*`, plus upstream
+   `tests/MonoGame.Extended.Tests/Serialization/**`.
+   - Command: `ctest --test-dir build -R Serialization` — expect 100% passing; both CMake
+     configs stay clean.
+
+4. **Phase 7 — Tilemaps** (the largest module: 121+22 files; depends on Phases 1, 5, 6).
+   Core `Tilemap`/`TilemapData`/`TilemapFactory`/etc., `TilemapLayers/*`,
+   `TilemapObjects/*`, `Rendering/*`, `Properties/*`, `Tiled/*` (TMX/JSON — priority, per
+   `plan.md`, given the user's existing `tiled-blupi` project), `LDtk/*`, `Ogmo/*`,
+   `Parsers/*`. Skip `Tilemaps/Content/*Reader` (xnb-based). Large enough to warrant
+   delegating to sub-agent forks (user-approved this session, with the standing safeguard:
+   forks never commit, orchestrator verifies then commits).
+   - Command: `ctest --test-dir build -R Tilemap` — expect 100% passing; both CMake
+     configs stay clean.
+
+5. **Phase 8 — Particles** (depends on Phases 1, 5). Core `ParticleEffect`/
+   `ParticleEmitter`/`ParticleBuffer`/`ParticleIterator`/`ParticleRenderingOrder`, plus
+   remaining `Particles/**` (profiles, modifiers, primitives — 47 files total, enumerate
+   exact list at implementation time). Skip `ParticleEffectContentReader.cs` (xnb-based).
+   - Command: `ctest --test-dir build -R Particle` — expect 100% passing; both CMake
+     configs stay clean.
+
+6. **Phase 9 — ECS** (depends on Phase 1; reuse `Bag<T>` from Collections, confirm and
+   reuse rather than re-rolling). `World`/`WorldBuilder`/`Entity`/`EntityManager`,
+   `Aspect`/`AspectBuilder`/`ComponentType`/`ComponentBits`/`ComponentManager`/
+   `ComponentMapper`/`BitArrayExtensions`, `EntitySubscription`, `Systems/*`.
+   - Command: `ctest --test-dir build -R ECS` (or the actual GoogleTest suite name once
+     ported) — expect 100% passing; both CMake configs stay clean.
+
+Phase 10 (integration, polish, documentation) follows once Phases 6–9 are done — not
+detailed here since its scope depends on what those phases actually produce.
 
 ---
 
@@ -314,10 +334,17 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 - No editing sibling repositories (`../cna`, `../sharp-runtime`, `../easy-3d`) — this
   includes the confirmed `sharp-runtime` `SelectSingleNode` doc-comment bug in section 5;
   report/ask, don't silently fix it there.
-- No committing or pushing the current BitmapFonts work until tasks 1–2 above are done.
-- No skipping ahead to Phase 6+ (Serialization/Tilemaps/Particles/ECS) before Phase 5's
-  remaining items are finished — the phase order in `plan.md` is dependency-ordered on
-  purpose.
+- No skipping the ordered dependency chain within `plan.md` (e.g. don't start Phase 7
+  Tilemaps' `Tiled/*` before Phase 6 Serialization lands, since TMX/JSON parsing needs it).
+  Phase 5's two small remaining items (task 1–2 above) don't block starting Phase 6 in
+  parallel if that's ever useful, but finish them before considering Phase 5 "done."
+- Long unattended autonomous session in progress (owner authorized, unavailable for
+  hours): keep pushing verified work directly to `develop` after each task (owner's
+  explicit choice), keep using sub-agent forks for large modules under the verify-then-
+  commit-myself safeguard (also the owner's explicit choice) — do not re-ask either
+  question. Do not use `AskUserQuestion` for anything else during this stretch either;
+  mark anything that genuinely needs a human call as blocked/`needs_human` in this file
+  instead and move to other independent work.
 - No mass-reconstruction of this file's old chronological log format — the history is
   preserved in git, not duplicated here.
 
