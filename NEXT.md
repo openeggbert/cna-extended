@@ -6,6 +6,65 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (2) — Color helpers ported (Phase 1 task 6); user corrected the check-in cadence
+
+The user asked "proč jsi se zastavil a autonomně nepokracoval" (why did you stop instead of
+continuing autonomously) after the previous check-in. Correction applied: stop pausing to
+report progress between tasks — that's not the same as being blocked, and it was making the
+user wait/prompt "pokracuj" each time despite having explicitly set up this session for
+autonomous, unattended operation. **From here on: keep working through `plan.md`'s task
+list without stopping for status updates. Only stop for a genuine blocker** — something
+that needs the user's judgment (like the `MulticastAction` extension question earlier this
+session), not "a task finished." If resuming this session, keep applying that correction.
+
+**Ported directly (~620 lines, no fork needed)**: `ColorExtensions` (the `ToHex` extension
+method → free function), `ColorHelper` (`FromHex`/`FromName`/`FromAbgr`), `HslColor` (full
+HSL color type with RGB conversion). Two dependency resolutions, both handled without
+deferring anything:
+- `ColorHelper`'s name→`Color` lookup table is built via C# reflection upstream
+  (`typeof(Color).GetRuntimeProperties()`) — no C++ equivalent, so it's a hand-written
+  table instead. Script-generated from CNA's `Color.hpp` (`grep -oP` for all
+  `static const Color X` declarations) to get all 141 entries correct rather than
+  transcribing by hand — cross-check tooling like this is worth reaching for whenever a
+  port needs a complete enumeration of something.
+- `HslColor::ToRgb` references `MathExtended.MachineEpsilon`, which isn't ported yet
+  (next task). Checked its actual value first (`1.19209290e-7f` — exactly the standard
+  IEEE-754 float epsilon) before deciding: this is a trivial constant
+  (`std::numeric_limits<float>::epsilon()`), not an algorithm, so used the standard-library
+  equivalent directly rather than deferring or duplicating a magic number. Same judgment
+  call category as `Collision2D::Epsilon` earlier, just resolved even more cleanly since a
+  real standard-library equivalent existed this time.
+
+**Real bug the build caught**: `ColorHelper::FromAbgr` tried to construct a `Color` from a
+packed `uint32`, matching upstream — but CNA's `Color(UInt32)` constructor is **private**
+(unlike upstream's public one). Reworked to decompose the packed value into R/G/B/A ints
+and use the public 4-int constructor instead; same resulting color. Also caught and fixed a
+genuine test bug of my own: my first draft of the `FromAbgr` test had R and B swapped
+(computed `rgba` packing order backwards) — worth remembering that a wrong *test* is just
+as real a bug as a wrong *implementation*, and building+running is what caught it, not
+inspection.
+
+**Test coverage**: unlike the last three tasks, all upstream tests were portable this time
+(no `Collision2D` dependency) — ported `ColorExtensionsTests.cs`/`ColorHelperTests.cs`/
+`HslColorTests.cs` **1:1**, using GoogleTest `TEST_P`/`INSTANTIATE_TEST_SUITE_P` for the
+xUnit `[Theory]`/`[InlineData]` cases (first use of parameterized tests in this project;
+matches xUnit's per-row reporting granularity better than folding rows into one `TEST`
+with a loop). One upstream sub-test (`AreEqualObjectMethod.WhenGivenObjectOfAntotherType_
+ReturnsFalse`, comparing against a boxed `DateTime` via the object-typed `Equals`) has no
+C++ equivalent and was skipped, matching the established `object obj`-overload precedent.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 180/180** (was 138
+before this task).
+
+**State / next step:** Phase 1 is 6 of ~20 tasks in. Next per `plan.md` §5 Phase 1:
+`MathExtended`, `FloatHelper`, `Angle`. Keep applying the established workflow (check real
+C# dependencies first, fork only for genuinely large reads ~300+ lines, independently
+verify a fork's `Equals`/`GetHashCode` claims via `grep`, build+test both modes before
+every commit, one `plan.md` task = one commit) — and, per the correction above, keep going
+through the list without pausing to check in.
+
+---
+
 ## 2026-07-13 (1) — Camera<T> ported, OrthographicCamera deferred to Phase 3 (Phase 1 task 5)
 
 Continued from session (5) after another "pokracuj". Small enough (144-line `Camera.cs`)

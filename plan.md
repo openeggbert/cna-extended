@@ -199,7 +199,23 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       **Phase 3** ("Input, Timers, Tweening, ViewportAdapters, VectorDraw"), not this phase.
       Port `OrthographicCamera` immediately after `ViewportAdapters` lands in Phase 3, not
       standalone.
-- [ ] Color helpers: `ColorExtensions`, `ColorHelper`, `HslColor`
+- [x] Color helpers: `ColorExtensions`, `ColorHelper`, `HslColor` (2026-07-13) — ported
+      directly (no fork needed, ~620 lines total). `ColorHelper`'s name→`Color` lookup table
+      is built via reflection upstream (`typeof(Color).GetRuntimeProperties()`); C++ has no
+      runtime reflection, so it's a hand-written (script-generated from CNA's `Color.hpp`,
+      cross-checked at 141 entries) static table instead, with lower-cased keys for
+      case-insensitive lookup (matches upstream's `StringComparer.OrdinalIgnoreCase`).
+      `HslColor::ToRgb`'s `MathExtended.MachineEpsilon` reference resolved directly via
+      `std::numeric_limits<float>::epsilon()` (the exact same value,
+      `1.19209290e-7f`) rather than deferring on the not-yet-ported `MathExtended` — a
+      trivial constant, not an algorithm, matching the established "duplicate the trivial"
+      pattern. All upstream tests ported 1:1 this time (no `Collision2D` dependency to work
+      around): `ColorExtensionsTests.cs`/`ColorHelperTests.cs`/`HslColorTests.cs` in full,
+      via GoogleTest `TEST_P`/`INSTANTIATE_TEST_SUITE_P` for the `[Theory]`/`[InlineData]`
+      cases. One real bug caught by the build: `ColorHelper::FromAbgr` couldn't use CNA's
+      `Color(UInt32)` constructor (private in CNA, unlike upstream's public one) — reworked
+      to decompose into R/G/B/A components and use the public 4-int constructor instead,
+      same resulting color.
 - [ ] `MathExtended`, `FloatHelper`, `Angle`
 - [ ] `RectangleF`, `Rectangle.Extensions`, `RectangleF.Extensions`, `BoundingRectangle`,
       `OrientedRectangle`
