@@ -20,9 +20,9 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase**: Phase 5 of 10 — "Graphics, BitmapFonts & Animations" — nearly complete.
-Phases 0–4 are complete (Phase 4 is marked "mostly complete": two Screen transitions were
-deliberately deferred into Phase 5, see section 8).
+**Current phase**: Phase 5 of 10 — "Graphics, BitmapFonts & Animations" — complete except
+one item (`FadeTransition`/`ExpandTransition`, blocked on `ShapeExtensions.cs`; see section
+8, task 1). Phases 0–4 are otherwise complete.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -69,17 +69,15 @@ deliberately deferred into Phase 5, see section 8).
   The runtime `BitmapFont.cpp` logic (glyph-enumeration iterators, `FromFile`/`FromStream`,
   UTF-8 codepoint decoding) has been independently line-reviewed against upstream — exact
   match, see section 3.
-- **Phase 5 ("Graphics, BitmapFonts & Animations") is now functionally complete except**:
+- **Phase 5 ("Graphics, BitmapFonts & Animations") is now complete except**:
   `FadeTransition`/`ExpandTransition` (deferred into this phase from Phase 4, still blocked
-  on `ShapeExtensions.cs`), and the upstream test-directory ports for `Animations` (only
-  `AnimationTests.cs` remains unported) plus the deferred `Animations/*` member audit.
+  on `ShapeExtensions.cs`, itself not yet ported). Everything else — including the
+  `Animations/*` member audit and its upstream test port — turned out to already be done;
+  see section 3.
 - **Does not work / not done yet**:
   - `FadeTransition`/`ExpandTransition` (Screens) — blocked on `ShapeExtensions.cs`
-    (`SpriteBatch::FillRectangle`), which is itself not yet ported.
-  - `Animations/AnimationTests.cs` (upstream) is **not yet ported**.
-  - `Animations/*` has not yet had the deferred file-by-file member audit against upstream
-    that the rest of this phase's modules received (only a spot-check was done when it
-    landed).
+    (`SpriteBatch::FillRectangle`), which is itself not yet ported. This is the only
+    remaining item before Phase 5 can be marked fully complete and Phase 6 started.
   - No headless mock `SpriteBatch`/`ISpriteBatchBackend` test double exists anywhere in
     this ecosystem yet, so `SpriteBatch.Extensions`' `Draw`/`DrawString` methods (both in
     the Sprite cluster and in `BitmapFontExtensions`) remain call-compilable but
@@ -116,7 +114,17 @@ deliberately deferred into Phase 5, see section 8).
   but it actually returns a pointer into the live DOM tree — `BitmapFontFileReader.cpp`
   treats the return value as non-owning instead. See section 5.
 - All of the above (BitmapFonts module + the CMake fix + `plan.md`/`NEXT.md` updates) is
-  committed and pushed on `develop` as of this update.
+  committed and pushed on `develop` (commit `6f32c0d`).
+- Completed the deferred `Animations/*` file-by-file member audit against upstream: all 7
+  files (`IAnimation`, `IAnimationFrame`, `IAnimationController`, `AnimationController`,
+  `AnimationEvent`, `AnimationEventTrigger`, `AnimationComponent`) checked member-by-member
+  — exact match throughout, no discrepancies found.
+- Discovered `Animations/AnimationTests.cs` was **already** fully ported (all 15 upstream
+  `[Fact]` tests present 1:1 in `tests/CNA/Extended/Animations/AnimationControllerTests.cpp`
+  as `TEST_F` fixtures) — the `plan.md` checkbox had just never been marked done. Corrected
+  after independently re-verifying all 15 tests pass and match upstream one-to-one.
+- Phase 5 is now complete except `FadeTransition`/`ExpandTransition` (blocked on
+  `ShapeExtensions.cs`, not yet ported) — see section 8.
 
 ---
 
@@ -161,9 +169,7 @@ committed, and pushed. The main open item is simply **unfinished scope**, not a 
   non-owning. Worth reporting to whoever maintains `sharp-runtime` at some point.
 - **INCOMPLETE**: `FadeTransition`/`ExpandTransition` (Screens) not ported — blocked on
   `ShapeExtensions.cs`/`SpriteBatch::FillRectangle`, itself not yet ported (see section 8).
-- **INCOMPLETE**: `Animations/*` module has not had its deferred file-by-file member audit
-  against upstream C# (only a spot-check was done at landing time).
-- **INCOMPLETE**: `Animations/AnimationTests.cs` (upstream) not yet ported.
+  This is the only remaining Phase 5 item.
 - **INCOMPLETE / architectural gap, not specific to this phase**: no headless
   `SpriteBatch`/`ISpriteBatchBackend` mock exists anywhere in this ecosystem, so every
   `SpriteBatch`-drawing extension method ported so far (`SpriteBatch.Extensions`,
@@ -258,7 +264,7 @@ Run the GoogleTest binary directly (more verbose output than ctest):
 ./build/CnaExtendedTests
 ```
 
-Check for uncommitted work (currently the BitmapFonts module):
+Check for uncommitted work:
 ```
 git status
 ```
@@ -270,14 +276,7 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-1. **Port `Animations/AnimationTests.cs` and audit `Animations/*` against upstream.**
-   - Goal: close the two open items noted against the `Animations/*` module in `plan.md`.
-   - Files: `tests/CNA/Extended/Animations/*`, upstream
-     `tests/MonoGame.Extended.Tests/Animations/AnimationTests.cs`,
-     `include/CNA/Extended/Animations/*`, `src/CNA/Extended/Animations/*`.
-   - Command: `ctest --test-dir build -R Animation` — expect 100% passing.
-
-2. **Port `Math/ShapeExtensions.cs` (Phase-5-scoped despite its upstream folder), then
+1. **Port `Math/ShapeExtensions.cs` (Phase-5-scoped despite its upstream folder), then
    `FadeTransition`/`ExpandTransition`.**
    - Goal: unblock the two deferred Screen transitions, which need
      `SpriteBatch::FillRectangle`. Completes Phase 5.
@@ -288,14 +287,14 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
    - Command: `ctest --test-dir build -R Transition` — expect 100% passing; both CMake
      configs stay clean.
 
-3. **Phase 6 — Serialization**: `Serialization/*` (JSON converters — check
+2. **Phase 6 — Serialization**: `Serialization/*` (JSON converters — check
    `sharp-runtime`'s `System::Text::Json` coverage first and reuse rather than hand-rolling
    a parallel layer), `Serialization/Xml/*`, plus upstream
    `tests/MonoGame.Extended.Tests/Serialization/**`.
    - Command: `ctest --test-dir build -R Serialization` — expect 100% passing; both CMake
      configs stay clean.
 
-4. **Phase 7 — Tilemaps** (the largest module: 121+22 files; depends on Phases 1, 5, 6).
+3. **Phase 7 — Tilemaps** (the largest module: 121+22 files; depends on Phases 1, 5, 6).
    Core `Tilemap`/`TilemapData`/`TilemapFactory`/etc., `TilemapLayers/*`,
    `TilemapObjects/*`, `Rendering/*`, `Properties/*`, `Tiled/*` (TMX/JSON — priority, per
    `plan.md`, given the user's existing `tiled-blupi` project), `LDtk/*`, `Ogmo/*`,
@@ -305,14 +304,14 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
    - Command: `ctest --test-dir build -R Tilemap` — expect 100% passing; both CMake
      configs stay clean.
 
-5. **Phase 8 — Particles** (depends on Phases 1, 5). Core `ParticleEffect`/
+4. **Phase 8 — Particles** (depends on Phases 1, 5). Core `ParticleEffect`/
    `ParticleEmitter`/`ParticleBuffer`/`ParticleIterator`/`ParticleRenderingOrder`, plus
    remaining `Particles/**` (profiles, modifiers, primitives — 47 files total, enumerate
    exact list at implementation time). Skip `ParticleEffectContentReader.cs` (xnb-based).
    - Command: `ctest --test-dir build -R Particle` — expect 100% passing; both CMake
      configs stay clean.
 
-6. **Phase 9 — ECS** (depends on Phase 1; reuse `Bag<T>` from Collections, confirm and
+5. **Phase 9 — ECS** (depends on Phase 1; reuse `Bag<T>` from Collections, confirm and
    reuse rather than re-rolling). `World`/`WorldBuilder`/`Entity`/`EntityManager`,
    `Aspect`/`AspectBuilder`/`ComponentType`/`ComponentBits`/`ComponentManager`/
    `ComponentMapper`/`BitArrayExtensions`, `EntitySubscription`, `Systems/*`.

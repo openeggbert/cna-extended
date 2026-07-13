@@ -838,9 +838,13 @@ Depends on Phase 1; needs CNA's `GameComponent`/`Game`.
       overloads. Nothing to port yet for `FadeTransition`/`ExpandTransition` since they're
       deferred. 1218 tests passing total for the whole project.
 
-### Phase 5 — Graphics, BitmapFonts & Animations
+### Phase 5 — Graphics, BitmapFonts & Animations — **MOSTLY COMPLETE (2026-07-13)**
 
-Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`.
+Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`. Every item
+below is done; the only remaining Phase-5-scoped work is `Math/ShapeExtensions.cs`
+(`SpriteBatch::FillRectangle` and friends — see Phase 1's `PrimitivesHelper` entry for why
+it's scoped here despite its upstream folder), needed to unblock Phase 4's deferred
+`FadeTransition`/`ExpandTransition`.
 
 - [x] `Graphics/Effects/*` (custom `Effect` wrapper) — **COMPLETE (2026-07-13)**.
       **Confirmed the flagged design question was real**: CNA's `Effect(GraphicsDevice&,
@@ -919,12 +923,23 @@ Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`
       `IAnimationController`, `IAnimation`, `IAnimationFrame`) + root `AnimationComponent` —
       **COMPLETE (2026-07-13)**, ported in parallel with the Sprite/Texture2D chain above
       (confirmed independent via grep before parallelizing: zero references from Animations/*
-      into the Sprite cluster at the time). Verified via successful integration (builds clean
-      in both linked and headers-only configs, 100% of `ctest` passes with these files
-      included) and a spot read of `AnimationComponent.hpp` against upstream
-      `AnimationComponent.cs` — not yet given the same file-by-file member-audit pass as the
-      rest of this phase; worth a closer read later if time allows.
-- [ ] Port `tests/MonoGame.Extended.Tests/{Graphics,BitmapFonts,Animations}`
+      into the Sprite cluster at the time). **Full file-by-file member audit against upstream
+      now done** (deferred at landing time, completed this session): all 7 files
+      (`IAnimation`, `IAnimationFrame`, `IAnimationController`, `AnimationController`,
+      `AnimationEvent`, `AnimationEventTrigger`, `AnimationComponent`) checked member-by-member
+      against their upstream `.cs` counterparts — exact match throughout, including the
+      correctly-preserved observation that `AnimationEvent` is itself unused within the module
+      (upstream raises `OnAnimationEvent` as a raw `Action`, never constructs an
+      `AnimationEvent` instance) and `AnimationComponent`'s reverse-iteration + prune-disposed
+      `Update()` pattern.
+- [x] Port `tests/MonoGame.Extended.Tests/{Graphics,BitmapFonts,Animations}` — **COMPLETE**.
+      `Texture2DAtlasTests.cs` (Graphics) and `BitmapFontTests.cs`/`BitmapFontFileReaderTests.cs`
+      (BitmapFonts) ported as their own files; `Animations/AnimationTests.cs` turned out to
+      already be fully ported (all 15 `[Fact]` tests present 1:1 in
+      `tests/CNA/Extended/Animations/AnimationControllerTests.cpp`, as `TEST_F` fixtures rather
+      than flat `TEST`s — a deliberate, documented GoogleTest idiom choice, not a gap) — this
+      checkbox was simply never marked done despite the work existing; corrected this session
+      after re-reading the file and confirming all 15 tests match upstream one-to-one.
 
 ### Phase 6 — Serialization
 
