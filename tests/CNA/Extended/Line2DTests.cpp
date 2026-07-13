@@ -2,15 +2,21 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Upstream's LIne2DTest.cs (13 test methods) exercises both self-contained behavior and the
-// Collision2D-dependent Intersects(Ray2D/LineSegment2D/BoundingBox2D/OrientedBoundingBox2D/
-// BoundingPolygon2D) overloads deferred in Line2D.hpp. These tests cover what's actually ported:
-// construction, DistanceToPoint, ClosestPoint, Normalize, Intersects(Line2D)/Intersects
-// (BoundingCircle2D)/Intersects(BoundingCapsule2D), Deconstruct, Equals/GetHashCode/ToString.
+// Upstream's LIne2DTest.cs (13 test methods) exercises only the self-contained behavior: it never
+// tests Intersects(Ray2D)/Intersects(LineSegment2D)/Intersects(BoundingBox2D)/
+// Intersects(OrientedBoundingBox2D)/Intersects(BoundingPolygon2D). Those overloads are ported
+// below (now that Collision2D exists) with fresh tests -- one true case and one false case per
+// overload, spot-checking the delegation rather than re-deriving Collision2D's own algorithm
+// correctness (already covered exhaustively by Collision2DTests.cpp).
 #include "CNA/Extended/Line2D.hpp"
 
+#include "CNA/Extended/BoundingBox2D.hpp"
 #include "CNA/Extended/BoundingCapsule2D.hpp"
 #include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
+#include "CNA/Extended/LineSegment2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
+#include "CNA/Extended/Ray2D.hpp"
 
 #include <gtest/gtest.h>
 
@@ -151,5 +157,85 @@ namespace CNA::Extended
         const std::string text = line.ToString();
         EXPECT_NE(text.find("Normal"), std::string::npos);
         EXPECT_NE(text.find("Distance"), std::string::npos);
+    }
+
+    TEST(Line2DTests, IntersectsRayInForwardDirection)
+    {
+        const Line2D line(Vector2(1, 0), 5.0f); // X = 5
+        const Ray2D ray(Vector2(0, 0), Vector2(1, 0));
+        std::optional<float> distanceAlongRay;
+        std::optional<Vector2> point;
+        EXPECT_TRUE(line.Intersects(ray, distanceAlongRay, point));
+        ASSERT_TRUE(distanceAlongRay.has_value());
+        EXPECT_NEAR(*distanceAlongRay, 5.0f, 1e-4f);
+    }
+
+    TEST(Line2DTests, IntersectsRayBehindOriginReturnsFalse)
+    {
+        const Line2D line(Vector2(1, 0), -5.0f); // X = -5
+        const Ray2D ray(Vector2(0, 0), Vector2(1, 0));
+        EXPECT_FALSE(line.Intersects(ray));
+    }
+
+    TEST(Line2DTests, IntersectsLineSegmentCrossingBounds)
+    {
+        const Line2D line(Vector2(1, 0), 0.0f); // X = 0
+        const LineSegment2D segment(Vector2(-5, 0), Vector2(5, 0));
+        std::optional<float> distanceAlongSegment;
+        std::optional<Vector2> point;
+        EXPECT_TRUE(line.Intersects(segment, distanceAlongSegment, point));
+        ASSERT_TRUE(distanceAlongSegment.has_value());
+        EXPECT_NEAR(*distanceAlongSegment, 0.5f, 1e-4f);
+    }
+
+    TEST(Line2DTests, IntersectsLineSegmentOutsideBoundsReturnsFalse)
+    {
+        const Line2D line(Vector2(1, 0), 10.0f); // X = 10
+        const LineSegment2D segment(Vector2(-5, 0), Vector2(5, 0));
+        EXPECT_FALSE(line.Intersects(segment));
+    }
+
+    TEST(Line2DTests, IntersectsBoundingBoxPassingThrough)
+    {
+        const Line2D line(Vector2(0, 1), 0.0f); // Y = 0
+        const BoundingBox2D box(Vector2(-1, -1), Vector2(1, 1));
+        EXPECT_TRUE(line.Intersects(box));
+    }
+
+    TEST(Line2DTests, IntersectsBoundingBoxMissReturnsFalse)
+    {
+        const Line2D line(Vector2(0, 1), 10.0f); // Y = 10
+        const BoundingBox2D box(Vector2(-1, -1), Vector2(1, 1));
+        EXPECT_FALSE(line.Intersects(box));
+    }
+
+    TEST(Line2DTests, IntersectsOrientedBoundingBoxPassingThrough)
+    {
+        const Line2D line(Vector2(0, 1), 0.0f); // Y = 0
+        const OrientedBoundingBox2D obb(Vector2(0, 0), Vector2::UnitX, Vector2::UnitY, Vector2(1, 1));
+        EXPECT_TRUE(line.Intersects(obb));
+    }
+
+    TEST(Line2DTests, IntersectsOrientedBoundingBoxMissReturnsFalse)
+    {
+        const Line2D line(Vector2(0, 1), 10.0f); // Y = 10
+        const OrientedBoundingBox2D obb(Vector2(0, 0), Vector2::UnitX, Vector2::UnitY, Vector2(1, 1));
+        EXPECT_FALSE(line.Intersects(obb));
+    }
+
+    TEST(Line2DTests, IntersectsBoundingPolygonPassingThrough)
+    {
+        const Line2D line(Vector2(0, 1), 0.0f); // Y = 0
+        const BoundingPolygon2D polygon =
+            BoundingPolygon2D::CreateFromVertices({Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)});
+        EXPECT_TRUE(line.Intersects(polygon));
+    }
+
+    TEST(Line2DTests, IntersectsBoundingPolygonMissReturnsFalse)
+    {
+        const Line2D line(Vector2(0, 1), 10.0f); // Y = 10
+        const BoundingPolygon2D polygon =
+            BoundingPolygon2D::CreateFromVertices({Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)});
+        EXPECT_FALSE(line.Intersects(polygon));
     }
 }

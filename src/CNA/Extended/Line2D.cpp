@@ -3,22 +3,22 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/Line2D.hpp"
 
+#include "CNA/Extended/BoundingBox2D.hpp"
 #include "CNA/Extended/BoundingCapsule2D.hpp"
 #include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
+#include "CNA/Extended/Collision2D.hpp"
+#include "CNA/Extended/LineSegment2D.hpp"
+#include "CNA/Extended/OrientedBoundingBox2D.hpp"
+#include "CNA/Extended/Ray2D.hpp"
 
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 
 namespace CNA::Extended
 {
-    namespace
-    {
-        // Duplicates MonoGame.Extended's Collision2D.Epsilon (Collision2D.cs:44), which is not yet
-        // ported (scheduled for Phase 2). Point this at Collision2D::Epsilon once that lands.
-        constexpr float kCollision2DEpsilonPending = 1e-6f;
-    }
-
     Line2D::Line2D(const Vector2& normal, const float distance) : Distance(distance), Normal(normal)
     {
     }
@@ -35,7 +35,7 @@ namespace CNA::Extended
         const Vector2 direction = p2 - p1;
         const float lengthSquared = direction.LengthSquared();
 
-        if (lengthSquared < kCollision2DEpsilonPending * kCollision2DEpsilonPending)
+        if (lengthSquared < Collision2D::Epsilon * Collision2D::Epsilon)
         {
             throw std::invalid_argument("Points must be distinct to define a line.");
         }
@@ -68,7 +68,7 @@ namespace CNA::Extended
         // Applied to an infinite line (no clamping of t), as described by Ericson.
         const Vector2 n = Normal;
         const float nn = Vector2::Dot(n, n);
-        if (nn <= kCollision2DEpsilonPending)
+        if (nn <= Collision2D::Epsilon)
         {
             // Degenerate line, normal has no meaningful direction. Treat line as a single point.
             distanceAlongLine = 0.0f;
@@ -98,7 +98,7 @@ namespace CNA::Extended
     void Line2D::Normalize(const Line2D& value, Line2D& result)
     {
         const float length = value.Normal.Length();
-        if (length < kCollision2DEpsilonPending)
+        if (length < Collision2D::Epsilon)
         {
             result = value;
             return;
@@ -110,7 +110,7 @@ namespace CNA::Extended
     void Line2D::Normalize()
     {
         const float length = Normal.Length();
-        if (length > kCollision2DEpsilonPending)
+        if (length > Collision2D::Epsilon)
         {
             Normal = Normal / length;
             Distance = Distance / length;
@@ -121,7 +121,7 @@ namespace CNA::Extended
     {
         // Use implicit line representation and Cramer's rule to solve a 2D line-line intersection
         const float cross = Normal.X * other.Normal.Y - Normal.Y * other.Normal.X;
-        if (std::abs(cross) < kCollision2DEpsilonPending)
+        if (std::abs(cross) < Collision2D::Epsilon)
         {
             // Lines are parallel or coincident
             point = std::nullopt;
@@ -138,6 +138,69 @@ namespace CNA::Extended
     {
         std::optional<Vector2> point;
         return Intersects(other, point);
+    }
+
+    bool Line2D::Intersects(const Ray2D& ray, std::optional<float>& distanceAlongRay, std::optional<Vector2>& point) const
+    {
+        float t = 0.0f;
+        if (!Collision2D::SolveParametricIntersectionWithImplicitLine(Normal, Distance, ray.Origin, ray.Direction, t))
+        {
+            // Parallel or coincident
+            distanceAlongRay = std::nullopt;
+            point = std::nullopt;
+            return false;
+        }
+
+        // Ray only intersects in forward direction
+        if (t < 0.0f)
+        {
+            distanceAlongRay = std::nullopt;
+            point = std::nullopt;
+            return false;
+        }
+
+        distanceAlongRay = t;
+        point = ray.Origin + t * ray.Direction;
+        return true;
+    }
+
+    bool Line2D::Intersects(const Ray2D& ray) const
+    {
+        std::optional<float> distanceAlongRay;
+        std::optional<Vector2> point;
+        return Intersects(ray, distanceAlongRay, point);
+    }
+
+    bool Line2D::Intersects(const LineSegment2D& segment, std::optional<float>& distanceAlongSegment, std::optional<Vector2>& point) const
+    {
+        const Vector2 ab = segment.End - segment.Start;
+
+        float t = 0.0f;
+        if (!Collision2D::SolveParametricIntersectionWithImplicitLine(Normal, Distance, segment.Start, ab, t))
+        {
+            distanceAlongSegment = std::nullopt;
+            point = std::nullopt;
+            return false;
+        }
+
+        // Check if the intersection is within the segment bounds
+        if (t < 0.0f || t > 1.0f)
+        {
+            distanceAlongSegment = std::nullopt;
+            point = std::nullopt;
+            return false;
+        }
+
+        distanceAlongSegment = t;
+        point = segment.Start + t * ab;
+        return true;
+    }
+
+    bool Line2D::Intersects(const LineSegment2D& segment) const
+    {
+        std::optional<float> distanceAlongSegment;
+        std::optional<Vector2> point;
+        return Intersects(segment, distanceAlongSegment, point);
     }
 
     bool Line2D::Intersects(const BoundingCircle2D& circle) const
@@ -170,7 +233,7 @@ namespace CNA::Extended
         const Vector2 segmentDir = capsule.PointB - capsule.PointA;
         const float segmentLenSq = segmentDir.LengthSquared();
 
-        if (segmentLenSq > kCollision2DEpsilonPending * kCollision2DEpsilonPending)
+        if (segmentLenSq > Collision2D::Epsilon * Collision2D::Epsilon)
         {
             // If endpoints are on opposite sides of the line, the segment crosses it
             if (signedDistA * signedDistB <= 0.0f)
@@ -183,6 +246,74 @@ namespace CNA::Extended
         return minDistSq <= capsule.Radius * capsule.Radius;
     }
 
+    bool Line2D::Intersects(const BoundingBox2D& box) const
+    {
+        const Vector2 n = Normal;
+        const float nn = Vector2::Dot(n, n);
+
+        // Check for degenerate line
+        if (nn <= Collision2D::Epsilon * Collision2D::Epsilon)
+            return false;
+
+        // Point on the line: a = n * (d / Dot(n,n))
+        const Vector2 origin = n * (Distance / nn);
+
+        // Direction along the line (perpendicular to normal)
+        const Vector2 dir(-n.Y, n.X);
+
+        float tEnter = 0.0f;
+        float tExit = 0.0f;
+        return Collision2D::ClipLineToAabb(
+            origin, dir, box.Min, box.Max, std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), tEnter, tExit);
+    }
+
+    bool Line2D::Intersects(const OrientedBoundingBox2D& obb) const
+    {
+        const Vector2 n = Normal;
+        const float nn = Vector2::Dot(n, n);
+
+        // Handle degenerate line
+        if (nn <= Collision2D::Epsilon * Collision2D::Epsilon)
+            return false;
+
+        // Get a world space point and direction for the line
+        const Vector2 a = n * (Distance / nn);
+        const Vector2 dir(-n.Y, n.X);
+
+        // Transform line into OBB local space
+        const Vector2 diff = a - obb.Center;
+        const Vector2 localOrigin(Vector2::Dot(diff, obb.AxisX), Vector2::Dot(diff, obb.AxisY));
+        const Vector2 localDirection(Vector2::Dot(dir, obb.AxisX), Vector2::Dot(dir, obb.AxisY));
+
+        // Local OBB is just an AABB [-halfExtents, +halfExtents]
+        float tEnter = 0.0f;
+        float tExit = 0.0f;
+        return Collision2D::ClipLineToAabb(localOrigin, localDirection, -obb.HalfExtents, obb.HalfExtents,
+            std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), tEnter, tExit);
+    }
+
+    bool Line2D::Intersects(const BoundingPolygon2D& polygon) const
+    {
+        const Vector2 n = Normal;
+        const float nn = Vector2::Dot(n, n);
+
+        // Check for degenerate line
+        if (nn <= Collision2D::Epsilon * Collision2D::Epsilon)
+            return false;
+
+        // A point on the line: a = n * (d / Dot(n,n))
+        const Vector2 a = n * (Distance / nn);
+
+        // A direction along the line (perpendicular to n)
+        const Vector2 dir(-n.Y, n.X);
+
+        // Clip infinite line against polygon half-spaces
+        float tEnter = 0.0f;
+        float tExit = 0.0f;
+        return Collision2D::ClipLineToConvexPolygon(a, dir, polygon.Vertices, polygon.Normals,
+            std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), tEnter, tExit);
+    }
+
     void Line2D::Deconstruct(Vector2& normal, float& distance) const
     {
         normal = Normal;
@@ -191,7 +322,7 @@ namespace CNA::Extended
 
     bool Line2D::Equals(const Line2D& other) const
     {
-        return Normal == other.Normal && std::abs(Distance - other.Distance) < kCollision2DEpsilonPending;
+        return Normal == other.Normal && std::abs(Distance - other.Distance) < Collision2D::Epsilon;
     }
 
     int Line2D::GetHashCode() const

@@ -2,16 +2,14 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Ported from MonoGame.Extended's Line2D.cs. Upstream's Intersects(...) overloads are split
-// between two groups:
-//   - Self-contained (ported here): Intersects(Line2D, out Vector2? point) / Intersects(Line2D),
-//     Intersects(BoundingCircle2D), Intersects(BoundingCapsule2D) -- these only use
-//     DistanceToPoint (self-contained) and/or the trivial Collision2D.Epsilon constant
-//     (duplicated locally, see Line2D.cpp), not any real Collision2D algorithm.
-//   - Deferred until Collision2D is ported (Phase 2): Intersects(Ray2D, ...) x2,
-//     Intersects(LineSegment2D, ...) x2, Intersects(BoundingBox2D), Intersects(OrientedBoundingBox2D),
-//     Intersects(BoundingPolygon2D) -- these delegate to real Collision2D algorithms
-//     (SolveParametricIntersectionWithImplicitLine, ClipLineToAabb, ClipLineToConvexPolygon).
+// Ported from MonoGame.Extended's Line2D.cs. Intersects(Line2D, out Vector2? point) /
+// Intersects(Line2D), Intersects(BoundingCircle2D), and Intersects(BoundingCapsule2D) were ported
+// before Collision2D existed (they only use DistanceToPoint, itself self-contained, and the
+// trivial Collision2D.Epsilon constant). Now that Collision2D is fully ported, the remaining
+// overloads are ported too: Intersects(Ray2D, ...) x2, Intersects(LineSegment2D, ...) x2,
+// Intersects(BoundingBox2D), Intersects(OrientedBoundingBox2D), Intersects(BoundingPolygon2D) --
+// these delegate to real Collision2D algorithms (SolveParametricIntersectionWithImplicitLine,
+// ClipLineToAabb, ClipLineToConvexPolygon). Line2D.cs is now 100% ported.
 // C#'s `object obj` overload of Equals has no C++ equivalent (no universal object base) and is
 // not ported, matching the precedent set by the bounding-volume types (which only port the
 // strongly-typed Equals(T)).
@@ -129,6 +127,30 @@ namespace CNA::Extended
         [[nodiscard]] bool Intersects(const Line2D& other) const;
 
         /**
+         * @brief Tests if this line intersects with a ray.
+         * @param ray The ray to test against.
+         * @param distanceAlongRay Receives the parametric distance along the ray to the
+         * intersection point, or std::nullopt if there is none.
+         * @param point Receives the intersection point, or std::nullopt if there is none.
+         */
+        [[nodiscard]] bool Intersects(const Ray2D& ray, std::optional<float>& distanceAlongRay, std::optional<Vector2>& point) const;
+
+        /** @brief Tests if this line intersects with a ray. */
+        [[nodiscard]] bool Intersects(const Ray2D& ray) const;
+
+        /**
+         * @brief Tests if this line intersects with a line segment.
+         * @param segment The line segment to test against.
+         * @param distanceAlongSegment Receives the parametric distance along the segment to the
+         * intersection point in [0, 1], or std::nullopt if there is none.
+         * @param point Receives the intersection point, or std::nullopt if there is none.
+         */
+        [[nodiscard]] bool Intersects(const LineSegment2D& segment, std::optional<float>& distanceAlongSegment, std::optional<Vector2>& point) const;
+
+        /** @brief Tests if this line intersects with a line segment. */
+        [[nodiscard]] bool Intersects(const LineSegment2D& segment) const;
+
+        /**
          * @brief Tests if this line intersects with a circle.
          * @param circle The circle to test against.
          */
@@ -139,6 +161,15 @@ namespace CNA::Extended
          * @param capsule The capsule to test against.
          */
         [[nodiscard]] bool Intersects(const BoundingCapsule2D& capsule) const;
+
+        /** @brief Tests if this line intersects with an axis-aligned bounding box. */
+        [[nodiscard]] bool Intersects(const BoundingBox2D& box) const;
+
+        /** @brief Tests if this line intersects with an oriented bounding box. */
+        [[nodiscard]] bool Intersects(const OrientedBoundingBox2D& obb) const;
+
+        /** @brief Tests if this line intersects with a polygon. */
+        [[nodiscard]] bool Intersects(const BoundingPolygon2D& polygon) const;
 
         /**
          * @brief Deconstructs this line into its component values.
