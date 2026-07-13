@@ -6,6 +6,71 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (24) — `CollisionShape2D` ported; Phase 2 task 1 (`Collision2D`/`CollisionShape2D` root types) COMPLETE
+
+Ported `CollisionShape2D` (713 upstream lines) directly, not via fork — the last piece of Phase 2
+task 1, and unlike `Collision2D` or the bounding-volume sweep, one cohesive file with no
+parallelization benefit, so direct porting avoided both the fork-report-reliability gap noted in
+entry (23) and unnecessary fork overhead for a task already fully scoped from reading the upstream
+source in full.
+
+A tagged-union type wrapping one of the 5 `CollisionShapeKind2D` kinds, storing only a
+`BoundingBox2D` (doubling as broadphase bounds) plus a small set of reused Vector2/float "slots"
+(`primary_`/`secondary_`/`tertiary_`/`scalar_`) and, for `Polygon`, `std::vector<Vector2>` copies
+of vertices/normals (upstream aliases the source arrays directly since C# arrays are reference
+types; C++ `std::vector` value semantics make this unnecessary — not a fidelity gap, just how the
+same "don't copy needlessly" intent is naturally expressed in each language). The private computed
+`Circle`/`OrientedBox`/`Capsule`/`Polygon` C# properties (each reconstructing a fresh instance from
+the stored slots on every access) became private `getXProperty()` methods, matching this project's
+established convention regardless of visibility.
+
+**Faithfully preserved 3 distinct asymmetric-coverage patterns, each verified against upstream
+rather than assumed**:
+1. `Intersects(CollisionShape2D)`: fully symmetric — all 5×5 kind pairs handled.
+2. `Intersects(Ray2D, out tMin, out tMax)` and `Intersects(LineSegment2D, out tMin, out tMax)`:
+   both correctly exclude the `Polygon` kind (falls to `default: return false`), because
+   `Ray2D`/`LineSegment2D` have no 3-out-param `Intersects(BoundingPolygon2D, ...)` overload —
+   only the bool-only one (see entry (22)/(23): this was itself a late addition to those types).
+3. `TryGetCollision(CollisionShape2D)`: only 15 of the 25 kind pairs are handled (e.g.
+   `Capsule`/`Capsule`, `Capsule`/`Box`, `Capsule`/`Polygon` all fall through to `default`),
+   matching upstream's own genuinely incomplete coverage — not filled in or "completed."
+
+Also ported `internal bool TryGetLegacyPenetrationVector(...)` (kept public per this project's
+established `internal`-has-no-C++-equivalent precedent) and its private static helpers — a legacy
+pre-`CollisionResult2D` penetration-vector API upstream still exposes for exactly 4 shape-pair
+combinations (Circle/Circle, Circle/Box, Box/Circle, Box/Box).
+
+**No upstream `CollisionShape2DTest.cs` exists anywhere under `MonoGame.Extended.Tests`**
+(confirmed via search before writing tests, not assumed) — added 26 fresh tests: one true/false
+spot-check pair per dispatch branch (not re-deriving each bounding-volume type's own algorithm
+correctness, already covered by their own test files and `Collision2DTests.cpp`), `None`-shape
+default-false coverage across every public method, and direct coverage of all 4 legacy
+penetration-vector pairs plus the unsupported-pair fallback. One hand-derived expected value
+(`TryGetLegacyPenetrationVectorCircleCircle`) was verified numerically with a scratch Python
+computation before being hardcoded into the test, rather than guessed from intuition about vector
+direction (the intuitive guess was actually wrong sign — worth remembering for future
+fresh-test-writing on vector-returning legacy/geometric APIs).
+
+**Build verification**: genuinely clean `rm -rf build` rebuild + both CMake configs (linked and
+headers-only), zero warnings in either. `ctest` → **1045/1045 passing** (was 1019 — 26 net new
+tests).
+
+**Phase 2 task 1 is now fully complete** — `plan.md`'s checkbox is ticked. This closes out the
+entire `Collision2D`/`CollisionShape2D` root-types effort that started in entry (19): `Collision2D`
+(3,809 lines), `CollisionResult2D`, `CollisionShapeKind2D`, the full `Ray2D`/`Line2D`/
+`LineSegment2D`/5-bounding-volume-type follow-up sweep, and now `CollisionShape2D` itself — six
+NEXT.md entries, one process-violation incident (entry (21)) and one milder self-report-accuracy
+incident (entry (23)), both handled by independent verification rather than blind trust.
+
+**State / next step**: Phase 2 task 2 is next per `plan.md` §5: `CollisionWorld2D`,
+`ICollisionActor`, `ICollisionBroadphase2D`, `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey`.
+Read these upstream sources fresh before starting — nothing about them has been scoped yet in this
+session. Continue without pausing for a status update per the standing correction, unless a
+genuine blocker or unusually large scope discovery comes up (as demonstrated via `AskUserQuestion`
+earlier this session).
+
+---
+
 ## 2026-07-13 (23) — All 5 bounding-volume types' deferred Collision2D methods landed; LineSegment2D reaches 100%
 
 Completed the parallel sweep planned in entry (22): launched 5 forks, one per bounding-volume

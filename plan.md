@@ -739,23 +739,28 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
 
 Depends on Phase 1 (math/shapes).
 
-- [ ] Root types: `Collision2D`, `CollisionResult2D`, `CollisionShape2D`,
-      `CollisionShapeKind2D` — **IN PROGRESS (2026-07-13)**. `CollisionShapeKind2D`,
-      `CollisionResult2D`, and `Collision2D` (3,809 upstream lines) are all now fully
-      ported AND at full test parity: `Collision2D`'s self-check diff confirms all 79
+- [x] Root types: `Collision2D`, `CollisionResult2D`, `CollisionShape2D`,
+      `CollisionShapeKind2D` — **COMPLETE (2026-07-13)**. `CollisionShapeKind2D`,
+      `CollisionResult2D`, and `Collision2D` (3,809 upstream lines) are all fully ported
+      AND at full test parity: `Collision2D`'s self-check diff confirms all 79
       `public static` methods present (zero missing/extra). The Collision2D-dependent
-      follow-up sweep is also complete: `Ray2D` (100%), `Line2D` (100%), `LineSegment2D`
+      follow-up sweep is complete: `Ray2D` (100%), `Line2D` (100%), `LineSegment2D`
       (100%, including `Intersects(BoundingPolygon2D)`), and all 5 bounding-volume types'
       own `Contains`/`Intersects`/`TryGetCollision` overloads — `BoundingBox2D`,
       `BoundingCircle2D`, `OrientedBoundingBox2D`, `BoundingCapsule2D` (also landing
       `CreateFromSegment`/`CreateMerged`), `BoundingPolygon2D` (also landing
       `Contains(Vector2)`, which unblocked `LineSegment2D`'s last method). Each type's
       asymmetric upstream Contains/Intersects/TryGetCollision coverage (not every shape
-      pair has all three) was verified against upstream, not assumed. 1019 tests passing
-      total for the whole project. Only `CollisionShape2D` (713 lines) remains for this
-      task — not yet started; depends on the bounding-volume types' own instance methods,
-      now unblocked. See `NEXT.md` entries (19)-(23) for the full breakdown. Do not check
-      this task off until `CollisionShape2D` lands.
+      pair has all three) was verified against upstream, not assumed. Finally,
+      `CollisionShape2D` (713 lines, a tagged-union type dispatching Intersects/
+      TryGetCollision via nested switches to the 5 bounding-volume types' instance
+      methods) is ported, including its `internal TryGetLegacyPenetrationVector` API and
+      faithfully preserving its own asymmetric dispatch coverage (e.g.
+      `Intersects(Ray2D, out, out)`/`Intersects(LineSegment2D, out, out)` both exclude the
+      Polygon kind; `TryGetCollision` only handles 15 of 25 kind pairs) — ported directly
+      rather than via fork, given it's one cohesive file. No upstream test file exists for
+      it; 26 fresh tests added (spot-check pair per dispatch branch). 1045 tests passing
+      total for the whole project. See `NEXT.md` entries (19)-(24) for the full breakdown.
 - [ ] `CollisionWorld2D`, `ICollisionActor`, `ICollisionBroadphase2D`,
       `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey`
 - [ ] Broadphase: `QuadTree/*`, `SpatialHash`
