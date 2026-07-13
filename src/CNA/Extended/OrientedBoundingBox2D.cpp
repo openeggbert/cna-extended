@@ -4,19 +4,16 @@
 #include "CNA/Extended/OrientedBoundingBox2D.hpp"
 
 #include "CNA/Extended/BoundingBox2D.hpp"
+#include "CNA/Extended/BoundingCapsule2D.hpp"
+#include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
+#include "CNA/Extended/Collision2D.hpp"
 
 #include <cmath>
 #include <limits>
 
 namespace CNA::Extended
 {
-    namespace
-    {
-        // Duplicates MonoGame.Extended's Collision2D.Epsilon (Collision2D.cs:44), which is not yet
-        // ported (scheduled for Phase 2). Point this at Collision2D::Epsilon once that lands.
-        constexpr float kCollision2DEpsilonPending = 1e-6f;
-    }
-
     OrientedBoundingBox2D::OrientedBoundingBox2D(
         const Vector2& center, const Vector2& axisX, const Vector2& axisY, const Vector2& halfExtents)
         : Center(center), AxisX(axisX), AxisY(axisY), HalfExtents(halfExtents)
@@ -97,7 +94,7 @@ namespace CNA::Extended
 
             // Only sqrt if necessary
             const float lenSq = axisX.LengthSquared();
-            if (lenSq > kCollision2DEpsilonPending * kCollision2DEpsilonPending)
+            if (lenSq > Collision2D::EpsilonSq)
             {
                 axisX = axisX / std::sqrt(lenSq);
             }
@@ -181,8 +178,8 @@ namespace CNA::Extended
         const float scaleY = transformedAxisY.Length();
 
         // Normalize axes
-        transformedAxisX = scaleX > kCollision2DEpsilonPending ? transformedAxisX / scaleX : Vector2::UnitX;
-        transformedAxisY = scaleY > kCollision2DEpsilonPending ? transformedAxisY / scaleY : Vector2::UnitY;
+        transformedAxisX = scaleX > Collision2D::Epsilon ? transformedAxisX / scaleX : Vector2::UnitX;
+        transformedAxisY = scaleY > Collision2D::Epsilon ? transformedAxisY / scaleY : Vector2::UnitY;
 
         // Scale the extents
         const Vector2 transformedExtents(HalfExtents.X * scaleX, HalfExtents.Y * scaleY);
@@ -201,6 +198,98 @@ namespace CNA::Extended
         axisX = AxisX;
         axisY = AxisY;
         halfExtents = HalfExtents;
+    }
+
+    ContainmentType OrientedBoundingBox2D::Contains(const Vector2& point) const
+    {
+        return Collision2D::ContainsObbPoint(point, Center, AxisX, AxisY, HalfExtents);
+    }
+
+    ContainmentType OrientedBoundingBox2D::Contains(const BoundingBox2D& aabb) const
+    {
+        return Collision2D::ContainsObbAabb(Center, AxisX, AxisY, HalfExtents, aabb.Min, aabb.Max);
+    }
+
+    ContainmentType OrientedBoundingBox2D::Contains(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::ContainsObbCircle(Center, AxisX, AxisY, HalfExtents, circle.Center, circle.Radius);
+    }
+
+    ContainmentType OrientedBoundingBox2D::Contains(const OrientedBoundingBox2D& other) const
+    {
+        return Collision2D::ContainsObbObb(Center, AxisX, AxisY, HalfExtents, other.Center, other.AxisX, other.AxisY, other.HalfExtents);
+    }
+
+    ContainmentType OrientedBoundingBox2D::Contains(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::ContainsObbCapsule(Center, AxisX, AxisY, HalfExtents, capsule.PointA, capsule.PointB, capsule.Radius);
+    }
+
+    ContainmentType OrientedBoundingBox2D::Contains(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::ContainsObbConvexPolygon(Center, AxisX, AxisY, HalfExtents, polygon.Vertices, polygon.Normals);
+    }
+
+    bool OrientedBoundingBox2D::Intersects(const BoundingCircle2D& circle) const
+    {
+        return Collision2D::IntersectsCircleObb(circle.Center, circle.Radius, Center, AxisX, AxisY, HalfExtents);
+    }
+
+    bool OrientedBoundingBox2D::Intersects(const OrientedBoundingBox2D& other) const
+    {
+        return Collision2D::IntersectsObbObb(Center, AxisX, AxisY, HalfExtents, other.Center, other.AxisX, other.AxisY, other.HalfExtents);
+    }
+
+    bool OrientedBoundingBox2D::Intersects(const BoundingBox2D& box) const
+    {
+        return Collision2D::IntersectsAabbObb(box.getCenterProperty(), box.getHalfExtentsProperty(), Center, AxisX, AxisY, HalfExtents);
+    }
+
+    bool OrientedBoundingBox2D::Intersects(const BoundingCapsule2D& capsule) const
+    {
+        return Collision2D::IntersectsObbCapsule(Center, AxisX, AxisY, HalfExtents, capsule.PointA, capsule.PointB, capsule.Radius);
+    }
+
+    bool OrientedBoundingBox2D::Intersects(const BoundingPolygon2D& polygon) const
+    {
+        return Collision2D::IntersectsObbConvexPolygon(Center, AxisX, AxisY, HalfExtents, polygon.Vertices, polygon.Normals);
+    }
+
+    bool OrientedBoundingBox2D::TryGetCollision(const BoundingCircle2D& circle, CollisionResult2D& result) const
+    {
+        CollisionResult2D circleResult;
+        if (!Collision2D::TryGetCollisionCircleObb(circle.Center, circle.Radius, Center, AxisX, AxisY, HalfExtents, circleResult))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        result = circleResult.Invert();
+        return true;
+    }
+
+    bool OrientedBoundingBox2D::TryGetCollision(const OrientedBoundingBox2D& other, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionObbObb(
+            Center, AxisX, AxisY, HalfExtents, other.Center, other.AxisX, other.AxisY, other.HalfExtents, result);
+    }
+
+    bool OrientedBoundingBox2D::TryGetCollision(const BoundingBox2D& box, CollisionResult2D& result) const
+    {
+        CollisionResult2D boxResult;
+        if (!Collision2D::TryGetCollisionAabbObb(box.getCenterProperty(), box.getHalfExtentsProperty(), Center, AxisX, AxisY, HalfExtents, boxResult))
+        {
+            result = CollisionResult2D::None;
+            return false;
+        }
+
+        result = boxResult.Invert();
+        return true;
+    }
+
+    bool OrientedBoundingBox2D::TryGetCollision(const BoundingPolygon2D& polygon, CollisionResult2D& result) const
+    {
+        return Collision2D::TryGetCollisionObbConvexPolygon(Center, AxisX, AxisY, HalfExtents, polygon.Vertices, polygon.Normals, result);
     }
 
     std::string OrientedBoundingBox2D::ToString() const

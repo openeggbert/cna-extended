@@ -3,10 +3,14 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
 // Ported from MonoGame.Extended's OrientedBoundingBox2D.cs. Contains(...)/Intersects(...)/
-// TryGetCollision(...) overloads are deferred until Collision2D is ported (Phase 2) -- see the
-// header comment in BoundingBox2D.hpp for the full rationale, which applies identically here.
+// TryGetCollision(...) now delegate to Collision2D, which is fully ported -- see
+// CollisionResult2D.hpp/Collision2D.hpp. As with BoundingBox2D, not every shape pair has a
+// TryGetCollision overload upstream: there is no TryGetCollision(BoundingCapsule2D) here because
+// Collision2D has no TryGetCollisionObbCapsule (only IntersectsObbCapsule).
 #pragma once
 
+#include "CNA/Extended/CollisionResult2D.hpp"
+#include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/Matrix.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 
@@ -15,10 +19,14 @@
 
 namespace CNA::Extended
 {
+    using Microsoft::Xna::Framework::ContainmentType;
     using Microsoft::Xna::Framework::Matrix;
     using Microsoft::Xna::Framework::Vector2;
 
     class BoundingBox2D;
+    struct BoundingCircle2D;
+    struct BoundingCapsule2D;
+    struct BoundingPolygon2D;
 
     /** @brief Represents an oriented bounding box in 2D space. */
     struct OrientedBoundingBox2D
@@ -121,6 +129,81 @@ namespace CNA::Extended
          * @param halfExtents Receives the half extents.
          */
         void Deconstruct(Vector2& center, Vector2& axisX, Vector2& axisY, Vector2& halfExtents) const;
+
+        /**
+         * @brief Tests whether a point lies inside this oriented bounding box or on its boundary.
+         * @param point The point to test in 2D space.
+         */
+        [[nodiscard]] ContainmentType Contains(const Vector2& point) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box contains, intersects, or is separate from a bounding box.
+         * @param aabb The bounding box to test against.
+         */
+        [[nodiscard]] ContainmentType Contains(const BoundingBox2D& aabb) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box contains, intersects, or is separate from a circle.
+         * @param circle The circle to test against.
+         */
+        [[nodiscard]] ContainmentType Contains(const BoundingCircle2D& circle) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box contains, intersects, or is separate from another oriented bounding box.
+         * @param other The other oriented bounding box to test against.
+         */
+        [[nodiscard]] ContainmentType Contains(const OrientedBoundingBox2D& other) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box contains, intersects, or is separate from a capsule.
+         * @param capsule The capsule to test against.
+         */
+        [[nodiscard]] ContainmentType Contains(const BoundingCapsule2D& capsule) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box contains, intersects, or is separate from a polygon.
+         * @param polygon The polygon to test against.
+         */
+        [[nodiscard]] ContainmentType Contains(const BoundingPolygon2D& polygon) const;
+
+        /** @brief Tests whether this oriented bounding box intersects with a circle. */
+        [[nodiscard]] bool Intersects(const BoundingCircle2D& circle) const;
+
+        /** @brief Tests whether this oriented bounding box intersects with another oriented bounding box. */
+        [[nodiscard]] bool Intersects(const OrientedBoundingBox2D& other) const;
+
+        /** @brief Tests whether this oriented bounding box intersects with an axis-aligned bounding box. */
+        [[nodiscard]] bool Intersects(const BoundingBox2D& box) const;
+
+        /** @brief Tests whether this oriented bounding box intersects with a capsule. */
+        [[nodiscard]] bool Intersects(const BoundingCapsule2D& capsule) const;
+
+        /** @brief Tests whether this oriented bounding box intersects with a polygon. */
+        [[nodiscard]] bool Intersects(const BoundingPolygon2D& polygon) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box intersects with a circle, and returns collision
+         * resolution data when they intersect (normal moves this box out of @p circle).
+         */
+        [[nodiscard]] bool TryGetCollision(const BoundingCircle2D& circle, CollisionResult2D& result) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box intersects with another oriented bounding box, and returns
+         * collision resolution data when they intersect (normal moves this box out of @p other).
+         */
+        [[nodiscard]] bool TryGetCollision(const OrientedBoundingBox2D& other, CollisionResult2D& result) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box intersects with an axis-aligned bounding box, and returns
+         * collision resolution data when they intersect (normal moves this box out of @p box).
+         */
+        [[nodiscard]] bool TryGetCollision(const BoundingBox2D& box, CollisionResult2D& result) const;
+
+        /**
+         * @brief Tests whether this oriented bounding box intersects with a polygon, and returns collision
+         * resolution data when they intersect (normal moves this box out of @p polygon).
+         */
+        [[nodiscard]] bool TryGetCollision(const BoundingPolygon2D& polygon, CollisionResult2D& result) const;
 
         [[nodiscard]] bool Equals(const OrientedBoundingBox2D& other) const;
         [[nodiscard]] int GetHashCode() const;

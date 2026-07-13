@@ -2,12 +2,17 @@
 // Copyright (c) Robert Vokac and contributors
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
-// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/OrientedBoundingBox2DTest.cs,
-// covering the subset of upstream test cases that don't require Collision2D, which is deferred
-// -- see OrientedBoundingBox2D.hpp.
+// Translated from MonoGame.Extended's tests/MonoGame.Extended.Tests/OrientedBoundingBox2DTest.cs.
+// Now that Collision2D is fully ported, this includes the upstream ContainsPoint/TryGetCollision
+// regions plus extra delegation-check coverage for the Contains/Intersects overloads upstream
+// doesn't separately exercise (Collision2D's own algorithms are tested exhaustively in
+// Collision2DTests.cpp; these just confirm each overload forwards the right fields).
 #include "CNA/Extended/OrientedBoundingBox2D.hpp"
 
 #include "CNA/Extended/BoundingBox2D.hpp"
+#include "CNA/Extended/BoundingCapsule2D.hpp"
+#include "CNA/Extended/BoundingCircle2D.hpp"
+#include "CNA/Extended/BoundingPolygon2D.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
 
 #include <cmath>
@@ -245,5 +250,191 @@ namespace CNA::Extended
         const OrientedBoundingBox2D b(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(1, 1));
 
         EXPECT_EQ(a.GetHashCode(), b.GetHashCode());
+    }
+
+    // ---- ContainsPoint Tests (Delegation Spot Check) ----
+
+    TEST(OrientedBoundingBox2DTests, ContainsPointInside)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 3));
+        EXPECT_EQ(obb.Contains(Vector2(2, 1)), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(OrientedBoundingBox2DTests, ContainsPointOnBoundary)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 3));
+        EXPECT_EQ(obb.Contains(Vector2(5, 0)), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(OrientedBoundingBox2DTests, ContainsPointOutside)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 3));
+        EXPECT_EQ(obb.Contains(Vector2(10, 0)), Microsoft::Xna::Framework::ContainmentType::Disjoint);
+    }
+
+    TEST(OrientedBoundingBox2DTests, ContainsPointRotatedBox)
+    {
+        const OrientedBoundingBox2D obb =
+            OrientedBoundingBox2D::CreateFromRotation(Vector2::Zero, Microsoft::Xna::Framework::MathHelper::PiOver4, Vector2(5, 3));
+        EXPECT_EQ(obb.Contains(Vector2::Zero), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    // ---- Contains(shape) Tests (Delegation Spot Check for the remaining overloads) ----
+
+    TEST(OrientedBoundingBox2DTests, ContainsBoundingBoxDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 5));
+        const BoundingBox2D box(Vector2(-1, -1), Vector2(1, 1));
+        EXPECT_EQ(obb.Contains(box), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(OrientedBoundingBox2DTests, ContainsCircleDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 5));
+        const BoundingCircle2D circle(Vector2::Zero, 1.0f);
+        EXPECT_EQ(obb.Contains(circle), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(OrientedBoundingBox2DTests, ContainsOrientedBoxDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 5));
+        const OrientedBoundingBox2D other(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(1, 1));
+        EXPECT_EQ(obb.Contains(other), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(OrientedBoundingBox2DTests, ContainsCapsuleDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 5));
+        const BoundingCapsule2D capsule(Vector2(-1, 0), Vector2(1, 0), 1.0f);
+        EXPECT_EQ(obb.Contains(capsule), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    TEST(OrientedBoundingBox2DTests, ContainsPolygonDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(5, 5));
+        const std::vector<Vector2> vertices{Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const BoundingPolygon2D polygon(vertices, normals);
+        EXPECT_EQ(obb.Contains(polygon), Microsoft::Xna::Framework::ContainmentType::Contains);
+    }
+
+    // ---- Intersects(shape) Tests (Delegation Spot Check) ----
+
+    TEST(OrientedBoundingBox2DTests, IntersectsCircleDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2, 2));
+        EXPECT_TRUE(obb.Intersects(BoundingCircle2D(Vector2(3, 0), 2.0f)));
+        EXPECT_FALSE(obb.Intersects(BoundingCircle2D(Vector2(10, 0), 1.0f)));
+    }
+
+    TEST(OrientedBoundingBox2DTests, IntersectsOrientedBoxDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2, 2));
+        EXPECT_TRUE(obb.Intersects(OrientedBoundingBox2D(Vector2(3, 0), Vector2::UnitX, Vector2::UnitY, Vector2(2, 2))));
+        EXPECT_FALSE(obb.Intersects(OrientedBoundingBox2D(Vector2(10, 0), Vector2::UnitX, Vector2::UnitY, Vector2(1, 1))));
+    }
+
+    TEST(OrientedBoundingBox2DTests, IntersectsBoundingBoxDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2, 2));
+        EXPECT_TRUE(obb.Intersects(BoundingBox2D(Vector2(1, -1), Vector2(5, 1))));
+        EXPECT_FALSE(obb.Intersects(BoundingBox2D(Vector2(10, -1), Vector2(15, 1))));
+    }
+
+    TEST(OrientedBoundingBox2DTests, IntersectsCapsuleDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2, 2));
+        EXPECT_TRUE(obb.Intersects(BoundingCapsule2D(Vector2(1, 0), Vector2(5, 0), 2.0f)));
+        EXPECT_FALSE(obb.Intersects(BoundingCapsule2D(Vector2(20, 0), Vector2(25, 0), 1.0f)));
+    }
+
+    TEST(OrientedBoundingBox2DTests, IntersectsPolygonDelegates)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2, 2));
+        const std::vector<Vector2> vertices{Vector2(1, -2), Vector2(5, -2), Vector2(5, 2), Vector2(1, 2)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        EXPECT_TRUE(obb.Intersects(BoundingPolygon2D(vertices, normals)));
+
+        const std::vector<Vector2> farVertices{Vector2(20, -2), Vector2(25, -2), Vector2(25, 2), Vector2(20, 2)};
+        EXPECT_FALSE(obb.Intersects(BoundingPolygon2D(farVertices, normals)));
+    }
+
+    // ---- TryGetCollision Tests ----
+
+    TEST(OrientedBoundingBox2DTests, TryGetCollisionWithCircleReturnsReceiverMinimumTranslationVector)
+    {
+        const OrientedBoundingBox2D obb(Vector2(3.0f, 0.0f), Vector2::UnitX, Vector2::UnitY, Vector2(2.0f, 2.0f));
+        const BoundingCircle2D circle(Vector2::Zero, 2.0f);
+
+        CollisionResult2D result;
+        const bool intersects = obb.TryGetCollision(circle, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(1.0f, 0.0f));
+    }
+
+    TEST(OrientedBoundingBox2DTests, TryGetCollisionWithOrientedBoxReturnsReceiverMinimumTranslationVector)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2.0f, 2.0f));
+        const OrientedBoundingBox2D other(Vector2(3.0f, 0.0f), Vector2::UnitX, Vector2::UnitY, Vector2(2.0f, 2.0f));
+
+        CollisionResult2D result;
+        const bool intersects = obb.TryGetCollision(other, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, -Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(-1.0f, 0.0f));
+    }
+
+    TEST(OrientedBoundingBox2DTests, TryGetCollisionWithSeparatedOrientedBoxReturnsFalseAndNone)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(1.0f, 1.0f));
+        const OrientedBoundingBox2D other(Vector2(5.0f, 0.0f), Vector2::UnitX, Vector2::UnitY, Vector2(1.0f, 1.0f));
+
+        CollisionResult2D result;
+        const bool intersects = obb.TryGetCollision(other, result);
+
+        EXPECT_FALSE(intersects);
+        EXPECT_FALSE(result.Intersects);
+        EXPECT_EQ(result.Normal, CollisionResult2D::None.Normal);
+        EXPECT_EQ(result.PenetrationDepth, CollisionResult2D::None.PenetrationDepth);
+        EXPECT_EQ(result.MinimumTranslationVector, CollisionResult2D::None.MinimumTranslationVector);
+    }
+
+    TEST(OrientedBoundingBox2DTests, TryGetCollisionWithBoxReturnsReceiverMinimumTranslationVector)
+    {
+        const OrientedBoundingBox2D obb(Vector2(3.0f, 0.0f), Vector2::UnitX, Vector2::UnitY, Vector2(2.0f, 2.0f));
+        const BoundingBox2D box(Vector2(-2.0f, -2.0f), Vector2(2.0f, 2.0f));
+
+        CollisionResult2D result;
+        const bool intersects = obb.TryGetCollision(box, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(1.0f, 0.0f));
+    }
+
+    TEST(OrientedBoundingBox2DTests, TryGetCollisionWithPolygonReturnsReceiverMinimumTranslationVector)
+    {
+        const OrientedBoundingBox2D obb(Vector2::Zero, Vector2::UnitX, Vector2::UnitY, Vector2(2.0f, 2.0f));
+        const std::vector<Vector2> vertices{Vector2(1.0f, -2.0f), Vector2(5.0f, -2.0f), Vector2(5.0f, 2.0f), Vector2(1.0f, 2.0f)};
+        const std::vector<Vector2> normals{-Vector2::UnitY, Vector2::UnitX, Vector2::UnitY, -Vector2::UnitX};
+        const BoundingPolygon2D polygon(vertices, normals);
+
+        CollisionResult2D result;
+        const bool intersects = obb.TryGetCollision(polygon, result);
+
+        EXPECT_TRUE(intersects);
+        EXPECT_TRUE(result.Intersects);
+        EXPECT_EQ(result.Normal, -Vector2::UnitX);
+        EXPECT_FLOAT_EQ(result.PenetrationDepth, 1.0f);
+        EXPECT_EQ(result.MinimumTranslationVector, Vector2(-1.0f, 0.0f));
     }
 }
