@@ -328,6 +328,10 @@ namespace CNA::Extended::Collections
             }
             else if (index < count_ / 2)
             {
+                // See this file's header comment (SECOND/THIRD LIKELY UPSTREAM BUGS): this
+                // front-half-shift branch is only correct on a NON-wrapped buffer
+                // (frontArrayIndex_ == 0); once the buffer has wrapped, an element is silently
+                // lost/orphaned. Preserved exactly, not fixed.
                 const intcs arrayIndex = GetArrayIndex(index);
                 // Shift the array from 0 to before the index to remove by 1 to the right; the
                 // element to remove is overwritten by the copy.
@@ -341,6 +345,11 @@ namespace CNA::Extended::Collections
             }
             else
             {
+                // See this file's header comment (SECOND LIKELY UPSTREAM BUG): this
+                // back-half-shift branch is broken even on a non-wrapped buffer -- its shift
+                // source, arrayCenterIndex, is a fixed physical midpoint with no relationship to
+                // the actual removal point, so it neither removes the intended element nor
+                // preserves the order/values of the rest. Preserved exactly, not fixed.
                 const intcs arrayIndex = GetArrayIndex(index);
                 const intcs arrayCenterIndex = static_cast<intcs>(items_.size()) / 2;
                 // Shift the array from the center to before the index to remove by 1 to the

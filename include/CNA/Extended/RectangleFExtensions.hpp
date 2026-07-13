@@ -4,6 +4,20 @@
 //
 // Ported from MonoGame.Extended's RectangleF.Extensions.cs. Extension methods -> free functions,
 // matching the convention used throughout this project.
+//
+// *** LIKELY UPSTREAM BUG, PRESERVED FOR FIDELITY -- flagged prominently, not silently fixed ***
+// Clip(rectangle, clippingRectangle) does NOT compute a true geometric intersection (unlike
+// RectangleExtensions::Clip, the analogous method for the integer Rectangle type, which uses
+// proper min/max intersection logic). Instead it mutates X/Y first, then derives Width/Height
+// from the Right/Bottom properties computed off the *already-mutated* X/Y -- not the original
+// rectangle's bounds. Concretely verified (see Clip's implementation comment and
+// RectangleFExtensionsTests.cpp's regression tests for hand-traced examples): when only the
+// left/top edge needs clipping and the right/bottom edge does not, Width/Height are left
+// unchanged instead of shrinking to account for the moved left/top edge, producing a rectangle
+// larger than the true intersection. When the clip rectangle doesn't overlap the source at all,
+// Clip does not detect this and does not return RectangleF::Empty -- it silently produces a
+// bogus non-empty "intersection" positioned at the clip rectangle's own X/Y. This is upstream's
+// actual behavior, reproduced exactly below rather than "fixed" to be geometrically correct.
 #pragma once
 
 #include "CNA/Extended/RectangleF.hpp"
@@ -26,6 +40,9 @@ namespace CNA::Extended
     /**
      * @brief Clips the specified rectangle against the specified clipping rectangle.
      * @return The clipped rectangle, or RectangleF::Empty if the rectangles do not intersect.
+     * @warning NOT a true geometric intersection -- see this file's header comment for a known
+     * upstream fidelity bug this method reproduces exactly (mutates X/Y before deriving
+     * Width/Height from them, and does not detect true non-overlap).
      */
     [[nodiscard]] RectangleF Clip(RectangleF rectangle, const RectangleF& clippingRectangle);
 

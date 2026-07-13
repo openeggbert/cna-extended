@@ -255,6 +255,13 @@ namespace CNA::Extended::Collections
         {
             item->Initialize(returnToPoolDelegate_);
             item->setNextNodeProperty(nullptr);
+            // See this file's header comment (SEVERE UPSTREAM BUG): CreateObject() always sets
+            // tailNode_ = item as its last step before calling Use(item) on that same item, so
+            // this check is FALSE for every freshly-created item without exception -- the
+            // "is this the pool's first node" branch below is unreachable dead code in that
+            // path. The else branch then links item to itself (PreviousNode == item,
+            // NextNode == item), which causes GetEnumerator() to loop forever once this is the
+            // current tail. Preserved exactly, not fixed.
             if (tailNode_ == nullptr)
             {
                 headNode_ = item;
