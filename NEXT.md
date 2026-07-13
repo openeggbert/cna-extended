@@ -6,6 +6,86 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (25) — Phase 2 task 2 started: standalone Collisions-module pieces ported; CollisionWorld2D deferred (task-internal reorder)
+
+Started Phase 2 task 2. Read all 6 upstream files under `Collisions/` for this task
+(`ICollisionActor.cs`, `ICollisionBroadphase2D.cs`, `CollisionPair2D.cs`, `CollisionEvent2D.cs`,
+`ActorPairKey.cs`, `CollisionWorld2D.cs`, 679 lines total) before writing anything, per the
+standing "read first" discipline.
+
+**Discovered a real forward dependency, not a false alarm**: `CollisionWorld2D.cs` (504 of the
+679 lines) uses `MonoGame.Extended.Collisions.Layers.Layer` (`layer.Space.Insert/Remove/Query`,
+`layer.Reset()`) and `LayerPair` throughout — both belong to task 4 (`Layers/*`, `LayerPair`),
+which `plan.md` lists AFTER this task. `Layer.Space` is itself typed `ICollisionBroadphase2D`,
+whose only two upstream implementations (`QuadTreeSpace`, `SpatialHash`) belong to task 3
+(`Broadphase: QuadTree/*, SpatialHash`), also listed after this task. So `CollisionWorld2D`
+cannot be meaningfully ported or tested — not even compiled against real behavior — until both
+task 3 and task 4 land, regardless of `plan.md`'s listed ordering. Per CLAUDE.md's "don't
+silently reorder phases without noting why" rule: **reordering task 2's internal work so
+`CollisionWorld2D` lands last**, after task 3 (broadphase) and task 4 (Layers) — not skipping or
+guessing at it, not stubbing it out. This is a task-internal reorder, not a phase-level one;
+`plan.md`'s task list itself is unchanged, just annotated.
+
+**Ported the 5 standalone pieces of task 2 that have no such dependency** (only depend on
+already-complete `CollisionShape2D`/`CollisionResult2D`): `ICollisionActor` (interface),
+`ICollisionBroadphase2D` (interface), `CollisionPair2D`, `CollisionEvent2D`, `ActorPairKey`.
+
+**New namespace decision, made once and applied consistently going forward**: upstream's
+`Collisions/*` files live in `MonoGame.Extended.Collisions`, a distinct namespace from
+`MonoGame.Extended` (where `Collision2D`/`CollisionShape2D`/the bounding-volume types live).
+Mapped to a new `CNA::Extended::Collisions` sub-namespace — matching `plan.md` §4's
+"sub-namespaced per module" rule and mirroring upstream's own namespace split, not a fresh
+decision invented for this file. All of task 2/3/4/5's remaining work belongs in this same
+sub-namespace.
+
+**Two C# BCL return types translated for this collision-query hot path, not wrapped in
+sharp-runtime's heap-allocating `System::Collections::Generic::IEnumerable<T>`**:
+`IEnumerable<ICollisionActor> Query(...)` → `std::vector<ICollisionActor*>` (eager instead of
+`yield return`-lazy — C++ has no equivalently-ergonomic built-in generator; same result set
+either way, not a behavioral difference). `List<ICollisionActor>.Enumerator GetEnumerator()` →
+`const std::vector<ICollisionActor*>& GetActors()` (upstream's concrete enumerator type strongly
+implies both broadphase implementations already keep a `List<ICollisionActor>` internally;
+exposing that directly avoids an abstract-iterator-through-virtual-interface design C++ has no
+lightweight idiom for). This decision was made autonomously as a standard C#-to-C++ translation
+call (consistent with `Vector2[]`→`std::vector<Vector2>`, `Func<T>`→`std::function<T>`, etc.
+throughout this whole project), not flagged for approval — it doesn't add scope or a new
+dependency, just picks the idiomatic C++ shape for an existing method signature.
+
+**Other translation notes**: `required ... { get; init; }` properties (`CollisionPair2D.First`/
+`Second`/`FirstResult`, `CollisionEvent2D.Other`/`Result`) → constructor parameters, no C++
+property-initializer equivalent. `ICollisionActor` references stored as non-owning raw pointers
+throughout (`ICollisionActor*`), matching `ObjectPool<T>`'s `IPoolable*` convention from Phase 1.
+`internal` visibility (`ActorPairKey`, several `ICollisionBroadphase2D`-adjacent members) has no
+C++ equivalent; kept public, matching the `CollisionResult2D::Invert()`/`CollisionShapeKind2D`
+precedent. `ActorPairKey` needed a `std::hash` specialization to be usable as an
+`std::unordered_set`/`HashSet<T>` key (mirrors `System::Type`'s own `std::hash` specialization in
+`sharp-runtime`) — hit a real build error here (`<cstddef>` alone doesn't declare the primary
+`std::hash` template; needs `<functional>`), fixed immediately.
+
+**Tests**: `CollisionEvent2DTests.cpp` ported 1:1 from upstream's `CollisionEvent2DTests.cs`. No
+upstream test files exist for `ActorPairKey` or `CollisionPair2D` (both are only exercised
+indirectly via `CollisionWorld2D.QueryCollisionPairs` in upstream's own test suite) — fresh tests
+added covering order-independence, `unordered_set`-key de-duplication, and the
+`SecondResult = FirstResult.Invert()` relationship. `ICollisionActor`/`ICollisionBroadphase2D`
+are pure interfaces with no dedicated test files, matching the `IPoolable` precedent from Phase 1.
+
+**Build verification**: clean rebuild + both CMake configs, zero warnings. `ctest` →
+**1051/1051 passing** (was 1045 — 6 net new tests).
+
+**State / next step**: Phase 2 task 3 (Broadphase: `QuadTree/*` — `QuadTree.cs` 343 lines,
+`QuadTreeData.cs` 95 lines, `QuadTreeSpace.cs` 100 lines — plus `SpatialHash.cs` 209 lines, ~747
+lines total) is next, then task 4 (`Layers/*` ~42 lines, `LayerPair.cs` ~42 lines,
+`UndefinedLayerException.cs` ~32 lines, ~116 lines total), then finally `CollisionWorld2D` (504
+lines) to close out task 2. Upstream test files exist for all of these
+(`QuadTreeTests.cs`/`QuadTreeSpaceTests.cs`/`SpatialHashTests.cs`/`CollisionWorld2DTests.cs`) plus
+a shared `Implementation/BasicActor.cs` test fixture (an `ICollisionActor` implementation used
+across all 4 of those test files) — port `BasicActor` once, when first needed, rather than
+duplicating per-file `TestCollisionActor` locals like this entry's own tests did (those were
+narrower one-off needs; `BasicActor` supports box/circle/OBB construction and is reused broadly
+upstream).
+
+---
+
 ## 2026-07-13 (24) — `CollisionShape2D` ported; Phase 2 task 1 (`Collision2D`/`CollisionShape2D` root types) COMPLETE
 
 Ported `CollisionShape2D` (713 upstream lines) directly, not via fork — the last piece of Phase 2

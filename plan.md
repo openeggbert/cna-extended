@@ -762,10 +762,20 @@ Depends on Phase 1 (math/shapes).
       it; 26 fresh tests added (spot-check pair per dispatch branch). 1045 tests passing
       total for the whole project. See `NEXT.md` entries (19)-(24) for the full breakdown.
 - [ ] `CollisionWorld2D`, `ICollisionActor`, `ICollisionBroadphase2D`,
-      `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey`
+      `CollisionEvent2D`, `CollisionPair2D`, `ActorPairKey` — **IN PROGRESS (2026-07-13)**.
+      `ICollisionActor`, `ICollisionBroadphase2D`, `CollisionEvent2D`, `CollisionPair2D`,
+      `ActorPairKey` are ported (new `CNA::Extended::Collisions` sub-namespace, matching
+      upstream's own `MonoGame.Extended.Collisions` namespace split from the root types).
+      `CollisionWorld2D` itself is deliberately deferred until after the next two
+      sub-tasks below land — it genuinely depends on `Layer`/`LayerPair` and the
+      broadphase implementations, a real forward dependency despite being listed here
+      first; see `NEXT.md` entry (25) for why this task's internal order was changed.
 - [ ] Broadphase: `QuadTree/*`, `SpatialHash`
 - [ ] `Layers/*`, `LayerPair`
-- [ ] Port `tests/MonoGame.Extended.Tests/Collisions/**`
+- [ ] Port `tests/MonoGame.Extended.Tests/Collisions/**` (partially done alongside each
+      piece above/below as it lands, per this project's "port tests alongside
+      implementation" rule; this checkbox tracks the final sweep for anything not yet
+      covered, e.g. `CollisionWorld2DTests.cs`'s full scope once `CollisionWorld2D` lands)
 
 ### Phase 3 — Input, Timers, Tweening, ViewportAdapters, VectorDraw
 
