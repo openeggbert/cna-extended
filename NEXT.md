@@ -6,6 +6,74 @@ every session with material progress; do not silently overwrite prior entries.
 
 ---
 
+## 2026-07-13 (4) — RectangleF family ported (Phase 1 task 8), largest task since bounding volumes
+
+Continued straight through, no check-in pause (per the standing correction).
+
+**Forked again** (1858 lines of C# across 5 files — `RectangleF.cs`, `Rectangle.
+Extensions.cs`, `RectangleF.Extensions.cs`, `BoundingRectangle.cs`, `OrientedRectangle.cs`)
+with the accumulated lessons baked into the prompt: mandatory per-type `Equals`/
+`GetHashCode`/`ToString`/operators/`Deconstruct` checklist, verify-don't-assume for
+dependency unblocking, explicit ask to check two specific deferred follow-ups.
+
+**Ported**: `RectangleF`, `RectangleExtensions`, `RectangleFExtensions`, `BoundingRectangle`
+— 1313 lines (4 header/source pairs + 4 test files). **`OrientedRectangle` fully
+deferred, no file created** — its `Orientation` field *is* `Matrix3x2` (not just used in a
+method), a deep structural dependency like `OrthographicCamera`→`ViewportAdapter` from two
+tasks ago, not a narrow one. `RectangleF`/`BoundingRectangle` both have several members
+deferred on `SizeF`/`Matrix3x2`/`PrimitivesHelper` (documented per-header;
+`plan.md`'s Phase 1 checklist has the full breakdown, don't duplicate it here).
+
+**Both explicitly-requested follow-ups verified genuinely unblocked and landed**:
+1. `IRectangularF` (`IRectangular.hpp`) — test added to `InterfaceTests.cpp`.
+2. `Camera<T>` (`Camera.hpp`) — forward-declared `RectangleF` replaced with a real
+   `#include`; `CameraTests.cpp`'s compile-only placeholder replaced with a full concrete
+   `Camera<Vector2>` test double (8 real tests: position/zoom/move/look-at/bounding-
+   rectangle/contains/world-screen round trip).
+`ISizable` is still blocked (needs `SizeF`, next-but-one task) — not touched.
+
+**Bugs the fork found and fixed via actually building/running (not just review)**:
+1. CNA's `Rectangle` has no `.Left`/`.Right`/`.Top`/`.Bottom` fields, only
+   `getLeftProperty()` etc. — fixed in `RectangleExtensions.cpp`.
+2. `BoundingRectangle` ended up with zero declared constructors (only the SizeF-taking one
+   was deferred) — resolved by deliberately keeping it a C++ aggregate (no user-declared
+   ctor at all) rather than adding one upstream doesn't have; C++20 parenthesized-
+   aggregate-init covers `BoundingRectangle()` and `BoundingRectangle(center, halfExtents)`
+   both. Worth remembering as a pattern: when every upstream constructor is deferred, an
+   aggregate can be the right (not just convenient) answer, if the fields are public and
+   there's no invariant a constructor would need to enforce.
+3. **A genuine test-authoring bug, not an implementation bug**: the fork's first-draft
+   `RectangleFExtensionsTests` assumed `Clip` does proper min/max rectangle intersection.
+   Upstream's actual `RectangleF.Extensions.Clip` mutates X/Y first, then derives Width/
+   Height from the *already-mutated* X/Y — a real quirk (it doesn't even detect true
+   non-overlap correctly) that the C++ port had faithfully replicated; only the test's
+   assumptions were wrong. Fixed the test, documented the quirk, did **not** "fix" the
+   port to be geometrically correct. Good reminder: when a test fails, check which side
+   (implementation or test) is actually unfaithful to upstream before "fixing" anything.
+
+**Test coverage**: upstream's own test suite for this area is unusually thin —
+`Primitives/RectangleFTests.cs` is entirely blocked (every test needs the deferred `SizeF`
+ctor or `Transform`), and `Primitives/BoundingRectangleTests.cs` is **commented out in
+upstream itself**. Ported what's actually active and portable 1:1 (7 tests total, from
+`Math/RectangleFTests.cs` + `RectangleExtensionsTests.cs`); wrote ~30 fresh tests for
+everything else that's ported but untested/disabled upstream.
+
+**Verification**: both build modes clean, `ctest` → **100% passed, 230/230** (was 189
+before this task). Independently re-verified (not just trusted the fork's report):
+`grep -n "public "` against `RectangleF.cs` confirmed the full member checklist,
+`GetHashCode` present in both `RectangleF.hpp` and `BoundingRectangle.hpp`, spot-read
+`BoundingRectangle.hpp` for the aggregate-vs-constructor judgment call.
+
+**State / next step:** Phase 1 is 8 of ~20 tasks in. Next per `plan.md` §5 Phase 1:
+`CircleF`, `EllipseF`, `Segment2`. **Check dependencies first as always** — given the
+pattern so far, watch specifically for anything needing `SizeF`/`Matrix3x2`/
+`PrimitivesHelper` (all three are recurring blockers this phase; `SizeF` is 2 tasks away,
+`Matrix3x2` is 3 tasks away — `CircleF`/`EllipseF`/`Segment2` may hit the same wall
+`OrientedRectangle` did). Continue without pausing for a status update, per the standing
+correction, unless a genuine blocker requiring the user's judgment comes up.
+
+---
+
 ## 2026-07-13 (3) — MathExtended, FloatHelper, Angle ported (Phase 1 task 7)
 
 Continued straight through per the correction in session (2) — no check-in pause this

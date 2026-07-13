@@ -6,9 +6,12 @@
 // plain property contracts with no behavior of their own). These tests only confirm the
 // interfaces are implementable and that the getX/setX Property() pattern round-trips.
 //
-// ISizable and IRectangularF are declared in this phase but not exercised here: they
-// return SizeF/RectangleF, which are ported later in Phase 1 (tasks 19/17). Their
-// round-trip tests are appended to this file once those types exist.
+// ISizable is declared in this phase but still not exercised here: it returns SizeF, ported
+// later in Phase 1 (task 19, "Size, SizeF, Interval, Thickness"). Its round-trip test is
+// appended to this file once that type exists.
+//
+// IRectangularF WAS deferred for the same reason (needed RectangleF) but is no longer blocked:
+// RectangleF landed in Phase 1 task 17 ("RectangleF family"), so its round-trip test below.
 #include "CNA/Extended/IColorable.hpp"
 #include "CNA/Extended/IEquatableByRef.hpp"
 #include "CNA/Extended/IMovable.hpp"
@@ -16,6 +19,7 @@
 #include "CNA/Extended/IRotatable.hpp"
 #include "CNA/Extended/IScalable.hpp"
 #include "CNA/Extended/ISizable.hpp"
+#include "CNA/Extended/RectangleF.hpp"
 
 #include <gtest/gtest.h>
 
@@ -72,6 +76,15 @@ namespace CNA::Extended
             }
         };
 
+        class RectangularFThing final : public IRectangularF
+        {
+        public:
+            [[nodiscard]] RectangleF getBoundingRectangleProperty() const override
+            {
+                return RectangleF(1.0f, 2.0f, 3.0f, 4.0f);
+            }
+        };
+
         struct Comparable final : IEquatableByRef<Comparable>
         {
             int value = 0;
@@ -116,6 +129,16 @@ namespace CNA::Extended
         const Rectangle rect = thing.getBoundingRectangleProperty();
         EXPECT_EQ(rect.X, 1);
         EXPECT_EQ(rect.Y, 2);
+    }
+
+    TEST(MarkerInterfaces, IRectangularFExposesBoundingRectangle)
+    {
+        RectangularFThing thing;
+        const RectangleF rect = thing.getBoundingRectangleProperty();
+        EXPECT_FLOAT_EQ(rect.X, 1.0f);
+        EXPECT_FLOAT_EQ(rect.Y, 2.0f);
+        EXPECT_FLOAT_EQ(rect.Width, 3.0f);
+        EXPECT_FLOAT_EQ(rect.Height, 4.0f);
     }
 
     TEST(MarkerInterfaces, IEquatableByRefComparesByReference)

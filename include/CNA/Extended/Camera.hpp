@@ -3,11 +3,12 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 //
 // Ported from MonoGame.Extended's Camera.cs. Fully abstract (all members pure virtual), so this
-// is header-only -- no Camera.cpp. getBoundingRectangleProperty() returns RectangleF, forward-
-// declared here since it isn't ported yet (Phase 1, "RectangleF family"); a pure virtual
-// declaration only needs a complete type where it's called/overridden, not where it's declared.
+// is header-only -- no Camera.cpp. getBoundingRectangleProperty() returns RectangleF, which
+// used to be forward-declared here (RectangleF wasn't ported yet); now #include'd directly since
+// RectangleF landed in Phase 1 task 17 ("RectangleF family").
 #pragma once
 
+#include "CNA/Extended/RectangleF.hpp"
 #include "Microsoft/Xna/Framework/BoundingFrustum.hpp"
 #include "Microsoft/Xna/Framework/ContainmentType.hpp"
 #include "Microsoft/Xna/Framework/Matrix.hpp"
@@ -21,8 +22,6 @@ namespace CNA::Extended
     using Microsoft::Xna::Framework::Matrix;
     using Microsoft::Xna::Framework::Rectangle;
     using Microsoft::Xna::Framework::Vector2;
-
-    class RectangleF;
 
     /**
      * @brief Represents an abstract camera.

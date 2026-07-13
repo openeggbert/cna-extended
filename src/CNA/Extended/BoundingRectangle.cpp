@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Robert Vokac and contributors
+// Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
+#include "CNA/Extended/BoundingRectangle.hpp"
+
+#include "CNA/Extended/MathExtended.hpp"
+
+#include <cmath>
+
+namespace CNA::Extended
+{
+    const BoundingRectangle BoundingRectangle::Empty = BoundingRectangle();
+
+    void BoundingRectangle::CreateFrom(const Vector2& minimum, const Vector2& maximum, BoundingRectangle& result)
+    {
+        result.Center = Vector2((maximum.X + minimum.X) * 0.5f, (maximum.Y + minimum.Y) * 0.5f);
+        result.HalfExtents = Vector2((maximum.X - minimum.X) * 0.5f, (maximum.Y - minimum.Y) * 0.5f);
+    }
+
+    BoundingRectangle BoundingRectangle::CreateFrom(const Vector2& minimum, const Vector2& maximum)
+    {
+        BoundingRectangle result;
+        CreateFrom(minimum, maximum, result);
+        return result;
+    }
+
+    void BoundingRectangle::Union(const BoundingRectangle& first, const BoundingRectangle& second, BoundingRectangle& result)
+    {
+        // Real-Time Collision Detection, Christer Ericson, 2005. Chapter 6.5; Bounding Volume
+        // Hierarchies - Merging Bounding Volumes. pg 267
+        const Vector2 firstMinimum = first.Center - first.HalfExtents;
+        const Vector2 firstMaximum = first.Center + first.HalfExtents;
+        const Vector2 secondMinimum = second.Center - second.HalfExtents;
+        const Vector2 secondMaximum = second.Center + second.HalfExtents;
+
+        const Vector2 minimum = MathExtended::CalculateMinimumVector2(firstMinimum, secondMinimum);
+        const Vector2 maximum = MathExtended::CalculateMaximumVector2(firstMaximum, secondMaximum);
+
+        result = CreateFrom(minimum, maximum);
+    }
+
+    BoundingRectangle BoundingRectangle::Union(const BoundingRectangle& first, const BoundingRectangle& second)
+    {
+        BoundingRectangle result;
+        Union(first, second, result);
+        return result;
+    }
+
+    BoundingRectangle BoundingRectangle::Union(const BoundingRectangle& boundingRectangle) const
+    {
+        return Union(*this, boundingRectangle);
+    }
+
+    void BoundingRectangle::Intersection(const BoundingRectangle& first, const BoundingRectangle& second, BoundingRectangle& result)
+    {
+        const Vector2 firstMinimum = first.Center - first.HalfExtents;
+        const Vector2 firstMaximum = first.Center + first.HalfExtents;
+        const Vector2 secondMinimum = second.Center - second.HalfExtents;
+        const Vector2 secondMaximum = second.Center + second.HalfExtents;
+
+        const Vector2 minimum = MathExtended::CalculateMaximumVector2(firstMinimum, secondMinimum);
+        const Vector2 maximum = MathExtended::CalculateMinimumVector2(firstMaximum, secondMaximum);
+
+        if (maximum.X < minimum.X || maximum.Y < minimum.Y)
+        {
+            result = BoundingRectangle();
+        }
+        else
+        {
+            result = CreateFrom(minimum, maximum);
+        }
+    }
+
+    BoundingRectangle BoundingRectangle::Intersection(const BoundingRectangle& first, const BoundingRectangle& second)
+    {
+        BoundingRectangle result;
+        Intersection(first, second, result);
+        return result;
+    }
+
+    BoundingRectangle BoundingRectangle::Intersection(const BoundingRectangle& boundingRectangle) const
+    {
+        BoundingRectangle result;
+        Intersection(*this, boundingRectangle, result);
+        return result;
+    }
+
+    bool BoundingRectangle::Intersects(const BoundingRectangle& first, const BoundingRectangle& second)
+    {
+        // Real-Time Collision Detection, Christer Ericson, 2005. Chapter 4.2; Bounding Volumes -
+        // Axis-aligned Bounding Boxes (AABBs). pg 80
+        const Vector2 distance = first.Center - second.Center;
+        const Vector2 radii = first.HalfExtents + second.HalfExtents;
+        return std::abs(distance.X) <= radii.X && std::abs(distance.Y) <= radii.Y;
+    }
+
+    bool BoundingRectangle::Intersects(const BoundingRectangle& boundingRectangle) const
+    {
+        return Intersects(*this, boundingRectangle);
+    }
+
+    bool BoundingRectangle::Contains(const BoundingRectangle& boundingRectangle, const Vector2& point)
+    {
+        // Real-Time Collision Detection, Christer Ericson, 2005. Chapter 4.2; Bounding Volumes -
+        // Axis-aligned Bounding Boxes (AABBs). pg 78
+        const Vector2 distance = boundingRectangle.Center - point;
+        const Vector2& radii = boundingRectangle.HalfExtents;
+
+        return std::abs(distance.X) <= radii.X && std::abs(distance.Y) <= radii.Y;
+    }
+
+    bool BoundingRectangle::Contains(const Vector2& point) const
+    {
+        return Contains(*this, point);
+    }
+
+    bool BoundingRectangle::Equals(const BoundingRectangle& boundingRectangle) const
+    {
+        return boundingRectangle.Center == Center && boundingRectangle.HalfExtents == HalfExtents;
+    }
+
+    int BoundingRectangle::GetHashCode() const
+    {
+        return (Center.GetHashCode() * 397) ^ HalfExtents.GetHashCode();
+    }
+
+    std::string BoundingRectangle::ToString() const
+    {
+        return "Centre: " + Center.ToString() + ", Radii: " + HalfExtents.ToString();
+    }
+
+    BoundingRectangle::operator Rectangle() const
+    {
+        const Vector2 minimum = Center - HalfExtents;
+        return Rectangle(static_cast<int>(minimum.X), static_cast<int>(minimum.Y), static_cast<int>(HalfExtents.X) * 2,
+            static_cast<int>(HalfExtents.Y) * 2);
+    }
+
+    BoundingRectangle::operator RectangleF() const
+    {
+        const Vector2 minimum = Center - HalfExtents;
+        return RectangleF(minimum.X, minimum.Y, HalfExtents.X * 2, HalfExtents.Y * 2);
+    }
+}

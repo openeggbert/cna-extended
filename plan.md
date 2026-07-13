@@ -232,8 +232,38 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       (from the previous task) to use the now-real `MathExtended::MachineEpsilon` instead
       of the `std::numeric_limits<float>::epsilon()` placeholder — same value, now the
       actual named constant matching upstream exactly.
-- [ ] `RectangleF`, `Rectangle.Extensions`, `RectangleF.Extensions`, `BoundingRectangle`,
-      `OrientedRectangle`
+- [x] `RectangleF`, `Rectangle.Extensions`, `RectangleF.Extensions`, `BoundingRectangle`
+      (2026-07-13, via forked sub-agent) — ported (1313 lines: 4 header/source pairs +
+      4 test files). Deferred, all documented in the relevant header, all genuinely blocked
+      on not-yet-ported types (`SizeF`, `Matrix3x2`, `PrimitivesHelper`), not skipped for
+      convenience:
+      - `RectangleF`: `Size` property + `RectangleF(Vector2, SizeF)` ctor (`SizeF`); both
+        `Transform(...)` overloads + `CreateFrom(points,...)`×2/`UpdateFromPoints` +
+        `SquaredDistanceTo`/`DistanceTo`/`ClosestPointTo` (`Matrix3x2`/`PrimitivesHelper`).
+      - `BoundingRectangle`: the `(Vector2, SizeF)` ctor and both implicit
+        `BoundingRectangle(Rectangle|RectangleF)` conversions (all three route through the
+        deferred `SizeF` ctor upstream); `Transform`/`CreateFrom(points,...)`/
+        `UpdateFromPoints`/`SquaredDistanceTo`/`ClosestPointTo` (same reasons as
+        `RectangleF`). Its *inverse* conversions (`BoundingRectangle`→`Rectangle`/
+        `RectangleF`) needed no `SizeF` and **are** ported. Kept as a C++ aggregate
+        (no user-declared constructor) rather than adding one upstream doesn't have, since
+        C++20 parenthesized-aggregate-init covers both the default and 2-arg cases.
+      - `OrientedRectangle` — **entirely deferred, no file created.** Its `Orientation`
+        field is `Matrix3x2` itself (not just used in a method) — a deep structural
+        dependency like `OrthographicCamera`→`ViewportAdapter`, not a narrow one. Port it
+        immediately after `Matrix3x2` lands (task below), not standalone.
+      Follow-ups landed in the same pass (verified unblocked, not assumed — see §6):
+      `IRectangularF` in `IRectangular.hpp` (test added to `InterfaceTests.cpp`); `Camera<T>`
+      in `Camera.hpp` (forward-declare replaced with a real `#include`, `CameraTests.cpp`
+      got a full concrete `Camera<Vector2>` test double replacing the compile-only
+      placeholder). `ISizable` is still blocked (needs `SizeF`, unrelated to this task).
+      Test coverage: upstream test suite for this area is unusually thin/broken — the main
+      `Primitives/RectangleFTests.cs` is entirely blocked (every test needs the deferred
+      `SizeF` ctor or `Transform`), and `Primitives/BoundingRectangleTests.cs` is *entirely
+      commented out in upstream itself* (nothing active to port). Ported what upstream
+      actually has active and portable 1:1 (7 tests: `Math/RectangleFTests.cs` +
+      `RectangleExtensionsTests.cs`), wrote ~30 fresh tests for everything else that's
+      ported but untested/disabled upstream.
 - [ ] `CircleF`, `EllipseF`, `Segment2`
 - [ ] `Size`, `SizeF`, `Interval`, `Thickness`
 - [ ] `Matrix3x2`, `MatrixExtensions`, `Vector2Extensions`
@@ -421,6 +451,14 @@ implementations — confirm and reuse rather than re-rolling).
   real mistake in `BoundingCapsule2D.hpp`'s existing deferral comment (see the Phase 1
   checklist entry above) rather than silently working around it or ignoring it — a good
   outcome from asking forks to state deferral *reasons*, not just deferral *lists*.
+- 2026-07-13 — `RectangleF`/`Rectangle.Extensions`/`RectangleF.Extensions`/
+  `BoundingRectangle` ported via a forked sub-agent (`OrientedRectangle` fully deferred —
+  needs `Matrix3x2`, see the Phase 1 checklist). Explicitly asked the fork to check
+  whether landing `RectangleF` actually unblocked `IRectangularF` (`IRectangular.hpp`) and
+  `Camera<T>`'s test — it verified both were genuinely unblocked (not assumed) and landed
+  both follow-ups in the same pass, updating `Camera.hpp`'s forward-declare to a real
+  `#include`. Independent re-verification via `grep -n "public "` against `RectangleF.cs`
+  confirmed the `Equals`/`GetHashCode`/`ToString`/operators checklist held up again.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 
