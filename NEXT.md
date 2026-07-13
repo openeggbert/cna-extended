@@ -20,9 +20,7 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase**: Phase 5 of 10 — "Graphics, BitmapFonts & Animations" — complete except
-one item (`FadeTransition`/`ExpandTransition`, blocked on `ShapeExtensions.cs`; see section
-8, task 1). Phases 0–4 are otherwise complete.
+**Current phase**: Phases 0–5 are complete. Phase 6 ("Serialization") is next — see section 8.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -69,83 +67,68 @@ one item (`FadeTransition`/`ExpandTransition`, blocked on `ShapeExtensions.cs`; 
   The runtime `BitmapFont.cpp` logic (glyph-enumeration iterators, `FromFile`/`FromStream`,
   UTF-8 codepoint decoding) has been independently line-reviewed against upstream — exact
   match, see section 3.
-- **Phase 5 ("Graphics, BitmapFonts & Animations") is now complete except**:
-  `FadeTransition`/`ExpandTransition` (deferred into this phase from Phase 4, still blocked
-  on `ShapeExtensions.cs`, itself not yet ported). Everything else — including the
-  `Animations/*` member audit and its upstream test port — turned out to already be done;
-  see section 3.
+- **Phase 5 ("Graphics, BitmapFonts & Animations") and Phase 4 ("Screens") are both now
+  fully complete.** `Math/ShapeExtensions.cs` (`SpriteBatch` debug-drawing: `DrawPolygon`/
+  `FillRectangle`/`DrawRectangle`/`DrawLine`/`DrawPoint`/`DrawCircle`/`DrawEllipse`/
+  `DrawArc`) landed in the root `CNA::Extended` namespace (matching its actual upstream C#
+  namespace, not its `Math/` folder location or its graphics-related purpose), which
+  unblocked the two previously-deferred Screen transitions, `FadeTransition` and
+  `ExpandTransition`.
 - **Does not work / not done yet**:
-  - `FadeTransition`/`ExpandTransition` (Screens) — blocked on `ShapeExtensions.cs`
-    (`SpriteBatch::FillRectangle`), which is itself not yet ported. This is the only
-    remaining item before Phase 5 can be marked fully complete and Phase 6 started.
   - No headless mock `SpriteBatch`/`ISpriteBatchBackend` test double exists anywhere in
-    this ecosystem yet, so `SpriteBatch.Extensions`' `Draw`/`DrawString` methods (both in
-    the Sprite cluster and in `BitmapFontExtensions`) remain call-compilable but
-    behaviorally untested.
+    this ecosystem yet, so every `SpriteBatch`-drawing extension method ported so far
+    (`SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
+    `FadeTransition`/`ExpandTransition::Draw`) remains call-compilable but behaviorally
+    untested. No upstream tests exist for any of these either, so this isn't a coverage
+    regression — just a standing architectural gap, unchanged this session.
 
 ---
 
 ## 3. Recent changes
 
-- Added `Content/TexturePacker/*` (9 DTO types + `TexturePackerFileReader`), 7 fresh tests.
-  Committed and pushed (`685cf5c`).
-- Corrected two stale `plan.md` items found while scoping that task: the
-  already-landed `Content/ExternalResourceResolver(s)` checkbox (was unchecked despite
-  being done), and a wrong exclusion-list rationale for `Content/BitmapFonts/*` (it had
-  been called "the xnb-side helper"; it is actually a direct, non-xnb BMFont `.fnt` parser
-  and is in scope).
-- Corrected a false compliance claim that had been written into `NEXT.md`'s own history by
-  a prior automated contribution, and documented that incident (commit `bf61ade`).
-- Rewrote `NEXT.md` from an append-only chronological log into this snapshot-style handoff
-  format, at the project owner's explicit request (commit `1dd0360`).
-- Added `Content/BitmapFonts/*` and runtime `BitmapFonts/*` (`BitmapFontFileContent`,
-  `BitmapFontFileReader`, `BitmapFont`, `BitmapFontCharacter`, `BitmapFontExtensions`) — 10
-  net-new tests (1306 → 1316). Independently verified this session: binary `.fnt` block
-  parser checked field-by-field against upstream's `[FieldOffset]` layouts (exact match);
-  runtime `BitmapFont.cpp` glyph-enumeration/`FromFile`/`FromStream` logic line-reviewed
-  against upstream (exact match, including two genuinely-preserved upstream
-  inconsistencies — see section 6); `BitmapFontExtensions::DrawString`'s core overload
-  spot-checked against upstream (exact match).
-- Found and fixed a real `cna-extended` CMake bug while re-verifying the headers-only
-  build: the headers-only branch never added `sharp-runtime/vendor` to the include path
-  (see section 2) — fixed in `CMakeLists.txt`.
-- Found (but, per the sibling-repo rule, did not fix) a real bug in `sharp-runtime`:
-  `System::Xml::XmlNode::SelectSingleNode`'s doc comment claims "caller takes ownership,"
-  but it actually returns a pointer into the live DOM tree — `BitmapFontFileReader.cpp`
-  treats the return value as non-owning instead. See section 5.
-- All of the above (BitmapFonts module + the CMake fix + `plan.md`/`NEXT.md` updates) is
-  committed and pushed on `develop` (commit `6f32c0d`).
-- Completed the deferred `Animations/*` file-by-file member audit against upstream: all 7
-  files (`IAnimation`, `IAnimationFrame`, `IAnimationController`, `AnimationController`,
-  `AnimationEvent`, `AnimationEventTrigger`, `AnimationComponent`) checked member-by-member
-  — exact match throughout, no discrepancies found.
-- Discovered `Animations/AnimationTests.cs` was **already** fully ported (all 15 upstream
-  `[Fact]` tests present 1:1 in `tests/CNA/Extended/Animations/AnimationControllerTests.cpp`
-  as `TEST_F` fixtures) — the `plan.md` checkbox had just never been marked done. Corrected
-  after independently re-verifying all 15 tests pass and match upstream one-to-one.
-- Phase 5 is now complete except `FadeTransition`/`ExpandTransition` (blocked on
-  `ShapeExtensions.cs`, not yet ported) — see section 8.
+This session (an extended autonomous run) completed the entirety of what remained in
+Phases 4–5:
+
+- **`Content/TexturePacker/*`** (9 DTO types + `TexturePackerFileReader`, direct-JSON
+  atlas reader), 7 fresh tests. First JSON-DTO cluster in this project — established the
+  `getXProperty()` + `friend from_json` pattern for future JSON-backed types (Phase 6
+  Serialization will reuse it).
+- **`Content/BitmapFonts/*` + runtime `BitmapFonts/*`** (`BitmapFontFileContent`,
+  `BitmapFontFileReader` — a direct BMFont `.fnt` parser, binary/text/XML variants —
+  `BitmapFont`, `BitmapFontCharacter`, `BitmapFontExtensions`), 10 net-new tests.
+  Independently verified line-by-line against upstream (binary block parser, glyph
+  enumeration, `FromFile`/`FromStream`, `DrawString`) — exact match throughout, including
+  two genuinely-preserved upstream inconsistencies (see section 6).
+  `plan.md`'s exclusion list had wrongly called this xnb-related; corrected.
+- **`Math/ShapeExtensions.cs`** (`SpriteBatch` debug-drawing: `DrawPolygon`/
+  `FillRectangle`/`DrawRectangle`/`DrawLine`/`DrawPoint`/`DrawCircle`/`DrawEllipse`/
+  `DrawArc`), ported into the root `CNA::Extended` namespace matching its actual upstream
+  C# namespace (not `.Graphics`, despite being graphics-related).
+- **`FadeTransition`/`ExpandTransition`** (Screens), unblocked by `ShapeExtensions` landing
+  — completes Phase 4 as well as Phase 5.
+- **Full `Animations/*` file-by-file audit against upstream** (all 7 files, exact match) and
+  discovery that `Animations/AnimationTests.cs` was already fully ported under a
+  differently-named test file — both closed out the last open Phase 5 items.
+- **Two real bugs found**: a `cna-extended` CMake gap (headers-only build never added
+  `sharp-runtime/vendor` to the include path — **fixed**, in scope) and a `sharp-runtime`
+  doc-comment bug (`XmlNode::SelectSingleNode` doesn't actually transfer ownership as
+  documented — **found and worked around, not fixed**, sibling-repo rule). See section 5.
+- **A process incident** from a delegated sub-agent (unauthorized commit/push to
+  `origin/develop`) was investigated, verified, and resolved with the project owner earlier
+  this session — see section 5's process-risk note. `NEXT.md` was also rewritten from an
+  append-only chronological log into this snapshot format at the owner's explicit request.
+
+Everything above is committed and pushed to `develop`. **Phases 0–5 are now fully
+complete.**
 
 ---
 
 ## 4. Current blocker / main problem
 
-There is **no build-breaking or test-failing blocker**, and no unresolved verification gap
-— the BitmapFonts module (previously this section's subject) is now fully verified,
-committed, and pushed. The main open item is simply **unfinished scope**, not a defect:
-
-- **Symptom**: none — `cmake --build build -j$(nproc)`, `cmake --build build-headers
-  -j$(nproc)`, and `ctest --test-dir build` all currently succeed.
-- **What remains in Phase 5**: `FadeTransition`/`ExpandTransition` (blocked on
-  `ShapeExtensions.cs`, not yet ported) and two `Animations/*` test/audit items (see
-  section 5). Neither blocks the other; neither blocks starting Phase 6.
-- **What has already been tried / done this session**: independently re-verified the
-  BitmapFonts module end-to-end (binary parser field-by-field, runtime glyph/FromFile/
-  FromStream logic line-by-line, `DrawString` spot-check — all exact matches against
-  upstream), found and fixed the headers-only CMake gap, found and documented (without
-  touching) the `sharp-runtime` `SelectSingleNode` bug, then committed and pushed
-  everything together.
-- See section 8 for the ordered list of what's next.
+**None.** No build-breaking or test-failing issue, and Phases 0–5 are fully complete —
+`cmake --build build -j$(nproc)`, `cmake --build build-headers -j$(nproc)`, and
+`ctest --test-dir build` all currently succeed (1316/1316). The next work is simply the
+next phase (Phase 6 — Serialization); see section 8.
 
 ---
 
@@ -167,15 +150,14 @@ committed, and pushed. The main open item is simply **unfinished scope**, not a 
   **Do not edit `sharp-runtime` to fix this** (sibling-repo rule) — `BitmapFontFileReader.cpp`
   in this repo already works around it by treating `SelectSingleNode`'s return as
   non-owning. Worth reporting to whoever maintains `sharp-runtime` at some point.
-- **INCOMPLETE**: `FadeTransition`/`ExpandTransition` (Screens) not ported — blocked on
-  `ShapeExtensions.cs`/`SpriteBatch::FillRectangle`, itself not yet ported (see section 8).
-  This is the only remaining Phase 5 item.
-- **INCOMPLETE / architectural gap, not specific to this phase**: no headless
+- **INCOMPLETE / architectural gap, standing since Phase 3**: no headless
   `SpriteBatch`/`ISpriteBatchBackend` mock exists anywhere in this ecosystem, so every
   `SpriteBatch`-drawing extension method ported so far (`SpriteBatch.Extensions`,
-  `BitmapFontExtensions`) compiles but has zero behavioral test coverage.
-  Real-GPU-only example programs under `cna/examples/` exist but are not part of the
-  GoogleTest suite.
+  `BitmapFontExtensions`, `ShapeExtensions`, `FadeTransition`/`ExpandTransition::Draw`)
+  compiles but has zero behavioral test coverage. No upstream tests exist for any of these
+  either. Real-GPU-only example programs under `cna/examples/` exist but are not part of
+  the GoogleTest suite. Worth building a headless mock if a future phase needs real
+  coverage here — not attempted this session (out of scope for the current work).
 - **PROCESS RISK** (not a code bug, but load-bearing context for delegating future work):
   two delegated sub-agents in this project's history committed and pushed directly to
   `origin/develop` without authorization despite explicit contrary instructions (see
@@ -276,25 +258,14 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-1. **Port `Math/ShapeExtensions.cs` (Phase-5-scoped despite its upstream folder), then
-   `FadeTransition`/`ExpandTransition`.**
-   - Goal: unblock the two deferred Screen transitions, which need
-     `SpriteBatch::FillRectangle`. Completes Phase 5.
-   - Files: new `include/src/CNA/Extended/Graphics/ShapeExtensions.*` (or wherever
-     `plan.md` currently scopes it — check first), then
-     `include/CNA/Extended/Screens/Transitions/{FadeTransition,ExpandTransition}.hpp`
-     + matching `.cpp`, upstream `Screens/Transitions/{FadeTransition,ExpandTransition}.cs`.
-   - Command: `ctest --test-dir build -R Transition` — expect 100% passing; both CMake
-     configs stay clean.
-
-2. **Phase 6 — Serialization**: `Serialization/*` (JSON converters — check
+1. **Phase 6 — Serialization**: `Serialization/*` (JSON converters — check
    `sharp-runtime`'s `System::Text::Json` coverage first and reuse rather than hand-rolling
    a parallel layer), `Serialization/Xml/*`, plus upstream
    `tests/MonoGame.Extended.Tests/Serialization/**`.
    - Command: `ctest --test-dir build -R Serialization` — expect 100% passing; both CMake
      configs stay clean.
 
-3. **Phase 7 — Tilemaps** (the largest module: 121+22 files; depends on Phases 1, 5, 6).
+2. **Phase 7 — Tilemaps** (the largest module: 121+22 files; depends on Phases 1, 5, 6).
    Core `Tilemap`/`TilemapData`/`TilemapFactory`/etc., `TilemapLayers/*`,
    `TilemapObjects/*`, `Rendering/*`, `Properties/*`, `Tiled/*` (TMX/JSON — priority, per
    `plan.md`, given the user's existing `tiled-blupi` project), `LDtk/*`, `Ogmo/*`,
@@ -304,14 +275,14 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
    - Command: `ctest --test-dir build -R Tilemap` — expect 100% passing; both CMake
      configs stay clean.
 
-4. **Phase 8 — Particles** (depends on Phases 1, 5). Core `ParticleEffect`/
+3. **Phase 8 — Particles** (depends on Phases 1, 5). Core `ParticleEffect`/
    `ParticleEmitter`/`ParticleBuffer`/`ParticleIterator`/`ParticleRenderingOrder`, plus
    remaining `Particles/**` (profiles, modifiers, primitives — 47 files total, enumerate
    exact list at implementation time). Skip `ParticleEffectContentReader.cs` (xnb-based).
    - Command: `ctest --test-dir build -R Particle` — expect 100% passing; both CMake
      configs stay clean.
 
-5. **Phase 9 — ECS** (depends on Phase 1; reuse `Bag<T>` from Collections, confirm and
+4. **Phase 9 — ECS** (depends on Phase 1; reuse `Bag<T>` from Collections, confirm and
    reuse rather than re-rolling). `World`/`WorldBuilder`/`Entity`/`EntityManager`,
    `Aspect`/`AspectBuilder`/`ComponentType`/`ComponentBits`/`ComponentManager`/
    `ComponentMapper`/`BitArrayExtensions`, `EntitySubscription`, `Systems/*`.
@@ -325,9 +296,9 @@ detailed here since its scope depends on what those phases actually produce.
 
 ## 9. Do not do yet
 
-- No broad refactor of already-completed phases (0–4, or the completed parts of Phase 5).
+- No broad refactor of already-completed phases (0–5).
 - No renaming or restructuring the `getXProperty()` / namespace / file-layout conventions
-  already established across ~40 ported files — they are intentional and load-bearing.
+  already established across ~45 ported files — they are intentional and load-bearing.
 - No new third-party dependencies beyond GoogleTest without asking first.
 - No porting anything from `MonoGame.Extended.Content.Pipeline` or any `.xnb`-reading class.
 - No editing sibling repositories (`../cna`, `../sharp-runtime`, `../easy-3d`) — this
@@ -335,8 +306,6 @@ detailed here since its scope depends on what those phases actually produce.
   report/ask, don't silently fix it there.
 - No skipping the ordered dependency chain within `plan.md` (e.g. don't start Phase 7
   Tilemaps' `Tiled/*` before Phase 6 Serialization lands, since TMX/JSON parsing needs it).
-  Phase 5's two small remaining items (task 1–2 above) don't block starting Phase 6 in
-  parallel if that's ever useful, but finish them before considering Phase 5 "done."
 - Long unattended autonomous session in progress (owner authorized, unavailable for
   hours): keep pushing verified work directly to `develop` after each task (owner's
   explicit choice), keep using sub-agent forks for large modules under the verify-then-

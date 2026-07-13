@@ -1,8 +1,8 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phase 0 and Phase 1 complete (2026-07-13),
-Phase 2 ("Collisions 2D") next. Fidelity requirement: port 1:1 wherever C#/C++ differences
-allow — no simplification. See `NEXT.md` for session history.**
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-5 complete (2026-07-13),
+Phase 6 ("Serialization") next. Fidelity requirement: port 1:1 wherever C#/C++ differences
+allow — no simplification. See `NEXT.md` for current state.**
 
 ## 1. What this project is
 
@@ -820,31 +820,34 @@ Independent of each other; depends only on Phase 1 and CNA's `Microsoft::Xna::Fr
       are dead code upstream, nothing to port. 49 total fresh/ported tests across Phase 3.
       1187 tests passing total for the whole project.
 
-### Phase 4 — Screens — **MOSTLY COMPLETE (2026-07-13)**
+### Phase 4 — Screens — **COMPLETE (2026-07-13)**
 
 Depends on Phase 1; needs CNA's `GameComponent`/`Game`.
 
 - [x] `Screens/*` (`Screen`, `ScreenManager`, transitions, etc.) — `Screen`, `GameScreen`,
-      `ScreenManager`, and the abstract `Transition` base are ported. **`FadeTransition`/
-      `ExpandTransition` deliberately deferred to Phase 5**: both depend on
-      `SpriteBatch::FillRectangle` (`ShapeExtensions.cs`), already scoped to Phase 5 during
-      Phase 1's own scoping pass — a real forward dependency, not stubbed around. Port them
-      once `ShapeExtensions`/`FillRectangle` lands in Phase 5. See `NEXT.md` entry (30) for
-      the full design rationale (non-owning `Screen*`, the transition-completion
+      `ScreenManager`, and the abstract `Transition` base are ported. See the earlier session
+      entry for the full design rationale (non-owning `Screen*`, the transition-completion
       deferred-destruction fix, etc.).
+      **`FadeTransition`/`ExpandTransition` — COMPLETE (2026-07-13)**, unblocked once Phase
+      5's `ShapeExtensions`/`FillRectangle` landed. Both are thin wrappers around a
+      value-owned `SpriteBatch` member (constructed in the initializer list — no heap
+      allocation needed, unlike `BitmapFont`'s page-texture vector, since nothing else
+      aliases this `SpriteBatch`) plus `CNA::Extended::FillRectangle`. Upstream's `null`
+      `blendState` argument to `SpriteBatch.Begin(...)` (meaning "use the default") is
+      translated as an explicit `BlendState::AlphaBlend`, confirmed to be the actual default
+      by reading CNA's own parameterless `SpriteBatch::Begin()` overload's implementation.
+      No upstream tests exist for `Transition`/`FadeTransition`/`ExpandTransition` at all
+      (confirmed via search) — matches the already-documented "no live-GraphicsDevice test
+      infra" gap for anything constructing a real `SpriteBatch`.
 - [x] Port `tests/MonoGame.Extended.Tests/Screens` — `ScreenManagerTests.cs`/
       `GameScreenTests.cs` ported (28+1 tests, 4 C#-cache-identity-specific tests replaced
       with a content-correctness equivalent), plus 3 fresh tests for the Transition-based
       overloads. Nothing to port yet for `FadeTransition`/`ExpandTransition` since they're
       deferred. 1218 tests passing total for the whole project.
 
-### Phase 5 — Graphics, BitmapFonts & Animations — **MOSTLY COMPLETE (2026-07-13)**
+### Phase 5 — Graphics, BitmapFonts & Animations — **COMPLETE (2026-07-13)**
 
-Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`. Every item
-below is done; the only remaining Phase-5-scoped work is `Math/ShapeExtensions.cs`
-(`SpriteBatch::FillRectangle` and friends — see Phase 1's `PrimitivesHelper` entry for why
-it's scoped here despite its upstream folder), needed to unblock Phase 4's deferred
-`FadeTransition`/`ExpandTransition`.
+Depends on Phase 1 and CNA's `GraphicsDevice`/`SpriteBatch`/`Effect`/`Texture2D`.
 
 - [x] `Graphics/Effects/*` (custom `Effect` wrapper) — **COMPLETE (2026-07-13)**.
       **Confirmed the flagged design question was real**: CNA's `Effect(GraphicsDevice&,
@@ -932,6 +935,15 @@ it's scoped here despite its upstream folder), needed to unblock Phase 4's defer
       (upstream raises `OnAnimationEvent` as a raw `Action`, never constructs an
       `AnimationEvent` instance) and `AnimationComponent`'s reverse-iteration + prune-disposed
       `Update()` pattern.
+- [x] `Math/ShapeExtensions.cs` (`DrawPolygon`/`FillRectangle`/`DrawRectangle`/`DrawLine`/
+      `DrawPoint`/`DrawCircle`/`DrawEllipse`/`DrawArc` `SpriteBatch` debug-drawing extensions)
+      — **COMPLETE (2026-07-13)**. Despite living under the `Math/` folder upstream, its
+      declared namespace is the C# root `MonoGame.Extended` (not `.Graphics`) — ported into
+      the matching root `CNA::Extended` namespace, not `CNA::Extended::Graphics`, per this
+      project's "namespace follows the actual C# declaration" convention. `IReadOnlyList
+      <Vector2>` ported as `const std::vector<Vector2>&`. This unblocked Phase 4's deferred
+      `FadeTransition`/`ExpandTransition` (see that phase's entry above). No upstream tests
+      exist for this file.
 - [x] Port `tests/MonoGame.Extended.Tests/{Graphics,BitmapFonts,Animations}` — **COMPLETE**.
       `Texture2DAtlasTests.cs` (Graphics) and `BitmapFontTests.cs`/`BitmapFontFileReaderTests.cs`
       (BitmapFonts) ported as their own files; `Animations/AnimationTests.cs` turned out to
