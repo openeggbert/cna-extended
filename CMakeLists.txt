@@ -174,6 +174,7 @@ add_library(CNA::Extended ALIAS CNA_EXTENDED)
 if(CNA_EXTENDED_BUILD_EXAMPLES)
     add_subdirectory(examples/minimal)
     add_subdirectory(examples/tiled_demo)
+    add_subdirectory(examples/world3d_demo)
 endif()
 
 if(CNA_EXTENDED_BUILD_TESTS)

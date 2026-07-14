@@ -20,37 +20,51 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase: DONE for the original port.** All 10 phases in `plan.md` are complete as
-of 2026-07-14 — the MonoGame.Extended port itself is finished. See section 4 for how the two
-former blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and
-its trailing pixel-verification test gap) were resolved, and section 8 for what a future
-session might reasonably still do with `plan.md` (all optional/non-blocking).
+**Current phase: DONE, both plans.** All 10 phases in `plan.md` (the original
+MonoGame.Extended port) and all 9 phases in `plan3d.md` (the `World3DEXT` 3D scene
+extension) are complete as of 2026-07-14. See section 4 for how `plan.md`'s two former
+blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and its
+trailing pixel-verification test gap) were resolved, and section 8 for optional,
+non-blocking follow-up ideas for either plan.
 
-**A second, separate, owner-approved plan is now active: `plan3d.md`.** Read `3d.md` (the
-design analysis) and `plan3d.md` (the phase-ordered task list, `Status: APPROVED`) before
-touching anything under `World3DEXT/`. It adds `CNA::Extended::World3DEXT` — a 3D scene
-layer (camera, ECS transform hierarchy, model rendering, skinned animation, plus systematic
-3D counterparts of Collisions/Graphics/Particles/Tilemaps) — built on top of the now-complete
-2D port, not a rework of it. This is a genuinely separate, still-in-progress body of work;
-`plan.md`'s "DONE" status above does not apply to it. As of 2026-07-14: Phases 1-7 are
-complete (`Camera3DEXT`; `Transform3ComponentEXT`/`TransformHierarchySystemEXT`;
-`ModelComponentEXT`/`RenderSystem3DEXT` with frustum culling; `SkinnedModelComponentEXT`/
-`AnimationSystem3DEXT` with real skinned-animation pixel-verified tests, reusing `cna`'s
-own `SkinnedModelEXT`/`AvatarRenderer::DrawRealEXT` draw recipe rather than reinventing
-either; `Collisions3DEXT` — `CollisionShape3DEXT`/`ICollisionActor3DEXT`/`OctreeEXT`
-(a 3D spatial hash, not a true recursive octree — see `plan3d.md`'s Phase 5 entry)/
-`CollisionWorld3DEXT`; `Graphics3DEXT` — cube meshes, billboards (`Matrix::CreateBillboard`),
-animated billboards, world-space `Text3DEXT` billboarded labels, and `DebugDrawSystemEXT`
-line-batch drawing, all with real pixel-verified render tests; `Particles3DEXT` — a
-deliberately scoped-down emitter (cone emission + gravity/expiry/color-opacity-interpolation
-baked in, not the full 2D module's Profile/Modifier/Interpolator plugin architecture),
-drawing through a small `BillboardRenderSystemEXT::DrawBillboardEXT` extraction so particle
-rendering genuinely reuses the billboard draw path; `Tilemaps3DEXT` — a sparse
-`Tilemap3DEXT` voxel grid (tile ID 0 = empty), `TilemapTileset3DEXT` (tile ID → whole
-texture, no atlas), `Tilemap3DFactoryEXT` (hand-built array data only, no 3D file format),
-and a standalone `TilemapRenderer3DEXT` reusing a new `CubeMeshRenderSystemEXT::
-DrawCubeEXT` extraction per visible, frustum-culled tile); Phase 9
-(`World3DScreenEXT` + an end-to-end example) is next — see `plan3d.md` §4.
+**`plan3d.md`** (read `3d.md` first for the design rationale behind every decision) added
+`CNA::Extended::World3DEXT` — a 3D scene layer (camera, ECS transform hierarchy, model
+rendering with frustum culling and skinned animation, plus systematic 3D counterparts of
+Collisions/Graphics/Particles/Tilemaps, tied together by a `World3DScreenEXT` convenience
+`Screen` base class) — built on top of the 2D port, not a rework of it. Summary of what
+landed, phase by phase (full detail + every scope decision's rationale in `plan3d.md`
+itself):
+
+1. `Camera3DEXT` — a standalone class (not `Camera<Vector3>`; that base hardcodes 2D types).
+2. `Transform3ComponentEXT`/`TransformHierarchySystemEXT` — bridges the existing
+   `Transform3` parent-pointer hierarchy into ECS entity IDs.
+3. `ModelComponentEXT`/`RenderSystem3DEXT` — frustum-culled `Model` rendering.
+4. `SkinnedModelComponentEXT`/`AnimationSystem3DEXT` — reuses `cna`'s own
+   `SkinnedModelEXT`/`AvatarRenderer::DrawRealEXT` draw recipe rather than reinventing either.
+5. `Collisions3DEXT` — `CollisionShape3DEXT`/`ICollisionActor3DEXT`/`OctreeEXT` (a 3D
+   spatial hash, not a true recursive octree)/`CollisionWorld3DEXT` (no named-layer system).
+6. `Graphics3DEXT` — cube meshes, billboards (`Matrix::CreateBillboard`), animated
+   billboards, world-space `Text3DEXT` billboarded labels, `DebugDrawSystemEXT` line-batch
+   drawing.
+7. `Particles3DEXT` — a deliberately scoped-down emitter (cone emission +
+   gravity/expiry/color-opacity-interpolation baked in, not the full 2D module's
+   Profile/Modifier/Interpolator plugin architecture), drawing through a
+   `BillboardRenderSystemEXT::DrawBillboardEXT` extraction so particle rendering
+   genuinely reuses the billboard draw path.
+8. `Tilemaps3DEXT` — a sparse `Tilemap3DEXT` voxel grid (tile ID 0 = empty),
+   `TilemapTileset3DEXT` (tile ID → whole texture, no atlas), `Tilemap3DFactoryEXT`
+   (hand-built array data only, no 3D file format), a standalone `TilemapRenderer3DEXT`
+   reusing a `CubeMeshRenderSystemEXT::DrawCubeEXT` extraction per visible tile.
+9. `World3DScreenEXT` (a `Screens::Screen` subclass owning an `ECS::World` + `Camera3DEXT`,
+   configured via an overridable `ConfigureWorldEXT` hook) + `examples/world3d_demo/`, a
+   real, running, visually-verified end-to-end example combining every phase above (a
+   transform hierarchy, a frustum-culled entity, a skinned character, particles, and a
+   voxel floor) — screenshot inspected, not just pixel-sampled.
+
+Full test suite: **2157/2159 passing** (2 pre-existing skips predating `plan3d.md`,
+unrelated to it — `OrthographicCameraTest`'s two `ContainsPoint`/`ContainsVector2` tests,
+see section 5). Both `plan.md` and `plan3d.md` checkboxes are fully checked off; there is
+no in-progress phase in either.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -573,6 +587,21 @@ independently check `git status`/`git diff` (not just `git log`) after every for
 including resumed ones, and be prepared for a "completed" notification to actually mean
 "stopped partway through" rather than genuinely done.
 
+**`plan3d.md` is also complete (all 9 phases, 2026-07-14)** — same standing preference
+applies to it. Several phases deliberately scoped down rather than porting the 2D module's
+full generality (each documented in-place in `plan3d.md`/`3d.md`, not hidden); these are
+the concrete "extend later if wanted" candidates, should the owner ask for any of them:
+- `Particles3DEXT`: the full `Profiles`/`Modifiers`/`Interpolators` plugin architecture
+  (only cone emission + gravity/expiry/color-opacity interpolation exist today).
+- `OctreeEXT`: true recursive octree subdivision (currently a fixed-cell-size spatial hash).
+- `CollisionWorld3DEXT`: a named-`Layer`/`LayerPair` cross-layer-filtering system.
+- `Collisions3DEXT` ↔ `Tilemaps3DEXT`: a purpose-built tilemap-aware collision broadphase
+  shortcut (today: insert one `ICollisionActor3DEXT` per populated tile manually).
+- `DebugDrawComponentEXT`: sphere wireframes (only box/frustum wireframes exist).
+- `Text3DEXT`: multi-page `BitmapFont` support (glyphs from a second page are skipped).
+- `TilemapRenderer3DEXT`: per-chunk geometry batching (currently one draw call per tile).
+- `Tilemap3DFactoryEXT`: a real file-format reader (currently hand-built arrays only).
+
 ---
 
 ## 9. Do not do yet
@@ -608,23 +637,21 @@ including resumed ones, and be prepared for a "completed" notification to actual
 
 ## 10. Resume prompt
 
-The original porting plan (`plan.md`) is complete (all 10 phases) — nothing outstanding
-there. **The active work is `plan3d.md`** (the `World3DEXT` 3D scene extension, owner-approved
-2026-07-14): Phases 1-8 are done (camera; transform hierarchy bridge; model
-rendering/frustum culling; skinned animation; `Collisions3DEXT`; `Graphics3DEXT`;
-`Particles3DEXT`; `Tilemaps3DEXT`); resume at Phase 9 (`World3DScreenEXT` + an end-to-end
-example, the last phase) — read `3d.md` and `plan3d.md` §4 first. Re-check `plan3d.md`'s
-checkboxes and this file's section 1 before assuming this is still current; something may
-have changed since this was written.
+Both plans are complete: `plan.md` (all 10 phases, the original MonoGame.Extended port) and
+`plan3d.md` (all 9 phases, the `World3DEXT` 3D scene extension, owner-approved 2026-07-14).
+There is no required next task in either. Re-check both files' checkboxes and this file's
+section 1 before assuming this is still current; something may have changed since this was
+written.
 
 If the project owner has a new, specific ask (a real request, not "continue the plan"), just
 do that directly rather than inventing work from section 8's optional idea list. If asked to
 "keep going" with no specific target, section 8 lists genuinely optional, non-blocking
-follow-ups — pick at most one, verify it the same way every prior task in this file was
-verified (independent `git status`/diff review of any fork's output before trusting it,
-genuinely clean rebuilds of both CMake configs from scratch, full `ctest`, and — for
-anything touching rendering/pixels — actually running the affected binary and inspecting
-real output, not just trusting a report), and update this file and `plan.md` afterward.
+follow-ups for both plans (including `plan3d.md`'s deliberately-deferred-scope items) — pick
+at most one, verify it the same way every prior task in this file was verified (independent
+`git status`/diff review of any fork's output before trusting it, genuinely clean rebuilds
+of both CMake configs from scratch, full `ctest`, and — for anything touching
+rendering/pixels — actually running the affected binary and inspecting real output, not
+just trusting a report), and update this file and the relevant plan file afterward.
 
 The historical prompt this section used to contain (below, for reference only — do not
 follow it literally, it refers to a "task 1" numbering scheme from an earlier, now-obsolete

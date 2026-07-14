@@ -1,9 +1,11 @@
 # `cna-extended` — World3DEXT Porting/Design Plan
 
-Status: **APPROVED (2026-07-14 by Robert Vokáč), including the Phase 5-8 scope expansion
-(`Collisions3DEXT`/`Graphics3DEXT`/`Particles3DEXT`/`Tilemaps3DEXT`) recorded the same
-day.** Implementation may proceed phase by phase, each verified (build + tests, both
-CMake configs) before the next starts, matching this project's established discipline.
+Status: **DONE — all 9 phases complete (2026-07-14).** Approved the same day
+(2026-07-14 by Robert Vokáč), including the Phase 5-8 scope expansion
+(`Collisions3DEXT`/`Graphics3DEXT`/`Particles3DEXT`/`Tilemaps3DEXT`). Every phase was
+verified (build + tests, both CMake configs, `rm -rf` clean rebuilds) before the next
+started, matching this project's established discipline. Full test suite: **2157/2159
+passing** (2 pre-existing skips predating this plan, unrelated to it — see `NEXT.md`).
 
 See [`3d.md`](3d.md) for the full analysis and rationale behind every decision recorded
 here — this file is the checkbox-tracked task list derived from it, not a restatement of
@@ -453,18 +455,47 @@ this task's own "decide during this phase" wording):
       clean (genuine `rm -rf` + fresh configure + build), full suite **2155/2157 passing**
       (was 2142/2144; 2 pre-existing skips unrelated to this phase).
 
-### Phase 9 — `World3DScreenEXT`
+### Phase 9 — `World3DScreenEXT` — **COMPLETE (2026-07-14)**
 
-- [ ] `World3DScreenEXT : Screens::Screen` owning an `ECS::World` + `Camera3DEXT`,
+- [x] `World3DScreenEXT : Screens::Screen` owning an `ECS::World` + `Camera3DEXT`,
       `GetWorld3DEXT()`/`GetCamera3DEXT()` accessors — ties Phases 1-8 together into one
       convenience base class for real game screens, reusing `Screen`'s real
-      `Load`/`Update`/`Draw`/`Unload` lifecycle and `ScreenManager`'s existing stack/
-      transition support (no new Scene/SceneManager type — see `3d.md` §6.8).
-- [ ] An end-to-end example under `examples/` (matching Phase 10's
-      `examples/tiled_demo/` precedent) demonstrating a small 3D scene: a camera, a
-      hierarchy of a few transformed entities, at least one culled-out-of-frame entity,
-      a `Tilemaps3DEXT` voxel area, some `Particles3DEXT` effect, and (if Phase 4 has
-      landed) a skinned model.
+      `Initialize`/`Update`/`Draw` lifecycle and `ScreenManager`'s existing stack/
+      transition support unchanged (no new Scene/SceneManager type — see `3d.md` §6.8).
+      A derived screen overrides `ConfigureWorldEXT(WorldBuilder&)` (called once, from
+      `Initialize()`, before the `World` is built) to add its own systems; a derived
+      class overriding `Initialize()` itself must call the base implementation first so
+      `GetWorld3DEXT()` is valid before its own setup runs — documented in the header,
+      exercised directly by the example below.
+      `include/CNA/Extended/World3DEXT/World3DScreenEXT.hpp` + `src/.../World3DScreenEXT.cpp`.
+- [x] An end-to-end example under `examples/world3d_demo/` (matching Phase 10's
+      `examples/tiled_demo/` precedent — real headless `GraphicsDevice` + off-screen
+      `RenderTarget2D`, `GetBackBufferData` readback, a saved PNG, pixel-sampled
+      assertions, a real 0/1 exit code): a `World3DScreenEXT` subclass wiring up
+      `TransformHierarchySystemEXT`/`AnimationSystem3DEXT`/`ParticleUpdateSystem3DEXT`/
+      `RenderSystem3DEXT`/`CubeMeshRenderSystemEXT`/`BillboardRenderSystemEXT`/
+      `ParticleRenderSystem3DEXT` via `ConfigureWorldEXT`, then creating: a parent/child
+      cube hierarchy (a pillar + a cap cube riding on it via `Transform3ComponentEXT`/
+      `TransformHierarchySystemEXT` — no per-frame code needed to keep the child
+      attached), a cube deliberately placed 10,000 units behind the far plane (proving
+      per-entity frustum culling), a two-bone skinned "character" (the same hand-built
+      rig shape `AnimationSystem3DEXTTests.cpp` uses — no content pipeline in scope, see
+      the root `CLAUDE.md`), a rising spark `ParticleEffect3DEXT` burst, and a
+      `Tilemap3DEXT` voxel floor drawn each frame via `TilemapRenderer3DEXT` (a
+      standalone renderer, called directly from the screen's own `Draw()` override,
+      matching that type's own non-ECS shape from Phase 8). Verified by actually running
+      the built executable, not just compiling it: real center-pixel sampling across 10
+      simulated frames consistently shows the pillar's tint color, spark-colored pixels
+      are detected, and the final frame's saved PNG was inspected and visually confirms
+      a coherent 3D scene (pillar, cap, floor, particles, character all present).
+      `examples/world3d_demo/CMakeLists.txt` + `main.cpp`, wired into the root
+      `CMakeLists.txt`'s `add_subdirectory` list next to `tiled_demo`.
+- [x] `World3DScreenEXTTests.cpp` (2 tests: a real headless render proving
+      `Initialize`/`Update`/`Draw` reach a configured `CubeMeshRenderSystemEXT` and
+      actually draw, and that `GetCamera3DEXT()` is independently usable before
+      `Initialize()` builds the `World`). Both build configs clean (genuine `rm -rf` +
+      fresh configure + build), full suite **2157/2159 passing** (was 2155/2157; 2
+      pre-existing skips unrelated to this phase).
 
 ## 5. After meaningful changes
 
