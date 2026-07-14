@@ -8,8 +8,10 @@
 #include "CNA/Extended/World3DEXT/Transform3ComponentEXT.hpp"
 #include "Microsoft/Xna/Framework/BoundingFrustum.hpp"
 #include "Microsoft/Xna/Framework/BoundingSphere.hpp"
+#include "Microsoft/Xna/Framework/Vector2.hpp"
 #include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
 #include "Microsoft/Xna/Framework/Graphics/PrimitiveType.hpp"
+#include "Microsoft/Xna/Framework/Graphics/VertexBuffer.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -48,14 +50,7 @@ namespace CNA::Extended::World3DEXT
     {
         (void)gameTime;
 
-        const Matrix view = camera_->GetViewMatrixEXT();
-        const Matrix projection = camera_->GetProjectionMatrixEXT();
         const BoundingFrustum frustum = camera_->GetBoundingFrustumEXT();
-        const Vector3 cameraPosition = camera_->getPositionProperty();
-        const Vector3 cameraUp = camera_->getUpProperty();
-
-        effect_.View = view;
-        effect_.Projection = projection;
 
         for (const int entityId : getActiveEntitiesProperty())
         {
@@ -84,18 +79,28 @@ namespace CNA::Extended::World3DEXT
                 continue;
             }
 
-            const Matrix world = Matrix::CreateScale(billboardComponent->SizeEXT.X, billboardComponent->SizeEXT.Y, 1.0f)
-                * Matrix::CreateBillboard(objectPosition, cameraPosition, cameraUp, std::nullopt);
-
-            effect_.World = world;
-            effect_.setTextureProperty(billboardComponent->TextureEXT);
-            effect_.setDiffuseColorProperty(billboardComponent->TintEXT.ToVector3());
-            effect_.setAlphaProperty(static_cast<float>(billboardComponent->TintEXT.getAProperty()) / 255.0f);
-            effect_.Apply();
-
-            graphicsDevice_->SetVertexBuffer(billboardComponent->VertexBufferEXT);
-            graphicsDevice_->SetIndexBuffer(&quadIndexBuffer_);
-            graphicsDevice_->DrawIndexedPrimitives(PrimitiveType::TriangleList, 0, 0, billboardComponent->VertexBufferEXT->getVertexCountProperty(), 0, 2);
+            DrawBillboardEXT(*billboardComponent->VertexBufferEXT, billboardComponent->TextureEXT, objectPosition,
+                              billboardComponent->SizeEXT, billboardComponent->TintEXT);
         }
+    }
+
+    void BillboardRenderSystemEXT::DrawBillboardEXT(Microsoft::Xna::Framework::Graphics::VertexBuffer& vertexBuffer,
+                                                      Microsoft::Xna::Framework::Graphics::Texture2D* texture, const Vector3& worldPosition,
+                                                      const Microsoft::Xna::Framework::Vector2& size, const Microsoft::Xna::Framework::Color& tint)
+    {
+        const Matrix world = Matrix::CreateScale(size.X, size.Y, 1.0f)
+            * Matrix::CreateBillboard(worldPosition, camera_->getPositionProperty(), camera_->getUpProperty(), std::nullopt);
+
+        effect_.View = camera_->GetViewMatrixEXT();
+        effect_.Projection = camera_->GetProjectionMatrixEXT();
+        effect_.World = world;
+        effect_.setTextureProperty(texture);
+        effect_.setDiffuseColorProperty(tint.ToVector3());
+        effect_.setAlphaProperty(static_cast<float>(tint.getAProperty()) / 255.0f);
+        effect_.Apply();
+
+        graphicsDevice_->SetVertexBuffer(&vertexBuffer);
+        graphicsDevice_->SetIndexBuffer(&quadIndexBuffer_);
+        graphicsDevice_->DrawIndexedPrimitives(PrimitiveType::TriangleList, 0, 0, vertexBuffer.getVertexCountProperty(), 0, 2);
     }
 }

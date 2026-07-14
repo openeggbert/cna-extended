@@ -12,11 +12,30 @@
 // shared IndexBuffer (the constant {0,1,2,0,2,3} quad winding every BillboardComponentEXT's
 // VertexBufferEXT was built against, see BillboardMeshEXT.hpp) and one shared BasicEffect
 // (texture/tint swapped per draw call, matching CubeMeshRenderSystemEXT's identical pattern).
+//
+// DrawBillboardEXT exposes that same per-billboard draw step publicly, so other systems can
+// draw ad-hoc billboards (not backed by a BillboardComponentEXT entity) through this exact
+// path instead of duplicating it -- ParticleRenderSystem3DEXT uses this for per-particle
+// billboards, matching plan3d.md's Phase 7 requirement ("via Graphics3DEXT::
+// BillboardRenderSystemEXT's existing draw path, not a new one").
 #pragma once
 
 #include "CNA/Extended/ECS/Systems/EntityDrawSystem.hpp"
+#include "Microsoft/Xna/Framework/Color.hpp"
 #include "Microsoft/Xna/Framework/Graphics/BasicEffect.hpp"
 #include "Microsoft/Xna/Framework/Graphics/IndexBuffer.hpp"
+
+namespace Microsoft::Xna::Framework
+{
+    struct Vector2;
+    struct Vector3;
+}
+
+namespace Microsoft::Xna::Framework::Graphics
+{
+    class Texture2D;
+    class VertexBuffer;
+}
 
 namespace CNA::Extended::World3DEXT
 {
@@ -40,6 +59,22 @@ namespace CNA::Extended::World3DEXT
         using ECS::Systems::EntityDrawSystem::Initialize;
         void Initialize(ECS::ComponentManager& componentManager) override;
         void Draw(const Microsoft::Xna::Framework::GameTime& gameTime) override;
+
+        /**
+         * @brief Draws one camera-facing textured quad through this system's shared
+         * IndexBuffer/BasicEffect -- the exact same draw step Draw() uses per
+         * BillboardComponentEXT entity, exposed for callers that don't have an ECS entity
+         * (e.g. ParticleRenderSystem3DEXT's individual particles).
+         * @param vertexBuffer A 4-vertex local-space quad with UV baked in (see BillboardMeshEXT.hpp).
+         * @param texture The texture to sample. May be null.
+         * @param worldPosition The billboard's world-space position (only position, not rotation, matters for a billboard).
+         * @param size The billboard's world-space size.
+         * @param tint Tint multiplied with the sampled texture color.
+         */
+        void DrawBillboardEXT(Microsoft::Xna::Framework::Graphics::VertexBuffer& vertexBuffer,
+                               Microsoft::Xna::Framework::Graphics::Texture2D* texture,
+                               const Microsoft::Xna::Framework::Vector3& worldPosition,
+                               const Microsoft::Xna::Framework::Vector2& size, const Microsoft::Xna::Framework::Color& tint);
 
     private:
         Microsoft::Xna::Framework::Graphics::GraphicsDevice* graphicsDevice_;

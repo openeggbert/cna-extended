@@ -330,21 +330,64 @@ note on how its design actually differs from `cna-scene`'s immediate-mode API).
       configure + build), full suite **2131/2133 passing** (was 2119/2121; 2 pre-existing
       skips unrelated to this phase).
 
-### Phase 7 — `Particles3DEXT` (3D counterpart of `Particles`)
+### Phase 7 — `Particles3DEXT` (3D counterpart of `Particles`) — **COMPLETE (2026-07-14)**
 
 Mirrors `CNA::Extended::Particles`'s `ParticleEffect`/`ParticleEmitter`/`ParticleBuffer`
 shape, changing 2D position/velocity fields to `Vector3` and rendering through
-`Graphics3DEXT`'s billboard pipeline (Phase 6) instead of `SpriteBatch`.
+`Graphics3DEXT`'s billboard pipeline (Phase 6) instead of `SpriteBatch`. **Deliberately
+scoped down**, discovered/decided during implementation once the 2D module's actual size
+was read (~13 `Modifier` subclasses, 5 `Profile` subclasses, 6 `Interpolator` subclasses):
+rather than port that full plugin architecture, `ParticleEmitter3DEXT` has ONE built-in
+emission shape (a cone; `ConeHalfAngleEXT == Pi` degenerates to full-sphere emission) and
+THREE built-in per-frame behaviors baked directly into `UpdateEXT` (linear gravity,
+age-based expiry, start/end color+opacity interpolation) — covering `AgeModifier`'s/
+`LinearGravityModifier`'s/`ColorInterpolator`'s/`OpacityInterpolator`'s conceptual roles
+without their extensibility framework. A real, working, tested particle system, just not a
+plugin architecture; the full `Profile`/`Modifier`/`Interpolator` port can be added later
+if a real need appears — matching this plan's repeated "start with the simplest correct
+version" precedent (`OctreeEXT`, `CollisionWorld3DEXT`).
 
-- [ ] `Particle3DEXT` (3D counterpart of `Particles::Data::Particle` — position/velocity/
-      etc. as `Vector3` instead of the 2D packed-float-array layout).
-- [ ] `ParticleEmitter3DEXT` / `ParticleEffect3DEXT` (3D counterparts of `ParticleEmitter`/
-      `ParticleEffect`; reuse `Particles::Modifiers`/`Particles::Profiles`' existing
-      shape/logic wherever it's already dimension-agnostic, extend only what's genuinely
-      2D-specific).
-- [ ] `ParticleRenderSystem3DEXT` (draws active 3D particles as billboards via
-      `Graphics3DEXT::BillboardRenderSystemEXT`'s existing draw path, not a new one).
-- [ ] Tests mirroring `Particles`'s existing coverage, adapted to 3D scenarios.
+- [x] `Particle3DEXT` (3D counterpart of `Particles::Data::Particle` — position/velocity/
+      color/scale as `Vector3`/`Color`/`float` fields instead of the 2D packed-float-array,
+      `#pragma pack(1)` layout, held in a plain `std::vector<Particle3DEXT>` rather than
+      upstream's raw-pointer-walked `ParticleBuffer` — that packing existed to match a C#
+      `[StructLayout(Pack=1)] unsafe struct`'s exact layout, which has no counterpart for
+      new, non-upstream code). `include/CNA/Extended/World3DEXT/Particle3DEXT.hpp` + `.cpp`.
+- [x] `ParticleEmitter3DEXT` / `ParticleEffect3DEXT` (3D counterparts of `ParticleEmitter`/
+      `ParticleEffect` — see the scope note above for what's actually included).
+      `ParticleEffect3DEXT` owns 1+ `ParticleEmitter3DEXT`s, driving them together from one
+      world position (e.g. a torch = "flame" + "smoke" emitters). `System::Random` (real
+      sharp-runtime type, not a hand-rolled RNG) drives cone-direction/speed/lifetime/scale
+      sampling. `include/CNA/Extended/World3DEXT/ParticleEmitter3DEXT.hpp` +
+      `ParticleEffect3DEXT.hpp` + matching `.cpp` files.
+- [x] `ParticleEffectComponentEXT` (ECS component pairing a `ParticleEffect3DEXT*` with the
+      texture its particles draw with — one texture per effect, not per-particle, the
+      simplest correct scope) + `ParticleUpdateSystem3DEXT` (`EntityUpdateSystem`, advances
+      each active entity's effect from its `Transform3ComponentEXT` world position, or
+      `Vector3::Zero` if it has none).
+- [x] `ParticleRenderSystem3DEXT` (draws active 3D particles as billboards via
+      `Graphics3DEXT::BillboardRenderSystemEXT`'s existing draw path, not a new one) —
+      **required a small `BillboardRenderSystemEXT` refactor to actually satisfy this**:
+      extracted its per-entity draw step into a new public `DrawBillboardEXT(VertexBuffer&,
+      Texture2D*, Vector3 worldPosition, Vector2 size, Color tint)` method, called both by
+      `BillboardRenderSystemEXT::Draw()`'s own entity loop and by
+      `ParticleRenderSystem3DEXT` for each active particle — one genuinely shared draw
+      path, not a duplicated one. `ParticleRenderSystem3DEXT` owns one shared, full-texture
+      ([0,1] UV) quad `VertexBuffer` (particles don't need atlas sub-regions in this scope),
+      reused for every particle every frame.
+      `include/CNA/Extended/World3DEXT/ParticleRenderSystem3DEXT.hpp` + `.cpp`.
+- [x] Tests mirroring `Particles`'s existing coverage, adapted to 3D scenarios:
+      `ParticleEmitter3DEXTTests.cpp` (9: emit count/cap/origin, age/velocity/gravity
+      integration, expiry, color/opacity interpolation, emission-rate-over-time, and
+      `ParticleEffect3DEXT` multi-emitter forwarding), `ParticleRenderSystem3DEXTTests.cpp`
+      (2: a real headless render showing an emitted particle's tint color on screen, and a
+      no-particles-drawn-nothing case). One real test bug caught and fixed during this
+      phase (not a product bug): a gravity-integration test advanced time by exactly the
+      particle's default 1-second lifetime, so the particle expired and was removed before
+      the assertion could read its velocity — fixed by giving that test a longer lifetime.
+      11 new tests total. Both build configs clean (genuine `rm -rf` + fresh configure +
+      build), full suite **2142/2144 passing** (was 2131/2133; 2 pre-existing skips
+      unrelated to this phase).
 
 ### Phase 8 — `Tilemaps3DEXT` (3D/voxel counterpart of `Tilemaps`)
 
