@@ -64,11 +64,13 @@ Reference source (full clone, kept up to date, **read-only, never edited**):
   were read directly: `BitmapFontFileReader` is a direct parser for the AngleCode BMFont
   `.fnt` spec (binary/text/XML variants) with no xnb/ContentReader/ContentManager
   dependency at all. It **is** ported, as part of Phase 5 — see that phase's task list.
-- **`ObservableCollection`/`IObservableCollection`** from MonoGame.Extended's own
+- ~~`ObservableCollection`/`IObservableCollection` from MonoGame.Extended's own
   `Collections/` — `sharp-runtime` already has the real BCL type at
-  `System::Collections::ObjectModel::ObservableCollection`. Use that instead; only add a
-  thin adapter if a later phase finds a call site that specifically needs
-  `IObservableCollection`'s exact interface shape.
+  `System::Collections::ObjectModel::ObservableCollection`. Use that instead.~~
+  **Reversed (2026-07-14)**: the project owner explicitly requested both be ported anyway,
+  as a genuinely separate type alongside `sharp-runtime`'s (different event shape — four
+  separate events vs. one `CollectionChanged` with a change payload). See the Collections
+  checklist entry below (Phase 1) for what actually landed.
 
 ## 3. License & attribution
 
@@ -709,6 +711,47 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       files — wrote fresh tests for `KeyedCollection`/`Shuffle` (determinism,
       element-preservation, edge cases). Test suite grew from 608 to 624 (16 net new
       tests). Both build modes clean.
+- [x] **Collections: `ObservableCollection`/`IObservableCollection`, Math: `Ray2`
+      (2026-07-14, both ported directly, no fork; landed via the post-completion
+      completeness audit's item-by-item owner review)**. Both were originally scoped out
+      (`ObservableCollection` in favor of reusing `sharp-runtime`'s own real BCL
+      equivalent, §2; `Ray2` never separately tracked at all — see below) but the project
+      owner explicitly requested both be ported anyway during the audit review, for full
+      fidelity even where a reasoned skip had already been made.
+      **`ObservableCollection<T>`/`IObservableCollection<T>`**: a genuinely separate type
+      from `sharp-runtime`'s `System::Collections::ObjectModel::ObservableCollection`
+      (different event shape — four separate events, `ItemAdded`/`ItemRemoved`/
+      `Clearing`/`Cleared`, vs. `sharp-runtime`'s single `CollectionChanged` with a
+      change-description payload); both now coexist, pick whichever shape a call site
+      needs. Built on `sharp-runtime`'s `System::Collections::ObjectModel::Collection<T>`
+      (already exposes the exact protected `InsertItem`/`RemoveItem`/`ClearItems`/
+      `SetItem` virtual hooks this type overrides). `System::EventHandler<TEventArgs>::
+      Raise` requires a `System::Object*` sender, so `ObservableCollection<T>`
+      additionally inherits `System::Object` (verified no diamond: `Collection<T>`'s own
+      base chain never touches `Object`) purely to have a valid `this` to pass — matching
+      `FramesPerSecondCounter.hpp`'s established `System::Object` + `EventHandler` pattern.
+      `GetTypeName()` returns a fixed, non-templated string rather than attempting to
+      embed `T`'s name, matching the established "reflection-hazard, use a fixed sensible
+      string" precedent (`GameTimer`'s constructor-supplied name). Header-only template,
+      matching `KeyedCollection<TKey,TValue>`'s convention. No upstream tests exist;
+      10 fresh tests added (event-raising for add/remove/set/clear, interface
+      conformance, base-`Collection<T>` passthrough, `GetTypeName`).
+      **`Ray2` (`Math/Ray2.cs`)**: discovered mid-audit to be a genuinely separate,
+      older, minimal upstream type from the already-ported `Ray2D` (different field name
+      — `Position` vs `Ray2D::Origin` — and a much smaller surface, one
+      `Intersects(BoundingRectangle, out, out)` method vs. `Ray2D`'s dozen overloads),
+      not merely a naming variant as first assumed during the audit (a real correction
+      made transparently, not silently). Confirmed via `grep` across upstream `source/`
+      and `tests/`: zero call sites anywhere in upstream itself (one comment mention in
+      `PrimitivesHelper.cs`) and no test coverage — legacy/superseded, but ported anyway
+      per the owner's explicit request. `IEquatableByRef<Ray2>` intentionally not
+      inherited, matching the identical precedent already set by every sibling geometric
+      value type in this project (`BoundingBox2D`, `Line2D`, `LineSegment2D`, `Ray2D`,
+      etc. — none of them inherit it either, despite upstream implementing it). 7 fresh
+      tests added (construction, equality, hashing, `ToString`, 3 `Intersects` scenarios
+      via `PrimitivesHelper::IntersectsSlab`, already ported and reused as-is).
+      Both build configs verified clean via genuine `rm -rf`-based rebuilds; full `ctest`
+      — **2063/2063 passing** (was 2046).
 - [x] Port `tests/MonoGame.Extended.Tests/{Math,Primitives,Shapes,Collections}` as
       GoogleTest suites (2026-07-13) — audited personally first: all 16 upstream files
       under the 4 literal named folders were already fully covered by tests ported
@@ -1065,23 +1108,42 @@ filename by hand against `plan.md`'s decision log or by reading the upstream fil
 directly. Result: every single mismatch across every module (Collections,
 Content, ECS, Graphics, Input, Serialization, Tilemaps/Tiled/LDtk/Ogmo, Tweening,
 all of Math/, all 35 root-level files) was one of: (a) an already-documented,
-reasoned exclusion in `plan.md` (`ObservableCollection`/`IObservableCollection`,
-`ComponentType.cs`, `BaseTypeJsonConverter.cs`, `EffectResource.cs`,
-`KeyboardState.Extensions.cs`'s `internal`-only FNA shim methods,
-`TiledDataDecoder.cs`/`TiledPropertyConverter.cs`, the xnb `ContentReaders`/
-`Content/*Reader` family); (b) a legitimate multi-file-to-one-file consolidation,
-each with its own explaining header comment (Tiled/LDtk/Ogmo's ~65 combined
-Document-DTO `.cs` files each folded into one `*Document.hpp` per format;
+reasoned exclusion in `plan.md` (`ComponentType.cs`, `BaseTypeJsonConverter.cs`,
+`EffectResource.cs`, `KeyboardState.Extensions.cs`'s `internal`-only FNA shim
+methods, `TiledDataDecoder.cs`/`TiledPropertyConverter.cs`, the xnb
+`ContentReaders`/`Content/*Reader` family); (b) a legitimate multi-file-to-one-file
+consolidation, each with its own explaining header comment (Tiled/LDtk/Ogmo's ~65
+combined Document-DTO `.cs` files each folded into one `*Document.hpp` per format;
 `OgmoLayerDataConverter.cs`/`OgmoTileCoordConverter.cs`'s polymorphic-dispatch and
 custom-coordinate-parsing logic folded into `ParseOgmoLayerData`/`ParseCoordPair`
 free functions rather than kept as separate `JsonConverter<T>` classes;
 `TweenFieldMember.cs`/`TweenPropertyMember.cs`/`TweenMember.cs`'s reflection-based
 3-class hierarchy replaced by one pointer-to-member-based `TweenMember<TTarget,
-TMember>`, an explicit user-approved redesign); (c) a trivial naming difference
-(`Ray2.cs` → `Ray2D.hpp`, matching the sibling `Line2D`/`LineSegment2D` naming
-convention); or (d) `SizeJsonConverter.cs` — the one real, undocumented gap,
-fixed above. No other gaps found. Both build configs verified clean and the full
-suite (2046/2046) passing after the fix.
+TMember>`, an explicit user-approved redesign); or (c) `SizeJsonConverter.cs` — the
+one real, undocumented gap, fixed above. No other gaps found in the initial pass.
+
+**Owner review of every finding (2026-07-14, same day)**: rather than take the
+above conclusions on trust, the owner asked to walk through all 14 items
+one by one. Two corrections came out of that review, both landed (see the Phase 1
+Collections/Math checklist entry above for what was actually built):
+- **`ObservableCollection`/`IObservableCollection`**: the owner overturned the
+  original "reuse `sharp-runtime`'s equivalent instead" decision (§2) and asked for
+  MonoGame.Extended's own type to be ported anyway, as a genuinely separate type.
+  Done.
+- **`Ray2.cs` → `Ray2D.hpp`, originally reported above as "a trivial naming
+  difference" — this was WRONG, caught and corrected transparently, not silently,
+  during the walkthrough.** `Ray2D.hpp` is in fact a correct, faithful port of a
+  *different*, real upstream file (`Ray2D.cs`, root-level, field `Origin`, a dozen
+  `Intersects` overloads) — genuinely distinct from `Math/Ray2.cs` (field
+  `Position`, one `Intersects(BoundingRectangle,...)` method), which this audit had
+  incorrectly conflated with `Ray2D.cs` purely because of the similar name. `Ray2`
+  itself is real, upstream, zero-call-site dead code (confirmed by `grep`, same
+  category as `ComponentType.cs`/`BaseTypeJsonConverter.cs`) — but the owner asked
+  for it to be ported anyway, for full fidelity. Done, as a genuinely separate type
+  alongside `Ray2D` (no rename of anything).
+
+Both build configs verified clean and the full suite (**2063/2063**) passing after
+both corrections.
 
 ### Phase 7 — Tilemaps (Tiled / LDtk / Ogmo)
 

@@ -52,7 +52,7 @@ what a future session might reasonably still do (all optional/non-blocking).
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2046/2046 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2063/2063 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -237,7 +237,7 @@ re-detailed here.
 
 **No blocker remains anywhere. The plan is complete — all 10 phases, including Phase 10.**
 `cmake --build build -j$(nproc)`, `cmake --build build-headers -j$(nproc)`, and
-`ctest --test-dir build` all currently succeed (**2046 tests run, 100% passing**, zero
+`ctest --test-dir build` all currently succeed (**2063 tests run, 100% passing**, zero
 warnings in both configs). The four historical blockers/gaps below are kept for context on
 how they were resolved, not because any is still open.
 
@@ -255,12 +255,23 @@ how they were resolved, not because any is still open.
 - **Result**: exactly one genuine, undocumented gap found —
   `Serialization/Json/SizeJsonConverter.cs` (the JSON converter for the integer `Size`
   type, distinct from the already-ported `Size2JsonConverter`/`SizeF`). Everything else
-  that looked like a gap on a raw file-count basis was legitimate: documented exclusions,
-  multi-file-to-one-file DTO consolidations (Tiled/LDtk/Ogmo), or naming differences
-  (`Ray2.cs`→`Ray2D.hpp`). Full account in `plan.md`'s Phase 6 entry.
+  that looked like a gap on a raw file-count basis was legitimate: documented exclusions
+  or multi-file-to-one-file DTO consolidations (Tiled/LDtk/Ogmo). Full account in
+  `plan.md`'s Phase 6 entry.
 - **Fix**: ported `SizeJsonConverter.hpp`/`.cpp` following `Size2JsonConverter`'s exact
-  established pattern, plus 4 fresh tests. Both configs verified clean, full suite
-  2046/2046 (was 2042).
+  established pattern, plus 4 fresh tests.
+- **Owner review of all 14 audit findings, same day**: rather than trust the audit's
+  conclusions, the owner asked to walk through every finding individually. Two
+  corrections: (1) `ObservableCollection`/`IObservableCollection` — the owner overturned
+  the original "reuse `sharp-runtime`'s equivalent" decision and asked for
+  MonoGame.Extended's own type to be ported anyway, as a genuinely separate type (built
+  on `sharp-runtime`'s `Collection<T>`, `System::Object`+`EventHandler` pattern matching
+  `FramesPerSecondCounter.hpp`). (2) `Ray2.cs`→`Ray2D.hpp` — **this was actually WRONG**,
+  caught during the walkthrough: `Ray2D.hpp` is a correct port of a *different* real
+  upstream file (`Ray2D.cs`, field `Origin`); `Math/Ray2.cs` (field `Position`, one
+  method, zero call sites, real dead code) is a genuinely separate type, now also
+  ported per the owner's request. Full account in `plan.md`'s Phase 1 checklist entry.
+  Both build configs verified clean, full suite **2063/2063** (was 2042).
 
 ### Resolved: Phase 10 (end-to-end example, Doxygen pass, README/NOTICE.md)
 
