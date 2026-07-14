@@ -726,12 +726,25 @@ port tests alongside → verify both CMake configs via genuine `rm -rf` clean re
       `CollisionWorld2DTests.cpp`. 32 new tests total (5+4+23, the last file's original 8
       pre-layer tests kept and 1 renamed for the `Rebuild()`→`RebuildDynamicLayers()` rename).
       Both configs verified; full suite green.
-- [ ] **Phase B — True recursive octree broadphase** — `OctreeNode3DEXT`/`OctreeNodeData3DEXT`
-      (pure recursive tree, mirrors `QuadTree`/`QuadtreeData`, 8 octants not 4 quadrants) +
-      `Octree3DEXT` (the public `ICollisionBroadphase3DEXT` adapter, mirrors `QuadTreeSpace`).
-      Not the default broadphase — usable via the existing
+- [x] **Phase B — True recursive octree broadphase** — `OctreeNode3DEXT`/`OctreeNodeData3DEXT`
+      (pure recursive tree, mirrors `QuadTree`/`QuadtreeData` method-for-method, 8 octants —
+      `Split()` divides `NodeBounds` around `(Min+Max)*0.5` into all 8 min/center × center/max
+      combinations per axis — not 4 quadrants; same `DefaultMaxDepth = 7`/
+      `DefaultMaxObjectsPerNode = 25` thresholds; same non-exclusive "insert into every
+      overlapping child" recursion, dirty-flag traversal dedup, and BFS `Shake()`
+      merge-back-down) + `Octree3DEXT` (the public `ICollisionBroadphase3DEXT` adapter,
+      mirrors `QuadTreeSpace`: owns every `OctreeNodeData3DEXT` it creates, the tree/its nodes
+      hold only non-owning references). Not the default broadphase — usable via the existing
       `CollisionWorld3DEXT(unique_ptr<ICollisionBroadphase3DEXT>)` constructor, exactly as
       `SpatialHash3DEXT.hpp`'s header comment already promised.
+      Tests: `OctreeNode3DEXTTests.cpp` (28 tests, full 1:1 port of `QuadTreeTests.cpp`'s
+      entire coverage — constructor/`NumTargets`/`Insert`/`Remove`/`RemoveFromAllParents`/
+      `Shake`/`Query`, including the 1000-actor incremental-insert and
+      2×`DefaultMaxObjectsPerNode` real-multi-level-split-then-query scenarios) +
+      `Octree3DEXTTests.cpp` (7 tests, mirrors `QuadTreeSpaceTests.cpp`'s coverage adapted to
+      3D per `SpatialHash3DEXTTests.cpp`'s own established pattern — sphere bounds in place
+      of 2D's circle/oriented-rectangle cases, `CollisionShape3DEXT` has no oriented-box
+      shape). 35 new tests total. Both configs verified; full suite green (2240/2240).
 - [ ] **Phase C-1 — Particles core architecture + proving slice** — `Profile3DEXT`/
       `Modifier3DEXT`/`ModifierExecutionStrategy3DEXT` (Serial only)/`Interpolator3DEXT`/
       `InterpolatorOfT3DEXT<T>` base types; `Particle3DEXT` gains `RotationEXT`/`MassEXT`/

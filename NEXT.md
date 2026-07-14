@@ -47,9 +47,10 @@ itself):
 4. `SkinnedModelComponentEXT`/`AnimationSystem3DEXT` — reuses `cna`'s own
    `SkinnedModelEXT`/`AvatarRenderer::DrawRealEXT` draw recipe rather than reinventing either.
 5. `Collisions3DEXT` — `CollisionShape3DEXT`/`ICollisionActor3DEXT`/`SpatialHash3DEXT`
-   (a 3D spatial hash, not a true recursive octree; renamed from `OctreeEXT` in Phase 10,
-   audit.md A-05; a true recursive octree alternative is in progress, `plan3d.md` Phase 11
-   B)/`CollisionWorld3DEXT` (named-`Layer`/`LayerPair` cross-layer filtering added
+   (a 3D spatial hash, still `CollisionWorld3DEXT`'s default; renamed from `OctreeEXT` in
+   Phase 10, audit.md A-05)/`Octree3DEXT` (a real recursive-subdivision octree alternative,
+   opt-in, `plan3d.md` Phase 11 B)/`CollisionWorld3DEXT` (named-`Layer`/`LayerPair`
+   cross-layer filtering added
    2026-07-14, `plan3d.md` Phase 11 A).
 6. `Graphics3DEXT` — cube meshes, billboards (`Matrix::CreateBillboard`), animated
    billboards, world-space `Text3DEXT` billboarded labels, `DebugDrawSystemEXT` line-batch
@@ -69,7 +70,7 @@ itself):
    transform hierarchy, a frustum-culled entity, a skinned character, particles, and a
    voxel floor) — screenshot inspected, not just pixel-sampled.
 
-Full test suite: **2205/2207 passing** (2 pre-existing skips predating `plan3d.md`,
+Full test suite: **2240/2242 passing** (2 pre-existing skips predating `plan3d.md`,
 unrelated to it — `OrthographicCameraTest`'s two `ContainsPoint`/`ContainsVector2` tests,
 see section 5). Both `plan.md` and `plan3d.md` checkboxes are fully checked off; there is
 no in-progress phase in either.
@@ -100,7 +101,7 @@ no in-progress phase in either.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2205/2205 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2240/2240 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -658,11 +659,13 @@ the concrete "extend later if wanted" candidates, should the owner ask for any o
 - `Particles3DEXT`: the full `Profiles`/`Modifiers`/`Interpolators` plugin architecture
   (only cone emission + gravity/expiry/color-opacity interpolation exist today) — **in
   progress, Phase 11 C-1 through C-4 in `plan3d.md`, 2026-07-14**.
-- `SpatialHash3DEXT` (renamed from `OctreeEXT` in Phase 10, audit.md A-05): true recursive
-  octree subdivision (currently a fixed-cell-size spatial hash) — **in progress, Phase 11 B
-  in `plan3d.md`, 2026-07-14**. (`Query`'s O(K) `std::find`-in-a-loop candidate dedup was
-  already fixed to an O(1) `unordered_set` check the same day, part of A-05's own closure —
-  see `plan3d.md`.)
+- ~~`SpatialHash3DEXT` (renamed from `OctreeEXT` in Phase 10, audit.md A-05): true recursive
+  octree subdivision (currently a fixed-cell-size spatial hash).~~ Done as an alternative
+  broadphase, `Octree3DEXT`/`OctreeNode3DEXT`/`OctreeNodeData3DEXT` (Phase 11 B, `plan3d.md`,
+  2026-07-14) — `SpatialHash3DEXT` remains `CollisionWorld3DEXT`'s default; `Octree3DEXT` is
+  opt-in via the existing `unique_ptr<ICollisionBroadphase3DEXT>` constructor. (`Query`'s
+  O(K) `std::find`-in-a-loop candidate dedup was already fixed to an O(1) `unordered_set`
+  check the same day, part of A-05's own closure — see `plan3d.md`.)
 - ~~`CollisionWorld3DEXT`: a named-`Layer`/`LayerPair` cross-layer-filtering system.~~ Done
   (Phase 11 A, `plan3d.md`, 2026-07-14).
 - `Collisions3DEXT` ↔ `Tilemaps3DEXT`: a purpose-built tilemap-aware collision broadphase
