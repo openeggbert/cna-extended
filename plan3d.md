@@ -582,7 +582,7 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       Fix: update `3d.md`'s status line to match `plan3d.md`'s actual "DONE" status;
       update `README.md`'s test count and re-scan `NEXT.md` for any other stale figures
       left over from mid-session edits this same day.
-- [ ] **A-07 (Medium)** — most `*EXT` render tests draw exactly one isolated object, so
+- [x] **A-07 (Medium)** — most `*EXT` render tests draw exactly one isolated object, so
       the missing-depth-buffer class of bug this session already found and fixed in
       `world3d_demo` (see `NEXT.md` section 5) has no regression test protecting it in the
       actual test suite. Add a depth-enabled multi-object test (two overlapping cubes

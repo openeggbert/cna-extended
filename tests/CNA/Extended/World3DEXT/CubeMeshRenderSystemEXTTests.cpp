@@ -18,6 +18,7 @@
 #include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
 #include "Microsoft/Xna/Framework/Graphics/RasterizerState.hpp"
 #include "Microsoft/Xna/Framework/Graphics/RenderTarget2D.hpp"
+#include "Microsoft/Xna/Framework/Graphics/SurfaceFormat.hpp"
 #include "Microsoft/Xna/Framework/Graphics/Texture2D.hpp"
 #include "Microsoft/Xna/Framework/Graphics/Viewport.hpp"
 #include "System/TimeSpan.hpp"
@@ -33,9 +34,11 @@ namespace CNA::Extended::World3DEXT
     using Microsoft::Xna::Framework::GameTime;
     using Microsoft::Xna::Framework::MathHelper;
     using Microsoft::Xna::Framework::Vector3;
+    using Microsoft::Xna::Framework::Graphics::DepthFormat;
     using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
     using Microsoft::Xna::Framework::Graphics::RasterizerState;
     using Microsoft::Xna::Framework::Graphics::RenderTarget2D;
+    using Microsoft::Xna::Framework::Graphics::SurfaceFormat;
     using Microsoft::Xna::Framework::Graphics::Texture2D;
     using Microsoft::Xna::Framework::Graphics::Viewport;
     using ECS::World;
@@ -149,5 +152,79 @@ namespace CNA::Extended::World3DEXT
 
         EXPECT_TRUE(std::none_of(pixels.begin(), pixels.end(),
                                   [](const Color& p) { return p.getRProperty() > 0 || p.getGProperty() > 0 || p.getBProperty() > 0; }));
+    }
+
+    // A-07 regression test (audit.md): locks in the missing-depth-buffer fix this session
+    // found and fixed in world3d_demo (see NEXT.md) -- RenderTarget2D's 3-arg constructor
+    // has no depth buffer at all (its own doc comment says so), which this fixture's
+    // RenderToPixels helper deliberately does NOT use (see the 7-arg constructor call
+    // below) specifically so this test can tell a real depth test apart from pure
+    // draw-order compositing. Two same-screen-silhouette cubes, drawn in both submission
+    // orders: the nearer cube's color must win either way.
+    TEST_F(CubeMeshRenderSystemEXTTest, TwoOverlappingCubes_NearerCubeWinsRegardlessOfSubmissionOrder)
+    {
+        Texture2D whiteTex(graphicsDevice, 1, 1);
+        const std::vector<Color> pixelData(1, Color::White);
+        whiteTex.SetData(pixelData.data(), 1);
+
+        const auto renderWithOrder = [&](bool nearFirst) {
+            WorldBuilder builder;
+            builder.AddSystem(std::make_unique<CubeMeshRenderSystemEXT>(graphicsDevice, camera));
+            const std::unique_ptr<World> world = builder.Build();
+            world->Initialize();
+
+            // Transform3ComponentEXT/CubeMeshComponentEXT are non-owning-pointer targets
+            // (Entity::Attach stores a raw pointer) -- declared here, in renderWithOrder's
+            // own scope, so they stay alive through world->Update()/Draw() below rather than
+            // dangling if they were locals inside a nested per-cube lambda.
+            Transform3ComponentEXT transforms[2];
+            CubeMeshComponentEXT cubes[2];
+
+            // Near cube (Z=3, closer to the camera at Z=10) is green; far cube (Z=-3) is
+            // red. Same X/Y and size on both, so their screen-space silhouettes coincide.
+            const float zValues[2] = {nearFirst ? 3.0f : -3.0f, nearFirst ? -3.0f : 3.0f};
+            const Color tints[2] = {nearFirst ? Color(0, 200, 0, 255) : Color(200, 0, 0, 255),
+                                     nearFirst ? Color(200, 0, 0, 255) : Color(0, 200, 0, 255)};
+            for (int i = 0; i < 2; ++i)
+            {
+                ECS::Entity& entity = world->CreateEntity();
+                transforms[i].TransformEXT.setPositionProperty(Vector3(0.0f, 0.0f, zValues[i]));
+                entity.Attach(&transforms[i]);
+
+                cubes[i].TextureEXT = &whiteTex;
+                cubes[i].SizeEXT = Vector3(4.0f, 4.0f, 4.0f);
+                cubes[i].TintEXT = tints[i];
+                entity.Attach(&cubes[i]);
+            }
+
+            GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+            world->Update(gameTime);
+
+            const int width = graphicsDevice.getViewportProperty().getWidthProperty();
+            const int height = graphicsDevice.getViewportProperty().getHeightProperty();
+
+            // Uses the 7-arg RenderTarget2D constructor directly (not this fixture's
+            // depth-less RenderToPixels helper) so this test actually exercises a real
+            // depth buffer, per this test's own file-header rationale.
+            RenderTarget2D rt(graphicsDevice, width, height, false, SurfaceFormat::Color, DepthFormat::Depth24);
+            graphicsDevice.SetRenderTarget(&rt);
+            graphicsDevice.Clear(Color::Black, 1.0f);
+
+            world->Draw(gameTime);
+
+            std::vector<Color> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), Color::Transparent);
+            graphicsDevice.GetBackBufferData(pixels.data(), static_cast<int>(pixels.size()));
+            graphicsDevice.SetRenderTarget(nullptr);
+
+            return GetPixel(pixels, width, width / 2, height / 2);
+        };
+
+        const Color nearFirstCenter = renderWithOrder(true);
+        EXPECT_GT(nearFirstCenter.getGProperty(), 0);
+        EXPECT_EQ(nearFirstCenter.getRProperty(), 0);
+
+        const Color farFirstCenter = renderWithOrder(false);
+        EXPECT_GT(farFirstCenter.getGProperty(), 0);
+        EXPECT_EQ(farFirstCenter.getRProperty(), 0);
     }
 }
