@@ -108,6 +108,31 @@ namespace CNA::Extended::Tweening
         [[nodiscard]] int getActiveTweensCountProperty() const { return static_cast<int>(activeTweens_.size()); }
 
         /**
+         * @brief Returns a read-only, non-owning view of the currently active tweens.
+         *
+         * C++ counterpart of upstream's `ReadOnlySpan<Tween> ActiveTweens` (a zero-copy span over
+         * the backing `List<Tween>`, via `CollectionsMarshal.AsSpan`). This port stores tweens as
+         * `std::vector<std::unique_ptr<Tween>>` (Tweener owns tween lifetime here, unlike
+         * upstream's GC-tracked list), so a true zero-copy `Tween*` view isn't directly achievable
+         * without exposing the internal `unique_ptr` storage -- this materializes a fresh
+         * `std::vector<Tween*>` of non-owning pointers on each call instead: not zero-allocation
+         * like upstream, but the same practical capability (inspect `.size()`, iterate elements),
+         * which is what every real upstream call site actually uses this for.
+         * @return Non-owning pointers to each active tween, valid until the next call that adds or
+         * removes a tween (`TweenTo`/`Update`/`CancelAll`/`CancelAndCompleteAll`).
+         */
+        [[nodiscard]] std::vector<Tween*> getActiveTweensProperty() const
+        {
+            std::vector<Tween*> result;
+            result.reserve(activeTweens_.size());
+            for (const auto& tween : activeTweens_)
+            {
+                result.push_back(tween.get());
+            }
+            return result;
+        }
+
+        /**
          * @brief Creates and starts an animation that interpolates the specified member of
          * @p target from its current value to @p toValue over @p duration seconds. If an
          * animation is already running on the same (target, member) it is cancelled first.

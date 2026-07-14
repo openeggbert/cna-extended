@@ -438,6 +438,11 @@ namespace CNA::Extended
         return ToMatrix(*this, depth);
     }
 
+    void Matrix3x2::ToMatrix(Matrix& result) const
+    {
+        ToMatrix(0.0f, result);
+    }
+
     void Matrix3x2::ToMatrix(const float depth, Matrix& result) const
     {
         ToMatrix(*this, depth, result);
@@ -448,6 +453,11 @@ namespace CNA::Extended
         Matrix result;
         ToMatrix(matrix, depth, result);
         return result;
+    }
+
+    void Matrix3x2::ToMatrix(const Matrix3x2& matrix, Matrix& result)
+    {
+        ToMatrix(matrix, 0.0f, result);
     }
 
     void Matrix3x2::ToMatrix(const Matrix3x2& matrix, const float depth, Matrix& result)

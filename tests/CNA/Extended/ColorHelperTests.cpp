@@ -10,6 +10,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace CNA::Extended
 {
@@ -135,6 +136,18 @@ namespace CNA::Extended
         EXPECT_THROW((void)ColorHelper::FromHex("00000"), std::invalid_argument);
         EXPECT_THROW((void)ColorHelper::FromHex("0000000"), std::invalid_argument);
         EXPECT_THROW((void)ColorHelper::FromHex("000000000"), std::invalid_argument);
+    }
+
+    // Regression test: FromHex's parameter is std::string_view (matching upstream's dual
+    // FromHex(string)/FromHex(ReadOnlySpan<char>) surface, unified since std::string converts to
+    // std::string_view implicitly, unlike C#) -- confirm it accepts a genuine std::string_view
+    // constructed from a non-null-terminated substring view, not just string literals/std::string.
+    TEST(ColorHelperFromHexTests, AcceptsStringViewOverANonNullTerminatedSubstring)
+    {
+        const std::string source = "#FF0000EXTRA";
+        const std::string_view view(source.data(), 7); // "#FF0000", excluding the trailing "EXTRA"
+        const Color actual = ColorHelper::FromHex(view);
+        EXPECT_EQ(actual, Color(255, 0, 0, 255));
     }
 
     // Additional coverage beyond upstream: FromName and FromAbgr have no dedicated upstream test

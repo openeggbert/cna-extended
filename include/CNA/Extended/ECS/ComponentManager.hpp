@@ -88,6 +88,12 @@ namespace CNA::Extended::ECS
             return componentMappers_[static_cast<std::size_t>(componentTypeId)];
         }
 
+        /** @brief Gets the mapper previously created for the given componentTypeId, or nullptr if none has been (a direct index lookup, no reflection involved). */
+        [[nodiscard]] ComponentMapper* GetMapper(int componentTypeId)
+        {
+            return componentMappers_[static_cast<std::size_t>(componentTypeId)];
+        }
+
         /** @brief Gets (assigning a new ID on first use) the stable component-type ID for @p type. */
         int GetComponentTypeId(std::type_index type)
         {

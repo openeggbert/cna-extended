@@ -5,11 +5,27 @@
 // No upstream tests exist for ParticleEffect. Fresh tests below.
 #include "CNA/Extended/Particles/ParticleEffect.hpp"
 
+#include "Microsoft/Xna/Framework/Content/ContentManager.hpp"
+#include "SharpRuntime/SharpRuntimeHelper.hpp"
+#include "System/IO/MemoryStream.hpp"
+
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <memory>
+#include <string_view>
 
 namespace CNA::Extended::Particles
 {
+    using Microsoft::Xna::Framework::Content::ContentManager;
+
+    namespace
+    {
+        constexpr const char* kEmptyEffectXml =
+            R"(<?xml version="1.0" encoding="utf-8"?><ParticleEffect Name="EmptyEffect" Position="0,0" Rotation="0" Scale="1,1" AutoTrigger="True" AutoTriggerFrequency="1" />)";
+    }
+
     TEST(ParticleEffectTests, ActiveParticlesSumsAcrossEmitters)
     {
         ParticleEffect subject("TestEffect");
@@ -68,5 +84,40 @@ namespace CNA::Extended::Particles
         EXPECT_EQ(subject.getActiveParticlesProperty(), 0);
         subject.Update(0.1f);
         EXPECT_EQ(subject.getActiveParticlesProperty(), 4);
+    }
+
+    // Regression tests: FromFile/FromStream were previously not ported at all -- the header
+    // comment deferred them behind ParticleEffectSerializer.cs being out of scope, but that file
+    // was fully ported in the same phase and the follow-up was never done (found via a
+    // member-level audit against upstream). Both just delegate to
+    // ParticleEffectSerializer::Deserialize, already exhaustively tested in
+    // ParticleEffectSerializerTests.cpp -- these two tests only need to confirm the delegation
+    // itself works, not re-verify parsing correctness.
+    TEST(ParticleEffectTests, FromStreamDelegatesToSerializer)
+    {
+        ContentManager content;
+        System::IO::MemoryStream stream(reinterpret_cast<const SharpRuntime::bytecs*>(kEmptyEffectXml), static_cast<SharpRuntime::intcs>(std::string_view(kEmptyEffectXml).size()));
+
+        const std::unique_ptr<ParticleEffect> effect = ParticleEffect::FromStream(stream, content);
+
+        ASSERT_NE(effect, nullptr);
+        EXPECT_EQ(effect->getNameProperty(), "EmptyEffect");
+    }
+
+    TEST(ParticleEffectTests, FromFileDelegatesToSerializer)
+    {
+        const std::filesystem::path path = std::filesystem::temp_directory_path() / "cna_extended_particle_effect_from_file_test.xml";
+        {
+            std::ofstream file(path);
+            file << kEmptyEffectXml;
+        }
+
+        ContentManager content;
+        const std::unique_ptr<ParticleEffect> effect = ParticleEffect::FromFile(path.string(), content);
+
+        std::filesystem::remove(path);
+
+        ASSERT_NE(effect, nullptr);
+        EXPECT_EQ(effect->getNameProperty(), "EmptyEffect");
     }
 }

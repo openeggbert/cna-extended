@@ -1886,6 +1886,77 @@ to `System.Text.Json`/`MonoGame.Extended.Serialization` anywhere).
   Next per `plan.md` §5: Phase 2 ("Collisions 2D"), which unblocks the large cluster of
   `Intersects`/`Contains`/`TryGetCollision` methods deferred throughout Phase 1 — see
   `NEXT.md` for the concrete next-task pointer.
+- 2026-07-14 — **Full member-level API audit, spanning the entire porting plan (all
+  ~390 upstream files, every module), requested by the owner as a deeper follow-up to
+  the earlier file-existence-only completeness audit** (see Phase 6's entry above).
+  10 parallel forked sub-agents each covered a coherent module group, comparing every
+  public member (method/property/field/event/operator/constructor) of every ported type
+  against its upstream `.cs` file, not just checking that a corresponding file/type
+  existed. Two forks initially returned truncated "still waiting on my own sub-forks"
+  status updates instead of real reports (the same failure mode documented earlier this
+  session for top-level forks, this time occurring recursively inside forks that tried
+  to further sub-delegate) — both resolved by an explicit "stop delegating, finish
+  synchronously yourself" instruction, matching this session's standing "verify, don't
+  just trust, and be prepared to intervene" fork discipline.
+  **Result: 4 of 10 module groups (166 files) had zero issues; 6 real, genuine gaps
+  found across the other 6 groups, all independently confirmed against source (not
+  taken on a fork's word) and then fixed**:
+  1. `ColorHelper::FromHex` only had a `const std::string&` overload; upstream also has
+     a non-allocating `FromHex(ReadOnlySpan<char>)`. Consolidated to a single
+     `FromHex(std::string_view)` overload (a `const std::string&` sibling overload was
+     tried first and reverted — it made every string-literal call site ambiguous, since
+     a literal converts to both `std::string` and `std::string_view` with equal rank;
+     `std::string_view` alone already accepts `std::string` implicitly, unlike C#, so one
+     overload covers both upstream signatures).
+  2. `Matrix3x2::ToMatrix(float depth, Matrix& result)` (instance and static) had no
+     `depth`-defaulted zero-arg counterpart, unlike the by-value-return overloads one
+     line above with `depth = 0.0f`. Fixed by adding genuinely separate `ToMatrix(Matrix&
+     result)`/`static ToMatrix(const Matrix3x2&, Matrix& result)` overloads (a default
+     argument isn't possible here — C++ requires trailing parameters to be the ones
+     defaulted, and `result` is the last, non-defaultable parameter).
+  3. `Tweener::ActiveTweens` (upstream `ReadOnlySpan<Tween>`, iterable) had been narrowed
+     to `getActiveTweensCountProperty()` (count-only) with no documented rationale,
+     unlike every other deliberate narrowing in that file. Added
+     `getActiveTweensProperty()` returning a materialized `std::vector<Tween*>`
+     (documented as not zero-copy like upstream's span, since this port's
+     `std::vector<std::unique_ptr<Tween>>` storage has no direct zero-copy `Tween*` view
+     — but the same practical capability).
+  4. **A real correctness bug**, not just a missing member:
+     `Serialization/Xml/XmlNodeExtensions.cpp`'s `ParseInvariant<T>()` used unchecked
+     `std::istringstream` extraction, silently returning a default/truncated value for
+     malformed numeric/boolean input instead of throwing — contradicting both upstream's
+     `Convert.ToXxx` semantics and this exact file's own header comment, which already
+     (correctly) documented the intended throw-on-malformed-input contract. The same
+     class of bug already found and fixed once this session in the sibling
+     `XmlReaderExtensions.cpp`, but this second occurrence in `XmlNodeExtensions.cpp` had
+     gone uncaught — no test exercised the malformed-input path. Fixed using the same
+     `System::Byte::Parse`/`System::UInt16::Parse`/`System::Int16::Parse`/
+     `System::UInt32::Parse`/`System::Int32::Parse`/`System::Single::Parse`/
+     `System::Double::Parse`/`System::Boolean::Parse`/`System::SByte::Parse` pattern
+     already established in `XmlReaderExtensions.cpp`; also fixed `GetBoolAttribute`
+     (previously accepted `"1"`, upstream's `Convert.ToBoolean` does not) and the two
+     delimited-attribute readers (previously silently left trailing elements at 0 for
+     too few tokens instead of throwing, matching upstream's `split[i]` out-of-bounds
+     `IndexOutOfRangeException`). 8 new regression tests added — this file had none for
+     the malformed-input path before.
+  5. `ComponentManager::GetMapper(int componentTypeId)` (a trivial direct bag-index
+     lookup, no reflection involved) had no ported counterpart — unlike the file's other
+     two documented, reflection-caused omissions, this one had no representational
+     obstacle and was simply missed. Added directly alongside the existing
+     `GetMapper(std::type_index)` overload.
+  6. `ParticleEffect::FromFile`/`FromStream` (both trivial delegations to
+     `ParticleEffectSerializer::Deserialize`) were deferred during Phase 8 behind
+     `ParticleEffectSerializer.cs` being out of scope — but that file was fully ported
+     later in the same phase, and the follow-up to add these two wrapper methods was
+     never done (a stale deferral comment, not a deliberate exclusion). Added, declared
+     in `ParticleEffect.hpp` but implemented in `ParticleEffect.cpp` (including
+     `ParticleEffectSerializer.hpp` back in the header would be circular, since that
+     file already includes `ParticleEffect.hpp`).
+  All 6 fixes independently verified by the orchestrating session: genuinely clean
+  `rm -rf build`/`rm -rf build-headers` rebuilds of both configs (zero warnings), full
+  `ctest` (**2079/2079 passing**, up from 2063 — 16 new regression tests), and each new
+  test run individually to confirm it actually exercises the fix (not just compiles).
+  See `NEXT.md` for the condensed version of this entry.
 
 ## 7. Open items to resolve during implementation (not blocking plan approval)
 

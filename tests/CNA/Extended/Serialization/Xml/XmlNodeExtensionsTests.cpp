@@ -117,4 +117,70 @@ namespace CNA::Extended::Serialization::Xml
         EXPECT_EQ(actual[1], 2);
         EXPECT_EQ(actual[2], -3);
     }
+
+    // Regression tests: a malformed *present* value must throw (matching upstream's
+    // Convert.ToXxx(string, CultureInfo.InvariantCulture) behavior), not silently return a
+    // default/truncated value -- this header's own top comment already documented this contract,
+    // but the .cpp didn't actually implement it (ParseInvariant<T> used unchecked istringstream
+    // extraction). Found via a member-level audit against upstream, fixed by switching to
+    // sharp-runtime's System::Byte::Parse/System::UInt16::Parse/etc (already the established
+    // pattern in the sibling XmlReaderExtensions.cpp).
+    TEST(XmlNodeExtensionsTests, GetByteAttributeMalformedThrows)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="not-a-number" />)");
+        EXPECT_THROW((void)GetByteAttribute(root, "value"), std::exception);
+    }
+
+    TEST(XmlNodeExtensionsTests, GetByteAttributeOutOfRangeThrows)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="300" />)");
+        EXPECT_THROW((void)GetByteAttribute(root, "value"), std::exception);
+    }
+
+    TEST(XmlNodeExtensionsTests, GetInt32AttributeMalformedThrows)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="12abc" />)");
+        EXPECT_THROW((void)GetInt32Attribute(root, "value"), std::exception);
+    }
+
+    TEST(XmlNodeExtensionsTests, GetSingleAttributeMalformedThrows)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="not-a-float" />)");
+        EXPECT_THROW((void)GetSingleAttribute(root, "value"), std::exception);
+    }
+
+    TEST(XmlNodeExtensionsTests, GetBoolAttributeMalformedThrows)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="yes" />)");
+        EXPECT_THROW((void)GetBoolAttribute(root, "value"), std::exception);
+    }
+
+    // "1" is a plausible-looking boolean in many formats, but Convert.ToBoolean(string) only
+    // recognizes "True"/"False" (case-insensitive) -- confirm the stricter behavior is preserved,
+    // not silently widened to accept "1"/"0" as some naive implementations do.
+    TEST(XmlNodeExtensionsTests, GetBoolAttributeRejectsNumericOne)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="1" />)");
+        EXPECT_THROW((void)GetBoolAttribute(root, "value"), std::exception);
+    }
+
+    TEST(XmlNodeExtensionsTests, GetByteDelimitedAttributeTooFewTokensThrows)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="1,2" />)");
+        EXPECT_THROW((void)GetByteDelimitedAttribute(root, "value", 4), std::exception);
+    }
+
+    TEST(XmlNodeExtensionsTests, GetSignedByteDelimitedAttributeTooFewTokensThrows)
+    {
+        System::Xml::XmlDocument document;
+        System::Xml::XmlElement* root = ParseRoot(document, R"(<element value="-1" />)");
+        EXPECT_THROW((void)GetSignedByteDelimitedAttribute(root, "value", 3), std::exception);
+    }
 }

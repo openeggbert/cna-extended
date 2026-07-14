@@ -101,4 +101,34 @@ namespace CNA::Extended
         EXPECT_FLOAT_EQ(matrix.M41, 1.0f);
         EXPECT_FLOAT_EQ(matrix.M42, 2.0f);
     }
+
+    // Regression test: the depth-taking out-param overloads (instance and static) previously had
+    // no depth=0.0f zero-arg counterpart, unlike their by-value-return siblings one line above in
+    // Matrix3x2.hpp -- confirm both new zero-arg overloads produce the same result as explicitly
+    // passing depth=0.0f to the depth-taking overload.
+    TEST(Matrix3x2Tests, ToMatrixOutParamOverloadDefaultsDepthToZero)
+    {
+        const Matrix3x2 matrix3x2 = Matrix3x2::CreateTranslation(1.0f, 2.0f);
+
+        Matrix viaZeroArg;
+        matrix3x2.ToMatrix(viaZeroArg);
+
+        Matrix viaExplicitDepth;
+        matrix3x2.ToMatrix(0.0f, viaExplicitDepth);
+
+        EXPECT_EQ(viaZeroArg, viaExplicitDepth);
+    }
+
+    TEST(Matrix3x2Tests, StaticToMatrixOutParamOverloadDefaultsDepthToZero)
+    {
+        const Matrix3x2 matrix3x2 = Matrix3x2::CreateTranslation(1.0f, 2.0f);
+
+        Matrix viaZeroArg;
+        Matrix3x2::ToMatrix(matrix3x2, viaZeroArg);
+
+        Matrix viaExplicitDepth;
+        Matrix3x2::ToMatrix(matrix3x2, 0.0f, viaExplicitDepth);
+
+        EXPECT_EQ(viaZeroArg, viaExplicitDepth);
+    }
 }

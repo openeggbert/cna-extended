@@ -175,7 +175,7 @@ namespace CNA::Extended
         }
     }
 
-    Color ColorHelper::FromHex(const std::string& value)
+    Color ColorHelper::FromHex(const std::string_view value)
     {
         if (value.empty())
         {
@@ -192,7 +192,7 @@ namespace CNA::Extended
         const auto result = std::from_chars(hex.data(), hex.data() + hex.size(), hexInt, 16);
         if (result.ec != std::errc() || result.ptr != hex.data() + hex.size())
         {
-            throw std::invalid_argument("Malformed hexadecimal color: " + value);
+            throw std::invalid_argument("Malformed hexadecimal color: " + std::string(value));
         }
 
         int r, g, b, a;
@@ -227,7 +227,7 @@ namespace CNA::Extended
                 break;
 
             default:
-                throw std::invalid_argument("Malformed hexadecimal color: " + value);
+                throw std::invalid_argument("Malformed hexadecimal color: " + std::string(value));
         }
 
         return Color(r, g, b, a);

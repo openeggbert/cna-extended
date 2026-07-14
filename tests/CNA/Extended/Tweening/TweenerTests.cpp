@@ -65,6 +65,30 @@ namespace CNA::Extended::Tweening
         EXPECT_EQ(tweener.getActiveTweensCountProperty(), 2);
     }
 
+    // Regression test: upstream's ActiveTweens (ReadOnlySpan<Tween>) allows inspecting individual
+    // active tweens, not just a count -- getActiveTweensProperty() covers the same capability via
+    // a materialized std::vector<Tween*> (see Tweener.hpp's header comment for why it can't be a
+    // true zero-copy span in this port).
+    TEST(TweenerTests, ActiveTweensPropertyExposesEachRunningTween)
+    {
+        Tweener tweener;
+        FloatHandler obj;
+
+        Tween* first = tweener.TweenTo(&obj, &FloatHandler::Value, 10.0f, 2.0f);
+        Tween* second = tweener.TweenTo(&obj, &FloatHandler::Other, 5.0f, 2.0f);
+
+        const std::vector<Tween*> active = tweener.getActiveTweensProperty();
+        ASSERT_EQ(active.size(), 2u);
+        EXPECT_EQ(active[0], first);
+        EXPECT_EQ(active[1], second);
+    }
+
+    TEST(TweenerTests, ActiveTweensPropertyIsEmptyWhenNoTweensStarted)
+    {
+        const Tweener tweener;
+        EXPECT_TRUE(tweener.getActiveTweensProperty().empty());
+    }
+
     TEST(TweenerTests, ActiveTweensCountDecreasesAfterTweenCompletes)
     {
         Tweener tweener;

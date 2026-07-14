@@ -52,7 +52,7 @@ what a future session might reasonably still do (all optional/non-blocking).
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2063/2063 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2079/2079 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -91,11 +91,42 @@ completed in full), then `Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then
 test-coverage task, then — after the owner's own question redirected the investigation —
 the `TilemapRenderer`/`TilemapWorldRenderer` blocker resolution, its own follow-up
 pixel-verification test task (closing Phase 7 100%), Phase 10 (end-to-end example +
-Doxygen/README/NOTICE.md pass, in parallel) closing the whole plan, and finally — after the
-project owner explicitly asked to be consulted before any further optional work — three
-small, individually-approved follow-up items. See `git log` for every batch's individual
-commits; this section covers the four most recent batches in detail, condensing earlier
+Doxygen/README/NOTICE.md pass, in parallel) closing the whole plan, three small,
+individually-approved follow-up items, and finally a full member-level API audit (10
+parallel forks covering every module) plus fixes for the 6 real gaps it found. See `git log`
+for every batch's individual commits; this section covers the five most recent batches in
+detail, condensing earlier
 ones.
+
+- **Full member-level API audit + 6 fixes (2026-07-14)**. After the file-existence-only
+  completeness audit (below) found and fixed its one gap, the owner asked for a deeper
+  pass: every public member (not just file/type existence) of every ported type checked
+  against upstream, across the whole plan. 10 parallel forks, one per coherent module
+  group, ~390 files total. Result: 4 of 10 groups (166 files) had zero issues; 6 real
+  gaps found in the rest, all fixed:
+  1. `ColorHelper::FromHex` — added the missing non-allocating overload, consolidated to
+     a single `std::string_view` parameter (a separate `const std::string&` sibling
+     overload made every string-literal call site ambiguous — reverted).
+  2. `Matrix3x2::ToMatrix(float depth, Matrix&)` — added zero-arg
+     `ToMatrix(Matrix&)`/`static ToMatrix(const Matrix3x2&, Matrix&)` overloads (can't be
+     a default argument — `result` is the trailing, non-defaultable parameter).
+  3. `Tweener::ActiveTweens` — added `getActiveTweensProperty()` (materialized
+     `std::vector<Tween*>`) alongside the existing count-only property.
+  4. **A real bug**: `XmlNodeExtensions.cpp`'s `ParseInvariant<T>()` silently returned
+     0/false on malformed input instead of throwing — the same class of bug already
+     fixed once this session in the sibling `XmlReaderExtensions.cpp`, but this second
+     occurrence had gone uncaught (no test exercised the malformed-input path). Fixed
+     with the same `System::Byte/UInt16/Int16/UInt32/Int32/Single/Double/Boolean/
+     SByte::Parse` pattern; also fixed `GetBoolAttribute` accepting `"1"` (upstream
+     doesn't) and the delimited-attribute readers silently leaving trailing elements at
+     0 for too-few tokens (upstream throws).
+  5. `ComponentManager::GetMapper(int componentTypeId)` — added (trivial direct lookup,
+     no reflection obstacle, simply missed).
+  6. `ParticleEffect::FromFile`/`FromStream` — added (stale deferral comment from Phase
+     8, dependency landed, follow-up never happened).
+  All 6 independently verified: clean rebuilds of both configs, full `ctest`
+  (**2079/2079**, up from 2063 — 16 new regression tests, each individually re-run to
+  confirm it exercises the fix). Full writeup in `plan.md`'s decisions log.
 
 - **Three explicitly-approved optional follow-ups landed (2026-07-14, commits `e82c1ed`,
   `9beec74`)**, after the owner was asked which (if any) of the ideas left in section 8 they

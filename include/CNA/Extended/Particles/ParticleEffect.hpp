@@ -4,17 +4,24 @@
 //
 // Ported from MonoGame.Extended's Particles/ParticleEffect.cs. `List<ParticleEmitter> Emitters` ->
 // owning `std::vector<std::unique_ptr<ParticleEmitter>>` (this effect disposes every emitter it
-// owns in its own Dispose(), matching upstream's ownership). `FromFile`/`FromStream` are NOT
-// ported: both delegate entirely to `ParticleEffectSerializer.Deserialize(...)`, and
-// `ParticleEffectSerializer.cs` is explicitly out of scope for this task (deferred separately,
-// depends on every other file in this module plus Serialization/Xml).
+// owns in its own Dispose(), matching upstream's ownership).
+//
+// `FromFile`/`FromStream` both delegate entirely to `ParticleEffectSerializer::Deserialize(...)`.
+// Declared here (matching upstream's static-factory-method placement on ParticleEffect itself)
+// but implemented in ParticleEffect.cpp, not inline: `ParticleEffectSerializer.hpp` itself
+// includes this header, so including it back here would be circular -- the .cpp has no such
+// restriction. Return type is `std::unique_ptr<ParticleEffect>`, matching `Deserialize`'s own
+// return type and this project's established "non-copyable/non-movable factory returns
+// unique_ptr" convention (see ParticleEffectSerializer.hpp's own header comment).
 #pragma once
 
 #include "CNA/Extended/Particles/ParticleEmitter.hpp"
 #include "CNA/Extended/Particles/Primitives/LineSegment.hpp"
+#include "Microsoft/Xna/Framework/Content/ContentManager.hpp"
 #include "Microsoft/Xna/Framework/GameTime.hpp"
 #include "Microsoft/Xna/Framework/Vector2.hpp"
 #include "System/IDisposable.hpp"
+#include "System/IO/Stream.hpp"
 
 #include <memory>
 #include <string>
@@ -24,6 +31,7 @@ namespace CNA::Extended::Particles
 {
     using Microsoft::Xna::Framework::GameTime;
     using Microsoft::Xna::Framework::Vector2;
+    using Microsoft::Xna::Framework::Content::ContentManager;
 
     /**
      * @brief A complete particle effect: a positioned/rotated/scaled container of one or more
@@ -67,6 +75,22 @@ namespace CNA::Extended::Particles
 
         ParticleEffect(const ParticleEffect&) = delete;
         ParticleEffect& operator=(const ParticleEffect&) = delete;
+
+        /**
+         * @brief Creates a new ParticleEffect from an XML particle-effect definition file.
+         * @throws System::ArgumentException @p path is empty.
+         * @throws System::Xml::XmlException the XML format is invalid.
+         */
+        [[nodiscard]] static std::unique_ptr<ParticleEffect> FromFile(const std::string& path, ContentManager& content);
+
+        /**
+         * @brief Creates a new ParticleEffect from a stream containing an XML particle-effect definition.
+         * @param stream The stream to read from.
+         * @param content The ContentManager used to load referenced textures.
+         * @param baseDirectory Base directory for resolving relative texture paths; if empty, uses @p content's RootDirectory.
+         * @throws System::Xml::XmlException the XML format is invalid.
+         */
+        [[nodiscard]] static std::unique_ptr<ParticleEffect> FromStream(System::IO::Stream& stream, ContentManager& content, const std::string& baseDirectory = "");
 
         [[nodiscard]] const std::string& getNameProperty() const { return name_; }
         void setNameProperty(const std::string& value) { name_ = value; }

@@ -185,10 +185,14 @@ namespace CNA::Extended
          * resulting Matrix is set to (0, 0, 1, 0); the fourth row is set to (M31, M32, depth, 1).
          */
         [[nodiscard]] Matrix ToMatrix(float depth = 0.0f) const;
+        /** @brief Converts this Matrix3x2 value into a Matrix value, with depth 0. */
+        void ToMatrix(Matrix& result) const;
         /** @brief Converts this Matrix3x2 value into a Matrix value. */
         void ToMatrix(float depth, Matrix& result) const;
         /** @brief Converts a Matrix3x2 value into a Matrix value. */
         [[nodiscard]] static Matrix ToMatrix(const Matrix3x2& matrix, float depth = 0.0f);
+        /** @brief Converts a Matrix3x2 value into a Matrix value, with depth 0. */
+        static void ToMatrix(const Matrix3x2& matrix, Matrix& result);
         /** @brief Converts a Matrix3x2 value into a Matrix value. */
         static void ToMatrix(const Matrix3x2& matrix, float depth, Matrix& result);
 

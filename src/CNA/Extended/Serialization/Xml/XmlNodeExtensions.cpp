@@ -3,6 +3,16 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/Serialization/Xml/XmlNodeExtensions.hpp"
 
+#include "System/Boolean.hpp"
+#include "System/Byte.hpp"
+#include "System/Double.hpp"
+#include "System/Int16.hpp"
+#include "System/Int32.hpp"
+#include "System/IndexOutOfRangeException.hpp"
+#include "System/SByte.hpp"
+#include "System/Single.hpp"
+#include "System/UInt16.hpp"
+#include "System/UInt32.hpp"
 #include "System/Xml/XmlAttribute.hpp"
 #include "System/Xml/XmlAttributeCollection.hpp"
 
@@ -23,16 +33,6 @@ namespace CNA::Extended::Serialization::Xml
             }
             return !value.empty();
         }
-
-        template <typename T>
-        T ParseInvariant(const std::string& value)
-        {
-            std::istringstream stream(value);
-            stream.imbue(std::locale::classic());
-            T result{};
-            stream >> result;
-            return result;
-        }
     }
 
     std::string GetStringAttribute(const System::Xml::XmlNode* node, const std::string& attribute)
@@ -44,53 +44,49 @@ namespace CNA::Extended::Serialization::Xml
     uint8_t GetByteAttribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        return GetAttributeValue(node, attribute, value) ? static_cast<uint8_t>(ParseInvariant<unsigned int>(value)) : 0;
+        return GetAttributeValue(node, attribute, value) ? System::Byte::Parse(value) : 0;
     }
 
     uint16_t GetUInt16Attribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        return GetAttributeValue(node, attribute, value) ? ParseInvariant<uint16_t>(value) : 0;
+        return GetAttributeValue(node, attribute, value) ? System::UInt16::Parse(value) : 0;
     }
 
     int16_t GetInt16Attribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        return GetAttributeValue(node, attribute, value) ? ParseInvariant<int16_t>(value) : 0;
+        return GetAttributeValue(node, attribute, value) ? System::Int16::Parse(value) : 0;
     }
 
     uint32_t GetUInt32Attribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        return GetAttributeValue(node, attribute, value) ? ParseInvariant<uint32_t>(value) : 0;
+        return GetAttributeValue(node, attribute, value) ? System::UInt32::Parse(value) : 0;
     }
 
     int32_t GetInt32Attribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        return GetAttributeValue(node, attribute, value) ? ParseInvariant<int32_t>(value) : 0;
+        return GetAttributeValue(node, attribute, value) ? System::Int32::Parse(value) : 0;
     }
 
     float GetSingleAttribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        return GetAttributeValue(node, attribute, value) ? ParseInvariant<float>(value) : 0.0f;
+        return GetAttributeValue(node, attribute, value) ? System::Single::Parse(value) : 0.0f;
     }
 
     double GetDoubleAttribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        return GetAttributeValue(node, attribute, value) ? ParseInvariant<double>(value) : 0.0;
+        return GetAttributeValue(node, attribute, value) ? System::Double::Parse(value) : 0.0;
     }
 
     bool GetBoolAttribute(const System::Xml::XmlNode* node, const std::string& attribute)
     {
         std::string value;
-        if (!GetAttributeValue(node, attribute, value))
-        {
-            return false;
-        }
-        return value == "true" || value == "True" || value == "1";
+        return GetAttributeValue(node, attribute, value) && System::Boolean::Parse(value);
     }
 
     std::vector<uint8_t> GetByteDelimitedAttribute(const System::Xml::XmlNode* node, const std::string& attribute, int expectedCount)
@@ -102,9 +98,13 @@ namespace CNA::Extended::Serialization::Xml
         {
             std::istringstream stream(value);
             std::string token;
-            for (int i = 0; i < expectedCount && std::getline(stream, token, ','); ++i)
+            for (int i = 0; i < expectedCount; ++i)
             {
-                result[static_cast<std::size_t>(i)] = static_cast<uint8_t>(ParseInvariant<unsigned int>(token));
+                if (!std::getline(stream, token, ','))
+                {
+                    throw System::IndexOutOfRangeException("Index was outside the bounds of the array.");
+                }
+                result[static_cast<std::size_t>(i)] = System::Byte::Parse(token);
             }
         }
 
@@ -120,9 +120,13 @@ namespace CNA::Extended::Serialization::Xml
         {
             std::istringstream stream(value);
             std::string token;
-            for (int i = 0; i < expectedCount && std::getline(stream, token, ','); ++i)
+            for (int i = 0; i < expectedCount; ++i)
             {
-                result[static_cast<std::size_t>(i)] = static_cast<int8_t>(ParseInvariant<int>(token));
+                if (!std::getline(stream, token, ','))
+                {
+                    throw System::IndexOutOfRangeException("Index was outside the bounds of the array.");
+                }
+                result[static_cast<std::size_t>(i)] = System::SByte::Parse(token);
             }
         }
 

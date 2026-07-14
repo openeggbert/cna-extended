@@ -65,6 +65,23 @@ namespace CNA::Extended::ECS
         EXPECT_EQ(spriteMapperByIndexer, componentManager.GetMapper(std::type_index(typeid(Graphics::Sprite))));
     }
 
+    // Regression test: upstream's GetMapper(int componentTypeId) -- a direct, non-reflective bag
+    // index lookup -- had no ported counterpart (found via a member-level audit against upstream;
+    // unlike GetMapper(std::type_index)'s documented reflection-representational gap, this one had
+    // no such obstacle, it was simply missed).
+    TEST(ComponentManagerTests, GetMapperForTypeById)
+    {
+        ComponentManager componentManager;
+        ComponentMapperOf<Transform2>* transformMapper = componentManager.GetMapper<Transform2>();
+        ComponentMapperOf<Graphics::Sprite>* spriteMapper = componentManager.GetMapper<Graphics::Sprite>();
+
+        const int transformTypeId = componentManager.GetComponentTypeId(std::type_index(typeid(Transform2)));
+        const int spriteTypeId = componentManager.GetComponentTypeId(std::type_index(typeid(Graphics::Sprite)));
+
+        EXPECT_EQ(componentManager.GetMapper(transformTypeId), transformMapper);
+        EXPECT_EQ(componentManager.GetMapper(spriteTypeId), spriteMapper);
+    }
+
     TEST(ComponentManagerTests, EnumerateMappers)
     {
         ComponentManager componentManager;

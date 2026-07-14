@@ -3,6 +3,7 @@
 // Portions based on MonoGame.Extended (MIT License, Copyright (c) Craftwork Games)
 #include "CNA/Extended/Particles/ParticleEffect.hpp"
 
+#include "CNA/Extended/Particles/ParticleEffectSerializer.hpp"
 #include "System/ObjectDisposedException.hpp"
 
 namespace CNA::Extended::Particles
@@ -15,6 +16,16 @@ namespace CNA::Extended::Particles
     ParticleEffect::~ParticleEffect()
     {
         Dispose();
+    }
+
+    std::unique_ptr<ParticleEffect> ParticleEffect::FromFile(const std::string& path, ContentManager& content)
+    {
+        return ParticleEffectSerializer::Deserialize(path, content);
+    }
+
+    std::unique_ptr<ParticleEffect> ParticleEffect::FromStream(System::IO::Stream& stream, ContentManager& content, const std::string& baseDirectory)
+    {
+        return ParticleEffectSerializer::Deserialize(stream, content, baseDirectory);
     }
 
     int ParticleEffect::getActiveParticlesProperty() const
