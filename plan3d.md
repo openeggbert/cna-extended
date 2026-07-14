@@ -821,9 +821,37 @@ port tests alongside → verify both CMake configs via genuine `rm -rf` clean re
       distinguishing it from `BoxProfile3DEXT`'s equal-probability selection) plus 8 new
       factory-method cases added to `Profile3DEXTTests.cpp`. 30 new tests total. Both configs
       verified via genuine `rm -rf` clean rebuild; full suite green (2305/2305).
-- [ ] **Phase C-3 — Remaining Modifiers (8)**: Drag/OpacityFastFade/Rotation/VelocityColor/
-      Velocity/Vortex + Sphere/Box/BoxLoop Container modifiers (3D analogs of 2D's
-      Circle/Rectangle/RectangleLoop containers).
+- [x] **Phase C-3 — Remaining Modifiers (8)**: `DragModifier3DEXT`, `OpacityFastFadeModifier3DEXT`,
+      `RotationModifier3DEXT` (applies to `Particle3DEXT::RotationEXT`, the billboard roll
+      angle — not a full 3D angular-velocity/orientation model), `VelocityColorModifier3DEXT`
+      (RGB, not HSL — same `ColorInterpolator3DEXT` rationale), `VelocityModifier3DEXT` (owns
+      `Interpolator3DEXT` instances, driven by speed instead of age), `VortexModifier3DEXT`,
+      `SphereContainerModifier3DEXT`/`BoxContainerModifier3DEXT`/`BoxLoopContainerModifier3DEXT`
+      (3D analogs of 2D's Circle/Rectangle/RectangleLoop containers — no shared
+      `ContainerModifier` base exists in 2D either, so none was added here).
+      `VortexModifier3DEXT` is NOT a literal port: 2D's vortex rotates a force around a single
+      point (the 2D plane's one implicit rotation axis); the 3D version rotates around an
+      explicit `AxisEXT` line via `PositionEXT` + `AxisEXT`, using Rodrigues' rotation formula
+      restricted to a vector already perpendicular to the axis
+      (`v*cos(theta) + (axis x v)*sin(theta)`) — a true generalization of 2D's 2x2 rotation
+      matrix, not an unrelated new algorithm (see `VortexModifier3DEXT.hpp`'s header comment).
+      `BoxContainerModifier3DEXT`/`BoxLoopContainerModifier3DEXT` preserve 2D
+      `RectangleContainerModifier`'s exact documented inconsistent int-truncation quirk on
+      X/Y (no attempt to "fix" it); the new Z axis has no 2D precedent, so it uses consistent
+      (non-truncating for the reflecting variant, truncating-both-sides for the looping
+      variant, matching each variant's own X/Y pattern) checks rather than inventing a new
+      asymmetry. New code applies the A-06 zero-vector/near-zero-distance NaN guard
+      proactively in `VortexModifier3DEXT` (zero `AxisEXT`, near-zero radial distance) and
+      `SphereContainerModifier3DEXT` (a freshly-emitted zero-offset particle sitting exactly
+      at its container's center) even though the 2D originals have the same latent
+      div-by-zero unguarded, since this is fresh code with no prior 3D behavior to preserve.
+      Tests: `DragModifier3DEXTTests.cpp` (2), `OpacityFastFadeModifier3DEXTTests.cpp` (2),
+      `RotationModifier3DEXTTests.cpp` (2), `VelocityColorModifier3DEXTTests.cpp` (3),
+      `VelocityModifier3DEXTTests.cpp` (2), `VortexModifier3DEXTTests.cpp` (5, including the
+      along-axis-no-force and outside-outer-radius and max-velocity-clamp cases),
+      `ContainerModifier3DEXTTests.cpp` (6, bundling all three containers, matching 2D's own
+      single-file `ContainerModifierTests.cpp`). 22 new tests total. Both configs verified via
+      genuine `rm -rf` clean rebuild; full suite green (2327/2327).
 - [ ] **Phase C-4 — Remaining Interpolators (4)**: Hue/Rotation/Scale/Velocity.
 
 ## 5. After meaningful changes
