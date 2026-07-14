@@ -90,10 +90,28 @@ completed in full), then `Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then
 `Tilemaps/Rendering/*` (the last item in Phase 7 at the time), then a follow-up
 test-coverage task, then — after the owner's own question redirected the investigation —
 the `TilemapRenderer`/`TilemapWorldRenderer` blocker resolution, its own follow-up
-pixel-verification test task (closing Phase 7 100%), and finally Phase 10 (end-to-end
-example + Doxygen/README/NOTICE.md pass, in parallel) closing the whole plan. See `git log`
-for every batch's individual commits; this section covers the three most recent batches in
-detail, condensing earlier ones.
+pixel-verification test task (closing Phase 7 100%), Phase 10 (end-to-end example +
+Doxygen/README/NOTICE.md pass, in parallel) closing the whole plan, and finally — after the
+project owner explicitly asked to be consulted before any further optional work — three
+small, individually-approved follow-up items. See `git log` for every batch's individual
+commits; this section covers the four most recent batches in detail, condensing earlier
+ones.
+
+- **Three explicitly-approved optional follow-ups landed (2026-07-14, commits `e82c1ed`,
+  `9beec74`)**, after the owner was asked which (if any) of the ideas left in section 8 they
+  wanted: (1) the `GetBackBufferData`/`RenderTarget2D` sizing gotcha, precisely confirmed by
+  reading `GraphicsDevice.cpp`'s exact branch (the no-`Rectangle` overload defaults to
+  `backend_->GetViewportSize()`, not the bound render target's own size) and documented as a
+  new `MISSING.md` entry; (2) a doc note on `SpriteSheetAnimationBuilder::IsPingPong`
+  explaining it needs `IsLooping(true)` too; (3) a Doxygen prose-quality pass (a forked
+  sub-agent, bounded to ~15-25 central public types rather than an unbounded rewrite) adding
+  genuinely useful `@brief` rewrites, `@see` cross-references, and 10 compiler-verified
+  `@code` examples across 21 header files — one real bug caught along the way (an example
+  double-wrapped `TilemapSpriteBatchRenderer::Draw` in a redundant `SpriteBatch::Begin`/`End`
+  pair). Doxygen warnings confirmed 0→0 (prose-only, no new gaps). Independently re-verified
+  by the orchestrating session as always: clean `git status`/diff, genuinely clean rebuilds
+  of both configs, full `ctest` (2042/2042), and a direct read of the actual doc-comment/
+  `MISSING.md` diffs for quality, not just trusted.
 
 - **Phase 10 landed, closing the entire plan (2026-07-14)**. Two forked sub-agents ran in
   parallel on disjoint files: (a) `examples/tiled_demo/` — a real end-to-end example loading
@@ -432,29 +450,21 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-**The entire plan is complete — all 10 phases. There is no required next task.** Nothing
-below is blocking; treat this as an idea list for a future session, not a checklist to work
-through.
+**The entire plan is complete — all 10 phases. There is no required next task.** The three
+optional follow-up ideas this section used to list were all explicitly requested by the
+project owner and completed on 2026-07-14 (Doxygen prose-quality pass on 21 central public
+API types; the `GetBackBufferData`/`RenderTarget2D` sizing gotcha documented in
+`MISSING.md`; the `IsPingPong`-needs-`IsLooping` gotcha documented on
+`SpriteSheetAnimationBuilder::IsPingPong`) — see `git log` (commits `9beec74`, `e82c1ed`)
+for details. Nothing below is blocking; this is an idea list for a future session, not a
+checklist to work through.
 
-Genuinely optional follow-ups, roughly in order of likely value:
+**Standing preference, explicit from the project owner**: once a body of work is genuinely
+complete and only optional/non-blocking ideas remain, do not autonomously pick one and start
+— ask which one (if any) is wanted first. Only the general-maintenance item below is left
+unaddressed from the original list; nothing new has been proposed since.
 
-1. **Doxygen coverage nice-to-haves**: the Phase 10 pass got real Doxygen warnings to zero,
-   but that only catches *missing* `@param`/`@return` tags on already-EXTRACT_ALL-visible
-   members, not prose quality. A future pass could improve doc *quality* (better `@brief`
-   descriptions, more `@see`/`@code` cross-references) — no warnings to chase, so there's no
-   objective "done" signal; use judgment.
-2. **`GetBackBufferData`/`RenderTarget2D` sizing gotcha** (found while building
-   `examples/tiled_demo/`, documented in `plan.md`'s Phase 10 entry and this file's section
-   5): `GraphicsDevice::GetBackBufferData(Color*, int)` without an explicit `Rectangle*`
-   reads against the window's real backbuffer size, not the currently-bound
-   `RenderTarget2D`'s size. This is a `cna` (sibling repo) behavior, not fixable here — but
-   consider adding a `MISSING.md` entry (matching the existing `Texture2D::GetData` entry's
-   format) if this trips up a future task again.
-3. **`AnimationController::AdvanceFrame`'s `IsPingPong`-needs-`IsLooping` gotcha** (same
-   discovery) — faithful upstream MonoGame.Extended behavior, not a bug, but worth a doc
-   note on `SpriteSheetAnimationBuilder::IsPingPong`'s Doxygen comment if a future session
-   is already touching that file.
-4. **General maintenance**: keep the reference clone at
+1. **General maintenance**: keep the reference clone at
    `/rv/data/library/github.com/craftworkgames/MonoGame.Extended` up to date
    (`/rv/data/library/github.com/github.sh`) if upstream MonoGame.Extended ever needs
    re-checking against a bugfix; keep `../cna`/`../sharp-runtime` in sync per their own
@@ -463,7 +473,7 @@ Genuinely optional follow-ups, roughly in order of likely value:
    `DefaultEffect`/`ShaderEffect` re-authoring notes throughout this codebase worth
    revisiting — not urgent, current behavior is correct and tested).
 
-If a future session picks up any of these, verify with:
+If a future session picks up this (or any new idea), verify with:
 `cmake --build build -j$(nproc) && ctest --test-dir build` (linked config) plus
 `cmake --build build-headers -j$(nproc)` (headers-only) — both must stay clean.
 
