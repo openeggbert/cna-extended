@@ -127,19 +127,42 @@ enough to warrant one by the time Phase 1 starts — decide then, not now).
       3 tests. Both build configs clean (genuine `rm -rf` + fresh configure + build),
       full suite **2089/2089** (was 2086; 2 pre-existing skips unrelated to this phase).
 
-### Phase 3 — Model rendering, frustum culling, multi-effect pipeline
+### Phase 3 — Model rendering, frustum culling, multi-effect pipeline — **COMPLETE (2026-07-14)**
 
-- [ ] `ModelComponentEXT` (non-owning `Model*` + `Effect*` + `BoundingSphere`).
-- [ ] `RenderSystem3DEXT` (`ECS::Systems::EntityDrawSystem`): per-frame frustum test via
-      `Camera3DEXT::GetBoundingFrustumEXT()` + `BoundingFrustum::Contains`/`Intersects`
-      against each entity's transformed `BoundingSphere`; `IEffectMatrices`-based
-      `World`/`View`/`Projection` set (works for any `Effect` subclass); draw via
-      `VertexBuffer`/`IndexBuffer` + `Effect::Apply()` + `DrawIndexedPrimitives`, matching
-      `TilemapRenderer.cpp`'s established pattern.
-- [ ] Real headless render test (matching `TilemapIntegrationTests.cpp`'s established
-      `GraphicsDevice` + render-target + pixel-readback idiom): a 3D model actually drawn,
-      confirmed by sampled pixel(s); a second test confirming an out-of-frustum entity is
-      correctly skipped (e.g. via a draw-call counter or an untouched clear-color pixel).
+- [x] `ModelComponentEXT` (non-owning `Model*` + `BoundingSphere`) —
+      `include/CNA/Extended/World3DEXT/ModelComponentEXT.hpp`. **Design correction from
+      this task's original wording, made before implementation**: no separate `Effect*`
+      field. Reading `Model.cpp`/`ModelMesh.cpp` showed `Model::Draw(world, view,
+      projection)` already forwards `World`/`View`/`Projection` to every mesh part's own
+      `Effect*` via `IEffectMatrices` and issues the real
+      `SetVertexBuffer`/`EffectPass::Apply()`/`DrawIndexedPrimitives` calls internally
+      (`ModelMesh::Draw()`) — a component-level `Effect*` would only duplicate state
+      `Model` already owns per mesh part. `RenderSystem3DEXT` therefore calls
+      `Model::Draw()` directly rather than hand-rolling the draw call this task
+      originally described.
+- [x] `RenderSystem3DEXT` (`ECS::Systems::EntityDrawSystem`): per-frame frustum test via
+      `Camera3DEXT::GetBoundingFrustumEXT()` + `BoundingFrustum::Intersects` against each
+      entity's `ModelComponentEXT::BoundsEXT` transformed by its `Transform3ComponentEXT`
+      world matrix (identity if the entity has none); draws via `Model::Draw(world, view,
+      projection)` for entities that pass the test.
+      `include/CNA/Extended/World3DEXT/RenderSystem3DEXT.hpp` + `src/.../RenderSystem3DEXT.cpp`.
+      Same `EntityDrawSystem::Initialize(World&)`-hiding issue as Phase 2's
+      `EntityUpdateSystem`, fixed the same way (`using
+      ECS::Systems::EntityDrawSystem::Initialize;`).
+- [x] Real headless render test (matching `TilemapIntegrationTests.cpp`'s established
+      `GraphicsDevice` + render-target + pixel-readback idiom): a hand-built single-
+      triangle `Model` (real `VertexBuffer`/`IndexBuffer`/`ModelBone`/`ModelMesh`/
+      `ModelMeshPart`/`BasicEffect`, matching `cna`'s own `SkinnedModelEXTTests.cpp`
+      GPU-backed-part-construction idiom — no content pipeline in scope, so tests build
+      `Model`s directly) actually drawn and confirmed via a sampled red center pixel; a
+      second test placing the same model 10,000 units behind the far plane confirms it is
+      frustum-culled (no non-black pixels at all). Viewport fixed at `800x480` to match
+      `GetBackBufferData`'s window-logical-size expectation (same reason
+      `TilemapIntegrationTests.cpp` uses that size, not an arbitrary one — see that file's
+      own header comment).
+      `tests/CNA/Extended/World3DEXT/RenderSystem3DEXTTests.cpp`, 2 tests.
+      Both build configs clean (genuine `rm -rf` + fresh configure + build), full suite
+      **2089/2091 passing** (was 2087/2089; 2 pre-existing skips unrelated to this phase).
 
 ### Phase 4 — Skinned animation
 

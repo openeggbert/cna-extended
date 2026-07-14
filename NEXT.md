@@ -32,10 +32,16 @@ touching anything under `World3DEXT/`. It adds `CNA::Extended::World3DEXT` — a
 layer (camera, ECS transform hierarchy, model rendering, skinned animation, plus systematic
 3D counterparts of Collisions/Graphics/Particles/Tilemaps) — built on top of the now-complete
 2D port, not a rework of it. This is a genuinely separate, still-in-progress body of work;
-`plan.md`'s "DONE" status above does not apply to it. As of 2026-07-14: Phase 1
-(`Camera3DEXT`) and Phase 2 (`Transform3ComponentEXT`/`TransformHierarchySystemEXT`) are
-complete; Phase 3 (model rendering/frustum culling/multi-effect pipeline) is next — see
-`plan3d.md` §4.
+`plan.md`'s "DONE" status above does not apply to it. As of 2026-07-14: Phases 1-3 are
+complete (`Camera3DEXT`; `Transform3ComponentEXT`/`TransformHierarchySystemEXT`;
+`ModelComponentEXT`/`RenderSystem3DEXT` with real frustum-culled headless render tests);
+Phase 4 (skinned animation) is next — see `plan3d.md` §4. Note for Phase 4: `cna` already
+has its own `SkinnedModelEXT`/`AnimationClipEXT`/`BoneTrackEXT`/`KeyframeEXT` types
+(`cna/include/Microsoft/Xna/Framework/Graphics/SkinnedModelEXT.hpp`), built for its Avatar
+system (`AvatarRenderer::EnableRealRenderingEXT`) — real bone-hierarchy + keyframe
+sampling logic (`ComputeBoneTransformsEXT`) already exists there, though the type itself
+carries Avatar-specific part-tinting/naming conventions baked in. Worth deciding during
+Phase 4 whether to reuse it directly, wrap it, or only borrow its sampling approach.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -595,9 +601,10 @@ including resumed ones, and be prepared for a "completed" notification to actual
 
 The original porting plan (`plan.md`) is complete (all 10 phases) — nothing outstanding
 there. **The active work is `plan3d.md`** (the `World3DEXT` 3D scene extension, owner-approved
-2026-07-14): Phase 1 (`Camera3DEXT`) and Phase 2 (transform hierarchy bridge) are done; resume
-at Phase 3 (model rendering/frustum culling/multi-effect pipeline) — read `3d.md` and
-`plan3d.md` §4 first. Re-check `plan3d.md`'s checkboxes and this file's section 1 before
+2026-07-14): Phases 1-3 are done (camera; transform hierarchy bridge; model
+rendering/frustum culling); resume at Phase 4 (skinned animation) — read `3d.md` and
+`plan3d.md` §4 first, and see section 1's note above about `cna`'s existing
+`SkinnedModelEXT`. Re-check `plan3d.md`'s checkboxes and this file's section 1 before
 assuming this is still current; something may have changed since this was written.
 
 If the project owner has a new, specific ask (a real request, not "continue the plan"), just
