@@ -35,4 +35,10 @@ namespace CNA::Extended::Screens::Transitions
             static_cast<float>(graphicsDevice_->getViewportProperty().getHeightProperty()), color_ * getValueProperty());
         spriteBatch_.End();
     }
+
+    const std::string& FadeTransition::GetTypeName() const
+    {
+        static const std::string typeName = "MonoGame.Extended.Screens.Transitions.FadeTransition";
+        return typeName;
+    }
 }

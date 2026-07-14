@@ -40,6 +40,9 @@ namespace CNA::Extended::Screens::Transitions
 
         void Draw(const GameTime& gameTime) override;
 
+        /** @brief Returns the fully qualified .NET type name of this class. */
+        [[nodiscard]] const std::string& GetTypeName() const override;
+
     private:
         GraphicsDevice* graphicsDevice_;
         SpriteBatch spriteBatch_;

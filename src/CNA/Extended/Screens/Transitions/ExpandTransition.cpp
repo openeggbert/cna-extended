@@ -47,4 +47,10 @@ namespace CNA::Extended::Screens::Transitions
         FillRectangle(spriteBatch_, rectangle, color_);
         spriteBatch_.End();
     }
+
+    const std::string& ExpandTransition::GetTypeName() const
+    {
+        static const std::string typeName = "MonoGame.Extended.Screens.Transitions.ExpandTransition";
+        return typeName;
+    }
 }
