@@ -19,6 +19,11 @@ namespace CNA::Extended::World3DEXT
         const BoundingSphere kSphereA(Vector3(0.0f, 0.0f, 0.0f), 1.0f);
         const BoundingSphere kSphereOverlapping(Vector3(1.5f, 0.0f, 0.0f), 1.0f);
         const BoundingSphere kSphereFar(Vector3(100.0f, 100.0f, 100.0f), 1.0f);
+
+        // Non-uniform half-extents (2, 3, 4) on X/Y/Z so each "sphere center embedded in the
+        // box" near-face case below has exactly one unambiguous nearest face.
+        const BoundingBox kBoxAsymmetric(Vector3(-2.0f, -3.0f, -4.0f), Vector3(2.0f, 3.0f, 4.0f));
+        const BoundingBox kUnitCube(Vector3(-1.0f, -1.0f, -1.0f), Vector3(1.0f, 1.0f, 1.0f));
     }
 
     TEST(CollisionShape3DEXTTests, DefaultConstructed_IsNoneAndNeverIntersects)
@@ -121,6 +126,74 @@ namespace CNA::Extended::World3DEXT
 
         EXPECT_NEAR(sphereVsBox.Normal.X, -boxVsSphere.Normal.X, 1e-4f);
         EXPECT_NEAR(sphereVsBox.PenetrationDepth, boxVsSphere.PenetrationDepth, 1e-4f);
+    }
+
+    // A-01 regression tests: sphere center embedded inside the box (GetClosestPoint
+    // degenerates to the center itself, dist == 0), previously mishandled -- see
+    // CollisionShape3DEXT.cpp's file header for the bug this fixes.
+
+    TEST(CollisionShape3DEXTTests, BoxSphere_TryGetCollision_SphereCenterAtBoxCenter_PicksDeterministicFaceAndFullDepth)
+    {
+        CollisionShape3DEXT box(kUnitCube);
+        CollisionShape3DEXT sphere(BoundingSphere(Vector3(0.0f, 0.0f, 0.0f), 0.5f));
+
+        CollisionResult3DEXT result;
+        ASSERT_TRUE(box.TryGetCollision(sphere, result));
+        // All six faces are equidistant (1.0) from a dead-center point; the nearest-face scan's
+        // deterministic tie-breaking (first candidate wins ties) always selects +X here.
+        EXPECT_NEAR(result.Normal.X, 1.0f, 1e-4f);
+        EXPECT_NEAR(result.Normal.Y, 0.0f, 1e-4f);
+        EXPECT_NEAR(result.Normal.Z, 0.0f, 1e-4f);
+        // Box must clear the sphere entirely: distance to face (1.0) + full radius (0.5).
+        EXPECT_NEAR(result.PenetrationDepth, 1.5f, 1e-4f);
+    }
+
+    TEST(CollisionShape3DEXTTests, BoxSphere_TryGetCollision_EmbeddedNearEachFace_PicksThatFaceAndFullDepth)
+    {
+        // (sphere center, expected outward face normal) -- radius is always 1.0, and every
+        // center sits 0.5 units from exactly one face of kBoxAsymmetric, so expected depth is
+        // always 0.5 (distance to face) + 1.0 (radius) = 1.5.
+        const struct
+        {
+            Vector3 center;
+            Vector3 expectedNormal;
+        } cases[] = {
+            {Vector3(1.5f, 0.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f)},
+            {Vector3(-1.5f, 0.0f, 0.0f), Vector3(-1.0f, 0.0f, 0.0f)},
+            {Vector3(0.0f, 2.5f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)},
+            {Vector3(0.0f, -2.5f, 0.0f), Vector3(0.0f, -1.0f, 0.0f)},
+            {Vector3(0.0f, 0.0f, 3.5f), Vector3(0.0f, 0.0f, 1.0f)},
+            {Vector3(0.0f, 0.0f, -3.5f), Vector3(0.0f, 0.0f, -1.0f)},
+        };
+
+        for (const auto& testCase : cases)
+        {
+            CollisionShape3DEXT box(kBoxAsymmetric);
+            CollisionShape3DEXT sphere(BoundingSphere(testCase.center, 1.0f));
+
+            CollisionResult3DEXT result;
+            ASSERT_TRUE(box.TryGetCollision(sphere, result));
+            EXPECT_NEAR(result.Normal.X, testCase.expectedNormal.X, 1e-4f);
+            EXPECT_NEAR(result.Normal.Y, testCase.expectedNormal.Y, 1e-4f);
+            EXPECT_NEAR(result.Normal.Z, testCase.expectedNormal.Z, 1e-4f);
+            EXPECT_NEAR(result.PenetrationDepth, 1.5f, 1e-4f);
+        }
+    }
+
+    TEST(CollisionShape3DEXTTests, SphereBox_TryGetCollision_EmbeddedCase_IsInverseOfBoxSphere)
+    {
+        CollisionShape3DEXT box(kBoxAsymmetric);
+        CollisionShape3DEXT sphere(BoundingSphere(Vector3(1.5f, 0.0f, 0.0f), 1.0f));
+
+        CollisionResult3DEXT boxVsSphere;
+        ASSERT_TRUE(box.TryGetCollision(sphere, boxVsSphere));
+
+        CollisionResult3DEXT sphereVsBox;
+        ASSERT_TRUE(sphere.TryGetCollision(box, sphereVsBox));
+
+        EXPECT_NEAR(sphereVsBox.Normal.X, -boxVsSphere.Normal.X, 1e-4f);
+        EXPECT_NEAR(sphereVsBox.PenetrationDepth, boxVsSphere.PenetrationDepth, 1e-4f);
+        EXPECT_NEAR(sphereVsBox.PenetrationDepth, 1.5f, 1e-4f);
     }
 
     TEST(CollisionShape3DEXTTests, CollisionResult3DEXT_Invert_NegatesNormalAndMinimumTranslationVector)

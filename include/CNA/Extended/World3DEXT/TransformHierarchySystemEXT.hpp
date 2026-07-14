@@ -11,6 +11,13 @@
 // dirty-flag machinery (see Transform.hpp) handles all local/world matrix propagation with
 // no further logic needed here. setParentProperty() already no-ops when the parent hasn't
 // actually changed, so calling it unconditionally every frame is cheap.
+//
+// WouldCreateCycle() was added to fix an independently re-verified audit finding
+// (audit.md, A-02): the ECS ParentEntityIdEXT chain -- not yet-resolved Transform3
+// pointers, which this frame hasn't wired yet -- is walked before every setParentProperty()
+// call, so self-parenting and indirect cycles are rejected (falling back to detached)
+// instead of being wired into Transform3's parent-recursive hierarchy, where they could
+// cause unbounded matrix/dirty-propagation recursion.
 #pragma once
 
 #include "CNA/Extended/ECS/Systems/EntityUpdateSystem.hpp"
@@ -32,5 +39,12 @@ namespace CNA::Extended::World3DEXT
         using ECS::Systems::EntityUpdateSystem::Initialize;
         void Initialize(ECS::ComponentManager& componentManager) override;
         void Update(const Microsoft::Xna::Framework::GameTime& gameTime) override;
+
+    private:
+        /**
+         * @brief True if wiring candidateParentId as entityId's parent would create a
+         * self-parent or indirect cycle in the ECS ParentEntityIdEXT chain.
+         */
+        bool WouldCreateCycle(int entityId, int candidateParentId);
     };
 }

@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) Robert Vokac and contributors
 //
-// TryGetBoxSphereCollision's "sphere center exactly inside the box" branch is a deliberate
-// simplification, not a bug: it falls back to a box-center-to-sphere-center direction (or
-// an arbitrary axis if that is also degenerate) with PenetrationDepth == Radius, rather
-// than computing the true nearest-face push-out distance a fully general SAT/GJK solver
-// would. Matches this phase's "start with the simplest correct version" scope decision
-// (plan3d.md section 4, Phase 5) -- the common real case (sphere center outside the box,
-// which is what most collision responses actually hit) is handled exactly.
+// TryGetBoxSphereCollision's "sphere center inside the box" branch previously used a
+// deliberate simplification (box-center-to-sphere-center direction, PenetrationDepth ==
+// Radius) that turned out to be a real correctness bug, not just a simplification: for a
+// center inside the box, that direction is not necessarily an outward face normal, and the
+// returned depth never accounts for the distance from the center to the box surface at
+// all -- so the computed MTV does not actually separate the shapes in general. Found by an
+// independent audit (audit.md, finding A-01) and independently re-verified before fixing
+// (this project's standing "verify before trusting" discipline). Fixed per plan3d.md's
+// Phase 10 entry: find the nearest of the box's 6 faces (the exact axis-aligned-box
+// equivalent of "nearest point on the surface" when the query point is inside), use that
+// face's outward normal, and set depth to the distance to that face *plus* the sphere's
+// full radius -- the box must move that far to clear the sphere entirely, not just until
+// the sphere's center reaches the face.
 #include "CNA/Extended/World3DEXT/CollisionShape3DEXT.hpp"
 
 #include <algorithm>
@@ -137,26 +143,64 @@ namespace CNA::Extended::World3DEXT
         const Vector3 delta = closest - sphere.Center;
         const float dist = delta.Length();
 
-        if (dist >= sphere.Radius)
-        {
-            result = CollisionResult3DEXT::None;
-            return false;
-        }
-
-        Vector3 normal;
         if (dist > 1e-6f)
         {
-            normal = delta / dist;
-        }
-        else
-        {
-            const Vector3 boxCenter = (box.Min + box.Max) * 0.5f;
-            const Vector3 fallback = sphere.Center - boxCenter;
-            const float fallbackLength = fallback.Length();
-            normal = fallbackLength > 1e-6f ? fallback / fallbackLength : Vector3(0.0f, 1.0f, 0.0f);
+            // Sphere center is strictly outside the box: closest is the real nearest
+            // surface point, and delta already points from the sphere toward the box --
+            // the correct MTV direction to move the box away from the sphere.
+            if (dist >= sphere.Radius)
+            {
+                result = CollisionResult3DEXT::None;
+                return false;
+            }
+
+            const Vector3 normal = delta / dist;
+            const float depth = sphere.Radius - dist;
+            result = CollisionResult3DEXT(true, normal, depth, normal * depth);
+            return true;
         }
 
-        const float depth = sphere.Radius - dist;
+        // Sphere center is inside (or exactly on the surface of) the box: GetClosestPoint
+        // degenerates to the center itself, so no "nearest surface point" direction exists
+        // from that alone. Find the nearest of the box's 6 faces instead -- the box must
+        // move out through that face by the distance to it, plus the sphere's full radius,
+        // so the sphere clears the face entirely rather than merely touching it.
+        const float distToMaxX = box.Max.X - sphere.Center.X;
+        const float distToMinX = sphere.Center.X - box.Min.X;
+        const float distToMaxY = box.Max.Y - sphere.Center.Y;
+        const float distToMinY = sphere.Center.Y - box.Min.Y;
+        const float distToMaxZ = box.Max.Z - sphere.Center.Z;
+        const float distToMinZ = sphere.Center.Z - box.Min.Z;
+
+        float faceDistance = distToMaxX;
+        Vector3 normal(1.0f, 0.0f, 0.0f);
+        if (distToMinX < faceDistance)
+        {
+            faceDistance = distToMinX;
+            normal = Vector3(-1.0f, 0.0f, 0.0f);
+        }
+        if (distToMaxY < faceDistance)
+        {
+            faceDistance = distToMaxY;
+            normal = Vector3(0.0f, 1.0f, 0.0f);
+        }
+        if (distToMinY < faceDistance)
+        {
+            faceDistance = distToMinY;
+            normal = Vector3(0.0f, -1.0f, 0.0f);
+        }
+        if (distToMaxZ < faceDistance)
+        {
+            faceDistance = distToMaxZ;
+            normal = Vector3(0.0f, 0.0f, 1.0f);
+        }
+        if (distToMinZ < faceDistance)
+        {
+            faceDistance = distToMinZ;
+            normal = Vector3(0.0f, 0.0f, -1.0f);
+        }
+
+        const float depth = faceDistance + sphere.Radius;
         result = CollisionResult3DEXT(true, normal, depth, normal * depth);
         return true;
     }

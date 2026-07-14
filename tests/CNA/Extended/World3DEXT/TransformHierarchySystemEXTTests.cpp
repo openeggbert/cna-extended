@@ -119,4 +119,134 @@ namespace CNA::Extended::World3DEXT
 
         EXPECT_EQ(childTransform.TransformEXT.getWorldPositionProperty(), Vector3(1.0f, 0.0f, 0.0f));
     }
+
+    // A-02 regression tests: WouldCreateCycle() must reject self-parenting and indirect
+    // cycles in the ECS ParentEntityIdEXT chain instead of wiring them into Transform3's
+    // parent-recursive hierarchy -- see TransformHierarchySystemEXT.cpp's file header for
+    // the bug this fixes.
+
+    TEST(TransformHierarchySystemEXTTests, SelfParenting_IsRejected_EntityStaysDetached)
+    {
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<TransformHierarchySystemEXT>());
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        ECS::Entity& entity = world->CreateEntity();
+        Transform3ComponentEXT transform;
+        transform.TransformEXT.setPositionProperty(Vector3(3.0f, 0.0f, 0.0f));
+        entity.Attach(&transform);
+        transform.ParentEntityIdEXT = entity.getIdProperty();
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+        world->Update(gameTime);
+
+        EXPECT_EQ(transform.TransformEXT.getParentProperty(), nullptr);
+        EXPECT_EQ(transform.TransformEXT.getWorldPositionProperty(), Vector3(3.0f, 0.0f, 0.0f));
+    }
+
+    TEST(TransformHierarchySystemEXTTests, TwoNodeCycle_BothEntitiesStayDetached)
+    {
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<TransformHierarchySystemEXT>());
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        ECS::Entity& a = world->CreateEntity();
+        ECS::Entity& b = world->CreateEntity();
+
+        Transform3ComponentEXT aTransform;
+        aTransform.TransformEXT.setPositionProperty(Vector3(1.0f, 0.0f, 0.0f));
+        a.Attach(&aTransform);
+
+        Transform3ComponentEXT bTransform;
+        bTransform.TransformEXT.setPositionProperty(Vector3(2.0f, 0.0f, 0.0f));
+        b.Attach(&bTransform);
+
+        // A -> B -> A: an indirect cycle, not just self-parenting.
+        aTransform.ParentEntityIdEXT = b.getIdProperty();
+        bTransform.ParentEntityIdEXT = a.getIdProperty();
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+        world->Update(gameTime);
+
+        EXPECT_EQ(aTransform.TransformEXT.getParentProperty(), nullptr);
+        EXPECT_EQ(bTransform.TransformEXT.getParentProperty(), nullptr);
+        EXPECT_EQ(aTransform.TransformEXT.getWorldPositionProperty(), Vector3(1.0f, 0.0f, 0.0f));
+        EXPECT_EQ(bTransform.TransformEXT.getWorldPositionProperty(), Vector3(2.0f, 0.0f, 0.0f));
+    }
+
+    TEST(TransformHierarchySystemEXTTests, ThreeNodeCycle_AllEntitiesStayDetached)
+    {
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<TransformHierarchySystemEXT>());
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        ECS::Entity& a = world->CreateEntity();
+        ECS::Entity& b = world->CreateEntity();
+        ECS::Entity& c = world->CreateEntity();
+
+        Transform3ComponentEXT aTransform;
+        a.Attach(&aTransform);
+        Transform3ComponentEXT bTransform;
+        b.Attach(&bTransform);
+        Transform3ComponentEXT cTransform;
+        c.Attach(&cTransform);
+
+        // A -> B -> C -> A.
+        aTransform.ParentEntityIdEXT = b.getIdProperty();
+        bTransform.ParentEntityIdEXT = c.getIdProperty();
+        cTransform.ParentEntityIdEXT = a.getIdProperty();
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+        world->Update(gameTime);
+
+        EXPECT_EQ(aTransform.TransformEXT.getParentProperty(), nullptr);
+        EXPECT_EQ(bTransform.TransformEXT.getParentProperty(), nullptr);
+        EXPECT_EQ(cTransform.TransformEXT.getParentProperty(), nullptr);
+    }
+
+    TEST(TransformHierarchySystemEXTTests, ParentEntityWithNoTransformComponent_ChildFallsBackToDetached)
+    {
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<TransformHierarchySystemEXT>());
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        // A real entity that exists but was never given a Transform3ComponentEXT.
+        ECS::Entity& parent = world->CreateEntity();
+
+        ECS::Entity& child = world->CreateEntity();
+        Transform3ComponentEXT childTransform;
+        childTransform.TransformEXT.setPositionProperty(Vector3(4.0f, 0.0f, 0.0f));
+        childTransform.ParentEntityIdEXT = parent.getIdProperty();
+        child.Attach(&childTransform);
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+        world->Update(gameTime);
+
+        EXPECT_EQ(childTransform.TransformEXT.getParentProperty(), nullptr);
+        EXPECT_EQ(childTransform.TransformEXT.getWorldPositionProperty(), Vector3(4.0f, 0.0f, 0.0f));
+    }
+
+    TEST(TransformHierarchySystemEXTTests, MissingParentEntity_ChildFallsBackToDetached)
+    {
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<TransformHierarchySystemEXT>());
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        ECS::Entity& child = world->CreateEntity();
+        Transform3ComponentEXT childTransform;
+        childTransform.TransformEXT.setPositionProperty(Vector3(5.0f, 0.0f, 0.0f));
+        childTransform.ParentEntityIdEXT = 999999;
+        child.Attach(&childTransform);
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+        world->Update(gameTime);
+
+        EXPECT_EQ(childTransform.TransformEXT.getParentProperty(), nullptr);
+        EXPECT_EQ(childTransform.TransformEXT.getWorldPositionProperty(), Vector3(5.0f, 0.0f, 0.0f));
+    }
 }

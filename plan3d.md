@@ -1,11 +1,12 @@
 # `cna-extended` — World3DEXT Porting/Design Plan
 
-Status: **DONE — all 9 phases complete (2026-07-14).** Approved the same day
-(2026-07-14 by Robert Vokáč), including the Phase 5-8 scope expansion
-(`Collisions3DEXT`/`Graphics3DEXT`/`Particles3DEXT`/`Tilemaps3DEXT`). Every phase was
-verified (build + tests, both CMake configs, `rm -rf` clean rebuilds) before the next
-started, matching this project's established discipline. Full test suite: **2157/2159
-passing** (2 pre-existing skips predating this plan, unrelated to it — see `NEXT.md`).
+Status: **All 9 original phases complete (2026-07-14); Phase 10 (audit follow-ups, added
+2026-07-14) in progress.** Approved 2026-07-14 by Robert Vokáč, including the Phase 5-8
+scope expansion (`Collisions3DEXT`/`Graphics3DEXT`/`Particles3DEXT`/`Tilemaps3DEXT`).
+Every phase was verified (build + tests, both CMake configs, `rm -rf` clean rebuilds)
+before the next started, matching this project's established discipline. An independent
+audit (`audit.md`) reviewed the completed Phase 1-9 result and found real findings, now
+tracked as Phase 10 below.
 
 See [`3d.md`](3d.md) for the full analysis and rationale behind every decision recorded
 here — this file is the checkbox-tracked task list derived from it, not a restatement of
@@ -509,6 +510,97 @@ this task's own "decide during this phase" wording):
       `Initialize()` builds the `World`). Both build configs clean (genuine `rm -rf` +
       fresh configure + build), full suite **2157/2159 passing** (was 2155/2157; 2
       pre-existing skips unrelated to this phase).
+
+### Phase 10 — Audit follow-ups (2026-07-14)
+
+An independent audit (Codex, `bf71945`) reviewed the full port and `World3DEXT`, saved to
+[`audit.md`](audit.md). Overall verdict: 2D port 8/10, `World3DEXT` 6/10
+production-readiness ("a capable first version... treat as experimental/early-production
+until the high-priority findings are fixed"). Each finding below was independently
+re-verified against the actual code before being accepted (per this project's standing
+"verify before trusting" discipline) — none were fixed on the audit's word alone. Findings
+keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
+
+- [x] **A-01 (High)** — `CollisionShape3DEXT::TryGetBoxSphereCollision`'s fallback (sphere
+      center inside the box) returns `depth == sphere.Radius`, not the true separating
+      distance, and picks a box-center-to-sphere-center direction that isn't necessarily
+      an outward face normal — confirmed by re-reading the code: doesn't actually move the
+      box out of the sphere in general. Fix: find the nearest of the box's 6 faces, use its
+      outward normal, and set `depth = distanceToThatFace + sphere.Radius`. Add tests: dead
+      center, all 6 near-face cases, a non-uniform (non-cube) box, and the inverse
+      (`sphere.TryGetCollision(box)`) call.
+- [x] **A-02 (High)** — `TransformHierarchySystemEXT::Update` wires any non-negative
+      `ParentEntityIdEXT` without checking for self-parenting or indirect cycles —
+      confirmed by re-reading the code. `Transform3`'s world-matrix recomputation
+      recurses through the parent chain, so `A -> B -> A` (or direct self-parenting) risks
+      unbounded recursion / stack overflow. Fix: walk the *ECS* `ParentEntityIdEXT` chain
+      (not yet-wired `Transform3` pointers) before calling `setParentProperty`; reject
+      self-parenting and any candidate parent whose own ancestor chain already contains
+      this entity, falling back to no-parent (detached) for the rejected edge. Add tests:
+      self-parent, 2-node cycle, 3+-node cycle, parent entity with no `Transform3ComponentEXT`.
+- [ ] **A-04 (Medium)** — `BillboardRenderSystemEXT`'s frustum-culling radius is
+      `max(width, height) / 2`, not `Vector2(width, height).Length() / 2` (half the
+      diagonal) — confirmed by re-reading the code. A billboard's corners can be
+      incorrectly culled while still on-screen. Fix: use the diagonal-based radius. Add a
+      boundary test: a wide/tall billboard whose center sits just outside a frustum plane
+      while a corner should still be visible under the corrected radius.
+- [ ] **A-06 (Medium)** — confirmed by re-reading the code: (1)
+      `ParticleEmitter3DEXT::SampleConeDirectionEXT` calls `Vector3::Normalize
+      (ConeDirectionEXT)` with no zero-vector guard (undefined/NaN result if a caller
+      leaves or sets it to `Vector3::Zero`); (2) `ParticleRenderSystem3DEXT` casts
+      `particle.OpacityEXT * 255.0f` straight to `std::uint8_t` with no clamping --
+      out-of-[0,1] opacity is real UB in C++, not just wraparound. Fix: default/guard a
+      zero `ConeDirectionEXT` in `EmitEXT`/`SampleConeDirectionEXT`; clamp opacity to
+      [0,1] before the byte conversion (in `ParticleEmitter3DEXT::UpdateEXT`, where
+      `OpacityEXT` is actually computed, not at the render call site). Add tests for both.
+- [ ] **A-08 (Medium)** — `ModelComponentEXT`/`SkinnedModelComponentEXT::BoundsEXT`
+      default to a zero-radius `BoundingSphere` and are easy to leave unset, silently
+      culling a real model every frame with no warning. Add a helper (e.g.
+      `ComputeModelBoundsEXT(const Model&)`) that derives a real bounding sphere from a
+      `Model`'s mesh bounds (`ModelMesh::getBoundingSphereProperty()`, merged via
+      `BoundingSphere::CreateMerged`), so callers have a real alternative to hand-rolling
+      one. Documenting the "must set this yourself" contract more prominently in the
+      component's own header comment is the minimum bar if the helper turns out to need a
+      Phase 11 of its own.
+- [ ] **A-09 (Medium)** — status docs are stale/contradictory, confirmed directly:
+      `3d.md`'s own top status line still says "still needs explicit phase-by-phase
+      approval before any code is written" despite `plan3d.md` recording that approval and
+      all 9 phases as complete; `README.md` says "2042/2042 tests passing" (predates even
+      `plan.md`'s own later phases, let alone `World3DEXT` — current count is 2157/2159).
+      Fix: update `3d.md`'s status line to match `plan3d.md`'s actual "DONE" status;
+      update `README.md`'s test count and re-scan `NEXT.md` for any other stale figures
+      left over from mid-session edits this same day.
+- [ ] **A-07 (Medium)** — most `*EXT` render tests draw exactly one isolated object, so
+      the missing-depth-buffer class of bug this session already found and fixed in
+      `world3d_demo` (see `NEXT.md` section 5) has no regression test protecting it in the
+      actual test suite. Add a depth-enabled multi-object test (two overlapping cubes
+      drawn in both submission orders, asserting the *nearer* one's color wins either way)
+      to lock in that fix.
+- [ ] **A-05 (Medium, deferred)** — `OctreeEXT` is honestly documented as a fixed-cell
+      spatial hash, not a hierarchical octree (`OctreeEXT.hpp`'s own header comment
+      already says so), but the audit is right that the class *name* still invites the
+      opposite assumption, and `Query`'s candidate dedup is `std::find`-in-a-loop (linear).
+      Left for a future session: renaming is a real breaking API change (touches
+      `CollisionWorld3DEXT`'s default construction and every test/example referencing
+      `OctreeEXT` by name) and the dedup performance concern needs a real large-scene
+      benchmark before "optimize" is well-defined, not a guess — recorded here rather than
+      done reflexively.
+- [x] **A-03 (High, addressed as documentation, not a code fix)** — the audit's own 22
+      graphics-test failures were caused by its sandbox lacking any SDL video device
+      (`SDL_InitSubSystem(SDL_INIT_VIDEO) failed: No available video device`), not a
+      renderer defect — confirmed not reproducible in *this* environment: every `*EXT`
+      render test and `world3d_demo` itself have run successfully via real EasyGL-over-Mesa
+      software rendering throughout every phase of this whole session (see `NEXT.md`
+      section 1's "genuine `rm -rf` rebuild, full ctest" verification after every phase).
+      The audit's underlying point — that headless rendering isn't automatically portable
+      to every environment, and this project doesn't document what it actually needs — is
+      fair and worth recording explicitly rather than assumed. See `NEXT.md` section 7 for
+      the added platform-requirements note.
+- [x] **A-10 (Low, already tracked)** — voxel tilemap rendering's lack of chunk
+      meshing/hidden-face culling/batching is already recorded as a deliberate,
+      documented scope decision (`plan3d.md`'s own Phase 8 entry, `NEXT.md` section 8's
+      deferred-scope list) — the audit independently arriving at the same conclusion is a
+      useful confirmation, not a new finding needing its own fix task.
 
 ## 5. After meaningful changes
 
