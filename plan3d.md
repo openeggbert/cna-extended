@@ -81,13 +81,23 @@ Ordered by dependency, matching `3d.md` §8. Check off tasks as they land; updat
 alongside every session's progress (or a dedicated `NEXT3D.md`, if this work is large
 enough to warrant one by the time Phase 1 starts — decide then, not now).
 
-### Phase 1 — `Camera3DEXT`
+### Phase 1 — `Camera3DEXT` — **COMPLETE (2026-07-14)**
 
-- [ ] `CNA::Extended::World3DEXT::Camera3DEXT` (`Camera<Vector3>` + `IMovable` +
-      `IRotatable`): position/target-or-forward/up, FOV/aspect/near/far,
-      `GetViewMatrixEXT()`/`GetProjectionMatrixEXT()`/`GetBoundingFrustumEXT()`. Adapt
-      `cna-scene::Camera3D`'s math as reference (see `3d.md` §6.1).
-- [ ] Tests mirroring `OrthographicCameraTests.cpp`'s structure/coverage bar.
+- [x] `CNA::Extended::World3DEXT::Camera3DEXT` — **standalone class, not
+      `Camera<Vector3>`/`IMovable`/`IRotatable`** (corrected during design review before
+      implementation — those interfaces hardcode 2D types regardless of their template
+      parameter/are flatly 2D; see `3d.md` §6.1 for the full finding). Position/target/up,
+      FOV/aspect/near/far, `GetViewMatrixEXT()`/`GetProjectionMatrixEXT()`/
+      `GetBoundingFrustumEXT()`. Math adapted from `cna-scene::Camera3D` as reference
+      (`Matrix::CreateLookAt`/`Matrix::CreatePerspectiveFieldOfView`, both real CNA math
+      this file only forwards to). `include/CNA/Extended/World3DEXT/Camera3DEXT.hpp` +
+      `src/.../Camera3DEXT.cpp`.
+- [x] Tests: 7 tests covering defaults, property round-trip, view/projection matrix
+      correctness (checked directly against `Matrix::CreateLookAt`/
+      `CreatePerspectiveFieldOfView`), and 3 `BoundingFrustum` geometry tests (contains a
+      point at the target, excludes a point behind the camera, excludes a point beyond
+      the far plane) — `tests/CNA/Extended/World3DEXT/Camera3DEXTTests.cpp`.
+      Both build configs clean, full suite **2086/2086** (was 2079).
 
 ### Phase 2 — Transform hierarchy bridge
 
