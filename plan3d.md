@@ -793,7 +793,34 @@ port tests alongside → verify both CMake configs via genuine `rm -rf` clean re
       `OpacityInterpolator3DEXT` including its A-06 clamp regression). 35 new tests total.
       Both configs verified via genuine `rm -rf` clean rebuild; full suite green
       (2275/2275).
-- [ ] **Phase C-2 — Remaining Profiles (6)**: Line/Ring/Box/BoxFill/BoxUniform/Circle.
+- [x] **Phase C-2 — Remaining Profiles (6)**: `LineProfile3DEXT`, `RingProfile3DEXT`,
+      `CircleProfile3DEXT`, `BoxProfile3DEXT`, `BoxFillProfile3DEXT`, `BoxUniformProfile3DEXT`
+      (+ shared `LineRadiation3DEXT`/`CircleRadiation3DEXT` enums), plus a new shared
+      `NextUnitVector3EXT(System::Random&, Vector3&)` free-function helper (3D counterpart of
+      `RandomExtensions::NextUnitVector`) factored out once six call sites needed the same
+      uniform-sphere-heading sampling; `PointProfile3DEXT`'s own pre-existing inline copy was
+      refactored to call it too (same formula, no behavior change). Per the approved plan,
+      `RingProfile3DEXT`/`CircleProfile3DEXT` are the sphere-surface/sphere-fill analogs of
+      2D's circle-perimeter/filled-disk emission (not a literal ring/torus), and
+      `BoxProfile3DEXT`/`BoxFillProfile3DEXT`/`BoxUniformProfile3DEXT` use a genuinely-3D
+      6-face box (not a 2D rectangle embedded in 3D) — `BoxUniformProfile3DEXT` weights face
+      selection by *surface area* (2D's `BoxUniformProfile` weights by perimeter *length*),
+      using a continuous float draw rather than 2D's `Next(static_cast<int>(perimeter))`
+      integer-truncation quirk, since this is brand-new code with no prior 3D behavior to
+      preserve. `LineRadiation3DEXT` collapses 2D `LineRadiation`'s `PerpendicularUp`/
+      `PerpendicularDown` pair into a single `Perpendicular` mode (a uniformly random
+      direction within the plane perpendicular to `AxisEXT`) since a 3D line's perpendicular
+      directions form an entire plane, not two fixed 2D screen-space choices. New code applies
+      the A-06 zero-vector NaN guard proactively (`AxisEXT`/`DirectionEXT` in
+      `LineProfile3DEXT`) even though upstream 2D `LineProfile` has no such guard, since this
+      is fresh code, not a preservation of prior behavior. `Profile3DEXT` gained matching
+      `Line`/`Ring`/`Box`/`BoxFill`/`BoxUniform`/`Circle` static factories.
+      Tests: one new file per profile (`LineProfile3DEXT` 7, `RingProfile3DEXT` 4,
+      `CircleProfile3DEXT` 3, `BoxProfile3DEXT` 3, `BoxFillProfile3DEXT` 2,
+      `BoxUniformProfile3DEXT` 3 — including a larger-face-sampled-more-often proof
+      distinguishing it from `BoxProfile3DEXT`'s equal-probability selection) plus 8 new
+      factory-method cases added to `Profile3DEXTTests.cpp`. 30 new tests total. Both configs
+      verified via genuine `rm -rf` clean rebuild; full suite green (2305/2305).
 - [ ] **Phase C-3 — Remaining Modifiers (8)**: Drag/OpacityFastFade/Rotation/VelocityColor/
       Velocity/Vortex + Sphere/Box/BoxLoop Container modifiers (3D analogs of 2D's
       Circle/Rectangle/RectangleLoop containers).

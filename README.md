@@ -20,7 +20,7 @@ rendering, 3D collisions, billboards/text/debug-draw, particles, voxel tilemaps,
 end-to-end `world3d_demo` example — with all 9 of its own phases complete and an
 independent audit's follow-up fixes (`plan3d.md`'s Phase 10) done, and 2D/3D parity work
 (`plan3d.md`'s Phase 11 — collision layers, a recursive octree broadphase, and a particles
-plugin architecture) in progress. Current test count: 2275/2275 passing (see `NEXT.md` for
+plugin architecture) in progress. Current test count: 2305/2305 passing (see `NEXT.md` for
 the most up-to-date figure, since this number moves as work continues).
 
 ## Modules

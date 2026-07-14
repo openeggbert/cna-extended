@@ -59,10 +59,11 @@ itself):
    gravity/expiry/color-opacity-interpolation baked directly into `UpdateEXT`; now (Phase 11
    C-1, `plan3d.md`, 2026-07-14) owns a real `Profile3DEXT`/`Modifier3DEXT`/
    `ModifierExecutionStrategy3DEXT`/`Interpolator3DEXT` plugin architecture matching 2D's
-   shape, proven behavior-preserving against the pre-existing test suite; only the
-   representative slice (point/cone Profiles, Age/LinearGravity Modifiers, Color/Opacity
-   Interpolators) exists so far — the remaining Profiles/Modifiers/Interpolators are Phase
-   11 C-2 through C-4, not yet started. Drawing still goes through a
+   shape, proven behavior-preserving against the pre-existing test suite; all 8 Profiles now
+   exist (Phase 11 C-2, `plan3d.md`, 2026-07-14 — Point/Cone/Line/Ring/Circle/Box/BoxFill/
+   BoxUniform), but only the representative slice of Modifiers/Interpolators (Age/
+   LinearGravity, Color/Opacity) exists so far — the remaining Modifiers/Interpolators are
+   Phase 11 C-3/C-4, not yet started. Drawing still goes through a
    `BillboardRenderSystemEXT::DrawBillboardEXT` extraction so particle rendering genuinely
    reuses the billboard draw path.
 8. `Tilemaps3DEXT` — a sparse `Tilemap3DEXT` voxel grid (tile ID 0 = empty),
@@ -106,7 +107,7 @@ no in-progress phase in either.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2275/2275 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2305/2305 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -663,8 +664,8 @@ full generality (each documented in-place in `plan3d.md`/`3d.md`, not hidden); t
 the concrete "extend later if wanted" candidates, should the owner ask for any of them:
 - `Particles3DEXT`: the full `Profiles`/`Modifiers`/`Interpolators` plugin architecture —
   **in progress, Phase 11 C-1 through C-4 in `plan3d.md`, 2026-07-14**. C-1 (core
-  architecture + a representative Profile/Modifier/Interpolator slice) is done; C-2
-  (remaining 6 Profiles), C-3 (remaining 8 Modifiers), C-4 (remaining 4 Interpolators) are
+  architecture + a representative Profile/Modifier/Interpolator slice) and C-2 (remaining 6
+  Profiles) are done; C-3 (remaining 8 Modifiers), C-4 (remaining 4 Interpolators) are
   not started.
 - ~~`SpatialHash3DEXT` (renamed from `OctreeEXT` in Phase 10, audit.md A-05): true recursive
   octree subdivision (currently a fixed-cell-size spatial hash).~~ Done as an alternative

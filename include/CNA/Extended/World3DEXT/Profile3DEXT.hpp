@@ -19,6 +19,9 @@
 // (lifetime/speed/scale sampling), which isn't behaviorally necessary and is worth avoiding.
 #pragma once
 
+#include "CNA/Extended/World3DEXT/CircleRadiation3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/LineRadiation3DEXT.hpp"
+
 #include <memory>
 
 namespace Microsoft::Xna::Framework
@@ -53,5 +56,32 @@ namespace CNA::Extended::World3DEXT
          * before this architecture existed (see ConeProfile3DEXT.hpp).
          */
         [[nodiscard]] static std::unique_ptr<Profile3DEXT> Cone(const Microsoft::Xna::Framework::Vector3& direction, float halfAngle);
+
+        /** @brief Creates a profile emitting particles uniformly along a 3D line segment with random headings (Radiate defaults to None). */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> Line(const Microsoft::Xna::Framework::Vector3& axis, float length);
+
+        /** @brief Creates a profile emitting particles along a 3D line segment with the given radiation mode. */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> Line(const Microsoft::Xna::Framework::Vector3& axis, float length,
+                                                                  LineRadiation3DEXT radiate);
+
+        /** @brief Creates a profile emitting particles along a 3D line segment with the given radiation mode and direction. */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> Line(const Microsoft::Xna::Framework::Vector3& axis, float length,
+                                                                  LineRadiation3DEXT radiate,
+                                                                  const Microsoft::Xna::Framework::Vector3& direction);
+
+        /** @brief Creates a profile emitting particles from the surface of a sphere (the 3D analog of a circle's perimeter). */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> Ring(float radius, CircleRadiation3DEXT radiate);
+
+        /** @brief Creates a profile emitting particles from one of a box's six faces (equal probability per face). */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> Box(float width, float height, float depth);
+
+        /** @brief Creates a profile emitting particles from anywhere within a box volume. */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> BoxFill(float width, float height, float depth);
+
+        /** @brief Creates a profile emitting particles from a box's surface, each face weighted by its area. */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> BoxUniform(float width, float height, float depth);
+
+        /** @brief Creates a profile emitting particles from anywhere within a spherical volume (the 3D analog of a filled disk). */
+        [[nodiscard]] static std::unique_ptr<Profile3DEXT> Circle(float radius, CircleRadiation3DEXT radiate);
     };
 }
