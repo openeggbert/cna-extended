@@ -55,3 +55,45 @@ gap, not a rendering-correctness bug in `cna`, `cna-extended`, `TilemapRenderer`
 test code only. Worth reporting to whoever maintains `cna`: a `Texture2D::GetData()` that
 silently doesn't reflect real GPU-rendered content is a surprising divergence from real
 XNA/MonoGame/FNA semantics that could affect any future consumer, not just this port's tests.
+
+## `GraphicsDevice::GetBackBufferData()`'s no-`Rectangle` overload reads the viewport size, not the bound `RenderTarget2D`'s size
+
+**Where discovered**: `examples/tiled_demo/main.cpp`, while wiring up the workaround above for
+a real (non-test) headless render.
+
+**Real XNA/FNA/MonoGame behavior**: `GraphicsDevice.GetBackBufferData(data)` (no explicit
+region) reads back the full current render target — whatever is currently bound via
+`SetRenderTarget()`, sized to *that target's* width/height. If a smaller or differently-sized
+`RenderTarget2D` is bound, the readback is sized to it, not to the window.
+
+**`cna`'s current behavior**: `GraphicsDevice::GetBackBufferData(Color* data, int
+startIndex, int elementCount)` and the 2-arg overload both delegate to the 4-arg
+`GetBackBufferData(const Rectangle* rect, ...)` with `rect = nullptr`
+(`cna/src/Microsoft/Xna/Framework/Graphics/GraphicsDevice.cpp:1680-1725`). When `rect` is
+`nullptr`, the region defaults to `x=0, y=0, w,h = backend_->GetViewportSize(w, h)` — i.e.
+**the window's real backbuffer/viewport size**, not the currently-bound `RenderTarget2D`'s
+own `Width`/`Height`. If a render target smaller than the viewport is bound (a common case
+for any offscreen/thumbnail-sized render), the no-`Rectangle` overload either reads a region
+larger than the target actually has data for, or throws
+`"GetBackBufferData: data array too small for requested region"` if the caller sized its
+buffer to the (smaller) render target instead of the (larger) viewport — confirmed directly
+by reading `GraphicsDevice.cpp`'s exact branch, not just observed as a symptom.
+
+**Confirmed workaround**: always use the 4-arg overload with an explicit `Rectangle` sized to
+the actual bound render target:
+
+```cpp
+Rectangle region(0, 0, renderTarget.getWidthProperty(), renderTarget.getHeightProperty());
+graphicsDevice.GetBackBufferData(&region, pixels.data(), 0, pixelCount); // BEFORE unbinding
+```
+
+**Impact on this port**: `TilemapIntegrationTests.cpp`'s render target happens to be sized to
+match the default 800×480 viewport, so it never hit this — the gap was only found later while
+building `examples/tiled_demo/`'s own (differently-sized) render target. Worked around there
+using the explicit-`Rectangle` overload.
+
+**Not fixed in `cna`** (sibling-repo rule) — worked around locally. Worth reporting to
+whoever maintains `cna`: the no-`Rectangle` overload silently defaulting to viewport size
+instead of erroring, or defaulting to the bound render target's own size (closer to real
+XNA/MonoGame semantics), would remove this footgun for any future caller who doesn't already
+know to always pass an explicit region.

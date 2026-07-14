@@ -52,7 +52,15 @@ namespace CNA::Extended::Graphics
             return *this;
         }
 
-        /** @brief Sets whether the animation should ping-pong (reverse direction at the ends) instead of looping back to the start. */
+        /**
+         * @brief Sets whether the animation should ping-pong (reverse direction at the ends)
+         * instead of looping back to the start.
+         *
+         * @note Faithful upstream MonoGame.Extended behavior, not a port defect: ping-pong
+         * only takes effect if `IsLooping(true)` is also set. `IsPingPong(true)` alone plays
+         * once forward and stops on the last frame instead of bouncing — see
+         * `AnimationController::AdvanceFrame`'s `isLooping_`-gated branch.
+         */
         SpriteSheetAnimationBuilder& IsPingPong(bool isPingPong)
         {
             isPingPong_ = isPingPong;
