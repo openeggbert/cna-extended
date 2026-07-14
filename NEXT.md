@@ -52,24 +52,28 @@ This is the sole remaining blocker in the entire porting plan outside Phase 10.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **1935/1935 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **1986/1986 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
+  A pixel-verification test suite (28 more tests, `TilemapIntegrationTests.cpp`) is being
+  ported by a forked sub-agent as of this writing — see section 4.
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
-- **Phases 0–6, 8, and 9 are complete.** Phase 7's core Tilemaps data model, `Tiled/*`,
-  `LDtk/*`, `Ogmo/*`, and most of `Rendering/*` all landed — see section 3.
-- **CORRECTED this session, was wrong in earlier entries of this same file**: a real
-  headless `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple genuinely works end-to-end in
-  this environment (real EasyGL-over-Mesa software rendering) — the "no headless
+- **Phases 0–6, 8, and 9 are complete. Phase 7's former architectural blocker is now
+  RESOLVED** (`TilemapRenderer`/`TilemapWorldRenderer` ported using `cna`'s real
+  `BasicEffect` — see section 4 for the full resolution). `Tiled/*`, `LDtk/*`, `Ogmo/*`,
+  and all of `Rendering/*` are landed — see section 3.
+- **CORRECTED earlier this session, was wrong in even-earlier entries of this same file**: a
+  real headless `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple genuinely works end-to-end
+  in this environment (real EasyGL-over-Mesa software rendering) — the "no headless
   SpriteBatch test infra" claim was an untested assumption inherited forward through this
   file, not a verified fact. `SpriteBatch.Extensions`, `BitmapFontExtensions`,
   `ShapeExtensions`, `FadeTransition`/`ExpandTransition::Draw` now all have real
   behavioral test coverage as a direct follow-up (47 new tests) — see section 3. This
   correction is now fully closed out, not just noted.
 - **Does not work / not done yet**:
-  - `TilemapRenderer`/`TilemapWorldRenderer` — genuine architectural blocker,
-    `needs_human`. See section 4. **This is the only thing left undone anywhere in
-    `plan.md` outside Phase 10.**
+  - `TilemapIntegrationTests.cs`'s 28 pixel-verification tests — not yet ported (in
+    progress, forked sub-agent running as of this writing). See section 4. **This is the
+    only thing left undone anywhere in `plan.md` outside Phase 10.**
 
 ---
 
@@ -80,10 +84,33 @@ One long autonomous session (owner authorized, unavailable for hours). Order so 
 + the bulk of Phase 8 (Particles) in parallel, then `Tilemaps/Tiled/*` +
 `ParticleEffectSerializer.cs` in parallel (Phase 8 completed in full), then
 `Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then `Tilemaps/Rendering/*` (the last item
-in Phase 7), then a follow-up test-coverage task (this batch) closing out the discovery from
-the Rendering batch. See `git log` for every batch's individual commits; this section covers
-the two most recent batches (Rendering + test-coverage follow-up) in detail, condensing
+in Phase 7), then a follow-up test-coverage task closing out the discovery from the Rendering
+batch, then — after the owner's own question redirected the investigation — the
+`TilemapRenderer`/`TilemapWorldRenderer` blocker resolution (this batch) and its own
+follow-up pixel-verification test task (in progress). See `git log` for every batch's
+individual commits; this section covers the two most recent batches in detail, condensing
 earlier ones.
+
+- **`TilemapRenderer`/`TilemapWorldRenderer` blocker RESOLVED and ported (2026-07-14)**. The
+  owner directly challenged the framing of the blocker (asking, in effect, whether
+  `DefaultEffect` was even a real XNA class, and whether the real fix was to use XNA's actual
+  `BasicEffect`) — investigating that question found the actual resolution: `DefaultEffect` is
+  **not** an XNA class at all (it's MonoGame.Extended's own invention); the real XNA
+  `BasicEffect` the owner meant **already exists in `cna`**, fully implemented and
+  pixel-verified across all 3 backends (see `cna/docs/basiceffect-support.md`), including
+  specifically the exact `TextureEnabled`+`VertexColorEnabled`+no-lighting /
+  `VertexPositionColorTexture` stride-24 combination these two renderers need — a strict
+  superset of what `DefaultEffect` ever provided. Ported via a forked sub-agent (~2000 lines
+  C# → ~2200 lines C++ across `TilemapRenderer.hpp/.cpp`/`TilemapWorldRenderer.hpp/.cpp` +
+  51 new tests). Independently verified by the orchestrating session (not just trusted): clean
+  `git status` (only the 6 expected new files, `plan.md`/`NEXT.md`/`NOTICE.md` untouched by
+  the fork), genuinely clean `rm -rf build`+`rm -rf build-headers` rebuilds of both configs
+  (zero warnings), full `ctest` re-run (1986/1986 passing, up from 1935), and a line-by-line
+  comparison of several core methods (`Update`, `BuildLayerModels`) against the actual
+  upstream `.cs` source confirming exact logical fidelity including preserved comments (e.g.
+  the "Tiled bottom-aligns all tiles" comment). Full technical writeup in `plan.md`'s Phase 7
+  entry. See section 4 for what's still open (a follow-up pixel-verification test gap this
+  review uncovered, not part of the original blocker).
 
 - **`Tilemaps/Rendering/*`**: `RenderMode`, `TilemapRendererShared`,
   `TilemapSpriteBatchRenderer`, `TilemapWorldSpriteBatchRenderer` all landed.
@@ -141,44 +168,43 @@ re-detailed here.
 
 ## 4. Current blocker / main problem
 
-**One genuine architectural blocker, `needs_human`; nothing else.** No build-breaking or
-test-failing issue — `cmake --build build -j$(nproc)`, `cmake --build build-headers
--j$(nproc)`, and `ctest --test-dir build` all currently succeed (1935 tests run, 100%
-passing, zero warnings in both configs).
+**No architectural blocker remains.** The former `TilemapRenderer`/`TilemapWorldRenderer`
+blocker (below, kept for history) is resolved. One test-coverage task is in progress; no
+build-breaking or test-failing issue exists — `cmake --build build -j$(nproc)`,
+`cmake --build build-headers -j$(nproc)`, and `ctest --test-dir build` all currently succeed
+(1986 tests run, 100% passing, zero warnings in both configs).
 
-- **Symptom**: `Tilemaps/Rendering/TilemapRenderer.cs`/`TilemapWorldRenderer.cs` (the
-  `VertexBuffer`/`IndexBuffer`-based tilemap renderers, as opposed to the already-landed
-  `SpriteBatch`-based ones) are not ported.
-- **Root cause**: they use `VertexPositionColorTexture`, whose real field layout in this
-  project (`Vector3 Position`, `Color`, `Vector2 TextureCoordinate` — confirmed directly in
-  `cna`) does not match `DefaultEffect`'s GLSL vertex shader layout (`vec2 aPos`@0, `vec2
-  aTexCoord`@1, `vec4 aColor`@2 — confirmed directly in this project's own
-  `DefaultEffect.cpp`): different attribute order *and* a different position component
-  count (`vec2` vs `Vector3`). Using one with the other wouldn't just fail to compile — it
-  would silently bind the wrong bytes to the wrong attributes.
-- **What this needs**: a human decision between (at least) three real options, each with
-  real tradeoffs:
-  1. A new `Effect` whose GLSL layout matches `VertexPositionColorTexture` exactly (new
-     code only, `DefaultEffect` untouched).
-  2. Change `DefaultEffect`'s own shader layout to match `VertexPositionColorTexture`
-     (risks regressing every already-shipped consumer of `DefaultEffect` — Sprite
-     rendering, `NinePatch`, etc. — all already tested and working).
-  3. Give `TilemapRenderer`/`TilemapWorldRenderer` their own vertex struct matching
-     `DefaultEffect`'s existing layout instead of literally using
-     `VertexPositionColorTexture` (deviates from upstream's exact type choice, but touches
-     nothing already shipped).
-  This is the same category of decision as the `Graphics/Effects/*` bytecode blocker
-  resolved earlier this session via `AskUserQuestion` (see that phase's `plan.md` entry) —
-  a real design fork, not a guessable implementation detail.
-- **Why this wasn't escalated synchronously**: per the standing autonomous-session
-  instruction ("mark `needs_human`, continue with other independent work" — not "always
-  ask immediately"), and because no other Phase 7 work remained to fill the gap while
-  waiting (this was the last item in the phase). Documented here and in `plan.md` instead,
-  for the owner to decide whenever they're back.
-- **What's NOT blocked by this**: everything else in `Rendering/*`
-  (`TilemapSpriteBatchRenderer`, `TilemapWorldSpriteBatchRenderer`, `TilemapRendererShared`,
-  `RenderMode`) is fully landed, tested, and working — this only affects the two
-  `VertexBuffer`-based renderer variants specifically.
+**In progress**: a forked sub-agent is porting
+`tests/MonoGame.Extended.Tests/Tilemaps/Rendering/TilemapIntegrationTests.cs` (28 tests) —
+discovered during independent verification of the `TilemapRenderer`/`TilemapWorldRenderer`
+port that this dedicated **pixel-verification** suite (asserts on actual rendered pixel
+colors via headless `Texture2D::GetData` readback, covering both `TilemapRenderer` and
+`TilemapSpriteBatchRenderer`) was never ported — the existing test coverage for all 4
+renderer classes is unit/validation-style ("does it throw"/"does it not throw") only. This
+project had no pixel-readback test harness yet; the fork is building one, modeled on `cna`'s
+own established pattern (`cna/docs/basiceffect-support.md`'s Task 364-370 pixel-verified
+`BasicEffect` tests). Check `git status`/`git log` for whether this has landed since this
+was written; if the fork's task notification hasn't arrived yet, it's still running.
+
+### Resolved: `TilemapRenderer`/`TilemapWorldRenderer` DefaultEffect blocker (kept for history)
+
+- **Symptom (as of 2026-07-13)**: `Tilemaps/Rendering/TilemapRenderer.cs`/
+  `TilemapWorldRenderer.cs` (the `VertexBuffer`/`IndexBuffer`-based tilemap renderers) were
+  not ported — `VertexPositionColorTexture`'s real field layout didn't match this project's
+  own hand-authored `DefaultEffect` GLSL vertex shader layout at all.
+- **Resolution (2026-07-14)**: the owner directly questioned whether `DefaultEffect` was
+  really an XNA 4.0 class needing a port fix, or whether the real fix was XNA's actual
+  `BasicEffect`. Investigating: `DefaultEffect` is MonoGame.Extended's own invention, not an
+  XNA class; `cna`'s real `BasicEffect` already exists, fully implemented and pixel-verified,
+  and its feature set (texture + vertex color + optional lighting/fog/specular) is a strict
+  superset of what `DefaultEffect` ever provided. Ported `TilemapRenderer`/
+  `TilemapWorldRenderer` using `BasicEffect` (`TextureEnabled=true`, `VertexColorEnabled=true`,
+  `LightingEnabled` left at its default `false`) instead of extending `DefaultEffect` or
+  giving the renderers a custom vertex struct (none of the originally-listed 3 options were
+  needed). Full technical detail in `plan.md`'s Phase 7 entry and section 3 above.
+- **What's NOT affected**: everything else in `Rendering/*` (`TilemapSpriteBatchRenderer`,
+  `TilemapWorldSpriteBatchRenderer`, `TilemapRendererShared`, `RenderMode`) was already
+  landed, tested, and working, and needed no changes.
 
 ---
 
@@ -348,18 +374,21 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-1. **`TilemapRenderer`/`TilemapWorldRenderer` — needs a human decision first** (section 4).
-   This is a `needs_human` blocker, not a task to just start on — read section 4's 3 options
-   and get the project owner's call on which one before writing any code here. **This is now
-   the only remaining item in the entire porting plan outside Phase 10.** Once decided:
-   - Command (after implementing): `ctest --test-dir build -R Tilemap` — expect 100%
-     passing; both CMake configs stay clean.
+1. **`TilemapIntegrationTests.cpp` (28 pixel-verification tests) — in progress**, forked
+   sub-agent running as of this writing (section 4). If it has already completed by the time
+   you read this (check `git status`/`git log`), independently verify its output the same
+   way the `TilemapRenderer`/`TilemapWorldRenderer` port was verified (clean `git status`,
+   clean rebuild of both configs, full `ctest`, spot-check a few tests' pixel-math against
+   upstream's own header-comment reasoning), then commit. **This is now the only remaining
+   item in the entire porting plan outside Phase 10.**
+   - Command: `ctest --test-dir build -R TilemapIntegration` — expect 100% passing; both
+     CMake configs stay clean.
 
-2. **Phase 10 — Integration, polish, documentation**, once item 1 lands (or is explicitly
-   deferred by the owner). Scope depends on what's actually left to polish at that point —
-   not detailed here yet. Likely candidates worth considering when scoping it: a real
-   `README.md` (mentioned in `CLAUDE.md`'s own "read first" list but not yet confirmed to
-   exist), and a pass over every `NOTICE.md`-flagged licensing note for completeness.
+2. **Phase 10 — Integration, polish, documentation**, once item 1 lands. Scope depends on
+   what's actually left to polish at that point — not detailed here yet. Likely candidates
+   worth considering when scoping it: a real end-to-end example under `examples/`, a full
+   Doxygen pass, and a final pass over every `NOTICE.md`-flagged licensing note for
+   completeness. `README.md` already exists and was refreshed earlier this session.
 
 Delegating to a sub-agent fork remains appropriate once item 1 has a decision (user-approved
 this session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/

@@ -1,10 +1,13 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6, 8, and 9 complete
-(2026-07-13). Phase 7 ("Tilemaps") 95% done: everything landed except
-`TilemapRenderer`/`TilemapWorldRenderer`, blocked on a genuine `needs_human` architectural
-decision (`VertexPositionColorTexture` vs `DefaultEffect` vertex-layout mismatch — see that
-phase's entry for the 3 real options). This is the sole remaining blocker outside Phase 10.
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-9 all complete (2026-07-14).**
+Phase 7's former architectural blocker (`TilemapRenderer`/`TilemapWorldRenderer`,
+`VertexPositionColorTexture` vs `DefaultEffect` vertex-layout mismatch) is resolved — ported
+using `cna`'s real `BasicEffect` instead (see that phase's entry for the full resolution).
+One known, already-tracked test-coverage gap remains within Phase 7 (upstream's dedicated
+pixel-verification `TilemapIntegrationTests.cs`, 28 tests, not yet ported — see that phase's
+checklist), in progress; everything else is done. Otherwise only Phase 10
+(integration/polish/documentation) remains.
 Fidelity requirement: port 1:1 wherever C#/C++ differences allow — no simplification. See
 `NEXT.md` for current state.**
 
@@ -1080,32 +1083,52 @@ all now complete.
       `NEXT.md` for the full incident note.
 - [x] `RenderMode`, `TilemapRendererShared`, `TilemapSpriteBatchRenderer`,
       `TilemapWorldSpriteBatchRenderer` — **COMPLETE (2026-07-13)**.
-      **`TilemapRenderer`/`TilemapWorldRenderer` — NOT PORTED, genuine architectural
-      blocker, `needs_human`**: these two draw via raw `VertexBuffer`/`IndexBuffer` +
-      `VertexPositionColorTexture`, not `SpriteBatch`. `VertexPositionColorTexture`'s real
-      field layout (`Vector3 Position`, `Color`, `Vector2 TextureCoordinate` — checked
-      directly in `cna`) is structurally incompatible with `DefaultEffect`'s GLSL vertex
-      shader (`vec2 aPos`@0, `vec2 aTexCoord`@1, `vec4 aColor`@2 — checked directly in this
-      project's own `DefaultEffect.cpp`): different attribute order *and* a different
-      position component count. Binding one to the other would silently read wrong data
-      into wrong attributes, not just fail to compile. Three real options, each with real
-      tradeoffs, none yet decided:
-        1. Add a new `Effect` whose GLSL layout matches `VertexPositionColorTexture` exactly
-           (new code, `DefaultEffect` untouched).
-        2. Change `DefaultEffect`'s shader to `VertexPositionColorTexture`'s layout (risks
-           regressing every already-shipped, tested consumer of `DefaultEffect` — Sprite
-           rendering, `NinePatch`, etc.).
-        3. Give `TilemapRenderer`/`TilemapWorldRenderer` their own vertex struct matching
-           `DefaultEffect`'s existing layout instead of using `VertexPositionColorTexture`
-           (deviates from upstream's literal type choice, but changes nothing already
-           shipped).
-      This is the same category of decision as the `Graphics/Effects/*` bytecode blocker
-      resolved earlier this session (see that phase's entry) — a real C#/C++-adjacent
-      design fork requiring a human call, not a guessable detail. Not escalated
-      synchronously this session per the standing autonomous-session instruction ("mark
-      `needs_human`, continue with other work" — no other Phase 7 work remained to
-      continue with; this is the last item in the phase). **This is the sole remaining
-      blocker in the entire porting plan outside of Phase 10.**
+      **`TilemapRenderer`/`TilemapWorldRenderer` — COMPLETE (2026-07-14), previously
+      `needs_human`, now resolved.** Root cause of the blocker as originally documented:
+      these two draw via raw `VertexBuffer`/`IndexBuffer` + `VertexPositionColorTexture`,
+      not `SpriteBatch`, and this project's own `DefaultEffect` (Phase 5) was correctly,
+      deliberately hand-authored with a GLSL vertex layout matching `SpriteBatch`'s own
+      internal compact vertex format (`vec2 aPos`@0, `vec2 aTexCoord`@1, `vec4 aColor`@2),
+      structurally incompatible with `VertexPositionColorTexture` (`Vector3 Position`,
+      `Color`, `Vector2 TextureCoordinate`). Of the 3 originally-listed options (new
+      `DefaultEffect`-shaped Effect, change `DefaultEffect`'s shader, or a custom vertex
+      struct), **none were taken**. The user's direct question — "isn't `DefaultEffect` a
+      known XNA 4.0 class, and isn't it already ported in `cna` per the real XNA API?" —
+      prompted the actual resolution: **`DefaultEffect` is not an XNA class at all** (it's
+      MonoGame.Extended's own invention, `MonoGame.Extended.Graphics.Effects` namespace,
+      built from its own precompiled `.mgfxo` bytecode with 4 baked-in techniques); the
+      class the user was actually thinking of, XNA's real `BasicEffect`, **already exists
+      in `cna`, fully implemented and pixel-verified across all 3 backends** (EasyGL/
+      Vulkan/Bgfx — see `cna/docs/basiceffect-support.md`), including specifically the
+      `TextureEnabled=true`+`VertexColorEnabled=true`+`LightingEnabled=false` combination
+      over the exact `VertexPositionColorTexture` stride-24 layout these two renderers use.
+      `BasicEffect`'s feature set is a strict superset of `DefaultEffect`'s (which never
+      had lighting/fog/specular at all, and never exposed a settable `DiffuseColor` —
+      only `Alpha`), so no capability is lost by using it instead. Ported via a forked
+      sub-agent (~2000 lines C# → `TilemapRenderer.hpp/.cpp` 1728 lines,
+      `TilemapWorldRenderer.hpp/.cpp` 459 lines, plus 51 new tests), independently
+      verified by the orchestrating session (clean `git status`, clean rebuild of both
+      configs from scratch, full `ctest` re-run, line-by-line source comparison of
+      several core methods — e.g. `Update`/`BuildLayerModels` — against the upstream
+      `.cs`, confirmed exact logical fidelity including preserved comments). Both
+      classes' internal `BasicEffect` is configured `TextureEnabled=true`,
+      `VertexColorEnabled=true`, `LightingEnabled` left at its default `false`, matching
+      `DefaultEffect`'s always-on texture+vertex-color/no-lighting behavior exactly. Draw
+      mechanics (`SetVertexBuffer`/`SetIndexBuffer` → `effect.Apply()` →
+      `DrawIndexedPrimitives`) re-author upstream's XNA dynamic-reflection
+      `Parameters["Texture"]`/`CurrentTechnique.Passes` walk in CNA's idiomatic style,
+      matching the precedent `DefaultEffect.cpp` itself already established. The public
+      `Effect` property is narrowed from upstream's generic `Effect` to `BasicEffect&`
+      (CNA's `Effect` base has no generic parameter-reflection surface for an arbitrary
+      caller-supplied effect to plug into) — the one real, deliberate API-shape deviation
+      beyond the `DefaultEffect`→`BasicEffect` substitution itself, documented in both
+      headers' top comments. Full details, all other minor translation deviations (
+      `Dictionary`/`HashSet` → `std::unordered_map`/`std::unordered_set` for move-only
+      mapped types, matching `TilemapTileset.hpp`'s precedent, etc.), and verification
+      commands are in `NEXT.md`. **This was the sole remaining architectural blocker in
+      the entire porting plan outside of Phase 10.** One test-coverage item remains open
+      within Phase 7 (see the `TilemapIntegrationTests.cs` entry immediately below, in
+      progress) — once that lands, Phase 7 is fully complete and only Phase 10 remains.
       **Real gap-fill needed and delivered as a prerequisite**: `OrthographicCamera` (see
       its own corrected Phase 1 entry above) had been deferred since Phase 3 and never
       actually landed — ported here since every `Rendering/*` class needs it.
@@ -1211,8 +1234,22 @@ all now complete.
       resolver to exercise tileset dimension reading without a real texture (matching this
       project's standing no-live-GraphicsDevice-test-infra boundary).
 - [ ] Explicitly **skip**: `Tilemaps/Content/*Reader` (xnb-based, see §2 exclusions)
-- [ ] Port the remaining `tests/MonoGame.Extended.Tests/Tilemaps/**` files (`Rendering/*`
-      test coverage — every other test file for this phase is already done)
+- [ ] **IN PROGRESS (2026-07-14, forked sub-agent running)**: port
+      `tests/MonoGame.Extended.Tests/Tilemaps/Rendering/TilemapIntegrationTests.cs` (28
+      tests) — the one remaining upstream test file for this phase. Unlike the
+      unit/validation-style tests already ported for all 4 renderer classes ("does it
+      throw", "does it not throw"), this is a dedicated **pixel-verification** suite:
+      renders to a headless render target and asserts on actual pixel colors read back via
+      `Texture2D::GetData`, covering both `TilemapRenderer` (`GdRenderer_*`) and
+      `TilemapSpriteBatchRenderer` (`SbRenderer_*`) — tile placement, hidden/zero-opacity
+      layers, tint/partial-opacity, camera position/zoom, animation frame advancement, all
+      `TilemapTileFlipFlags` combinations, layer groups/merged mode. Real regression
+      coverage smoke tests can't provide (e.g. would catch a `BasicEffect` diffuse/vertex-
+      color multiply bug or wrong UV-flip math). `cna` already supports headless
+      render-target readback (`Texture2D::GetData`, used by `cna`'s own pixel-verified
+      `BasicEffect` tests per `cna/docs/basiceffect-support.md`) — this project had no
+      existing pixel-readback test harness yet, the fork is building one now, modeled on
+      `cna`'s own established pattern.
 
 ### Phase 8 — Particles — **COMPLETE (2026-07-13)**
 
