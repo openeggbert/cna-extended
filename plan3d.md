@@ -1,7 +1,8 @@
 # `cna-extended` — World3DEXT Porting/Design Plan
 
 Status: **All 9 original phases complete (2026-07-14); Phase 10 (audit follow-ups, added
-2026-07-14) in progress.** Approved 2026-07-14 by Robert Vokáč, including the Phase 5-8
+2026-07-14) done except A-05, explicitly deferred to a future session (see its own entry
+below for why).** Approved 2026-07-14 by Robert Vokáč, including the Phase 5-8
 scope expansion (`Collisions3DEXT`/`Graphics3DEXT`/`Particles3DEXT`/`Tilemaps3DEXT`).
 Every phase was verified (build + tests, both CMake configs, `rm -rf` clean rebuilds)
 before the next started, matching this project's established discipline. An independent
@@ -574,14 +575,22 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       has no equivalent helper at all (`SkinnedModelEXT` parts have no per-part
       `BoundingSphere`, same vertex-readback blocker) — its doc comment was strengthened
       instead, matching this finding's own documented fallback bar.
-- [ ] **A-09 (Medium)** — status docs are stale/contradictory, confirmed directly:
-      `3d.md`'s own top status line still says "still needs explicit phase-by-phase
+- [x] **A-09 (Medium)** — status docs are stale/contradictory, confirmed directly:
+      `3d.md`'s own top status line still said "still needs explicit phase-by-phase
       approval before any code is written" despite `plan3d.md` recording that approval and
-      all 9 phases as complete; `README.md` says "2042/2042 tests passing" (predates even
-      `plan.md`'s own later phases, let alone `World3DEXT` — current count is 2157/2159).
-      Fix: update `3d.md`'s status line to match `plan3d.md`'s actual "DONE" status;
-      update `README.md`'s test count and re-scan `NEXT.md` for any other stale figures
-      left over from mid-session edits this same day.
+      all 9 phases as complete; `README.md` said "2042/2042 tests passing" (predates even
+      `plan.md`'s own later phases, let alone `World3DEXT`). Fixed: `3d.md`'s status line
+      now matches `plan3d.md`'s actual status; `README.md`'s Status section now describes
+      `World3DEXT`'s existence and current test count (2175/2175, matching `NEXT.md`).
+      Re-scanned `NEXT.md` for other stale figures: found and fixed two more "current
+      status" claims presented as live facts (section 1's "2157/2159 passing" and section
+      2's "2079/2079", both now 2175/2175 or 2175/2177 as appropriate) plus section 1's
+      "Current phase: DONE, both plans" line (now reflects Phase 10 in progress). Left
+      alone: figures inside historical narration describing a *specific past fix*'s
+      point-in-time verification (e.g. "full ctest (2079/2079, up from 2063 — 16 new
+      regression tests)") — those are truthful accounts of what happened at that commit,
+      not claims about current state, and rewriting them would corrupt the historical
+      record rather than fix a staleness bug.
 - [x] **A-07 (Medium)** — most `*EXT` render tests draw exactly one isolated object, so
       the missing-depth-buffer class of bug this session already found and fixed in
       `world3d_demo` (see `NEXT.md` section 5) has no regression test protecting it in the

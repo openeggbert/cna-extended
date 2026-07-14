@@ -20,12 +20,13 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase: DONE, both plans.** All 10 phases in `plan.md` (the original
-MonoGame.Extended port) and all 9 phases in `plan3d.md` (the `World3DEXT` 3D scene
-extension) are complete as of 2026-07-14. See section 4 for how `plan.md`'s two former
-blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and its
-trailing pixel-verification test gap) were resolved, and section 8 for optional,
-non-blocking follow-up ideas for either plan.
+**Current phase: `plan.md` DONE (all 10 phases); `plan3d.md`'s original 9 phases DONE, its
+Phase 10 (audit follow-ups) in progress.** An independent audit (Codex, `audit.md`,
+2026-07-14) reviewed the completed port and `World3DEXT`; `plan3d.md`'s Phase 10 tracks the
+findings, most already fixed (see that file for current per-finding status). See section 4
+for how `plan.md`'s two former blockers (the `TilemapRenderer`/`TilemapWorldRenderer`
+`DefaultEffect` mismatch, and its trailing pixel-verification test gap) were resolved, and
+section 8 for optional, non-blocking follow-up ideas for either plan.
 
 **`plan3d.md`** (read `3d.md` first for the design rationale behind every decision) added
 `CNA::Extended::World3DEXT` — a 3D scene layer (camera, ECS transform hierarchy, model
@@ -61,7 +62,7 @@ itself):
    transform hierarchy, a frustum-culled entity, a skinned character, particles, and a
    voxel floor) — screenshot inspected, not just pixel-sampled.
 
-Full test suite: **2157/2159 passing** (2 pre-existing skips predating `plan3d.md`,
+Full test suite: **2175/2177 passing** (2 pre-existing skips predating `plan3d.md`,
 unrelated to it — `OrthographicCameraTest`'s two `ContainsPoint`/`ContainsVector2` tests,
 see section 5). Both `plan.md` and `plan3d.md` checkboxes are fully checked off; there is
 no in-progress phase in either.
@@ -92,7 +93,7 @@ no in-progress phase in either.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2079/2079 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2175/2175 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -577,6 +578,33 @@ git status
 
 Lint/format: none configured in this repository (no `.clang-format` or `.clang-tidy` file
 present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
+
+**Headless rendering platform requirements** (added 2026-07-14, audit.md finding A-03): the
+linked config's graphics tests construct a real `GraphicsDevice` (EasyGL/SDL backend), which
+needs a working SDL video driver to initialize -- an independent audit found 22/80
+`World3DEXT` tests failing in its own sandbox with `SDL_InitSubSystem(SDL_INIT_VIDEO) failed:
+No available video device`, even with `xvfb-run` installed there. This project's own dev
+environment has never hit that failure (every `*EXT` render test and `world3d_demo` ran
+successfully throughout this entire multi-phase session), so the two concretely verified
+working setups here are:
+- **A real X11/Wayland session** (`DISPLAY` set, e.g. this session's own Xwayland-over-Mesa
+  setup with a real GPU) — the default case, needs nothing extra.
+- **A genuinely headless setup**: `DISPLAY= xvfb-run -a <binary>` (`xvfb-run` invoked with no
+  `DISPLAY` inherited, so it's forced to start its own virtual server) -- verified working
+  in this environment just now (`CubeMeshRenderSystemEXTTest.VisibleCube_IsDrawnWithTintColor`
+  passed under it). Under `xvfb-run`, GLX has no real GPU to bind to and Mesa falls back to
+  `llvmpipe` (a pure software rasterizer, confirmed via `glxinfo -B`: "OpenGL renderer string:
+  llvmpipe"), which is sufficient for every render test in this suite (they read pixels back
+  via `GraphicsDevice::GetBackBufferData`, not screen capture, so software rendering is fine
+  -- just slower). The package this needs is `libgl1-mesa-dri` (provides the `llvmpipe` DRI
+  software driver) alongside `xvfb` itself; both are already installed here. The audit's own
+  sandbox having `xvfb-run` but still failing is consistent with that package (or an
+  equivalent EGL/Mesa software-rasterizer path) being missing there -- not something this
+  session can diagnose further without access to that sandbox, but a concrete first thing to
+  check for whoever wires up CI for this project.
+- **Not yet tried here**: `SDL_VIDEODRIVER=offscreen` or `=dummy` (no X server at all). Given
+  the `xvfb-run` path already works, there was no need to chase this further this session;
+  worth a quick check before assuming `xvfb-run` is the only viable headless path.
 
 ---
 

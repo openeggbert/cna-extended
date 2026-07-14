@@ -14,9 +14,13 @@ differences between C# and C++ allow, not a reimagining.
 ## Status
 
 Porting is complete: all 9 module phases described in `plan.md` (Phases 1-9) are fully
-ported and tested, 2042/2042 tests passing. The only remaining work (`plan.md`'s Phase
-10) is integration polish — documentation, an end-to-end example, and this kind of
-final pass — not new functionality.
+ported and tested. On top of the port, `World3DEXT` (see `3d.md`/`plan3d.md`) adds a
+non-upstream 3D scene extension — camera, transform hierarchy, model/skinned-model
+rendering, 3D collisions, billboards/text/debug-draw, particles, voxel tilemaps, and an
+end-to-end `world3d_demo` example — with all 9 of its own phases complete and an
+independent audit's follow-up fixes (`plan3d.md`'s Phase 10) in progress. Current test
+count: 2175/2175 passing (see `NEXT.md` for the most up-to-date figure, since this number
+moves as work continues).
 
 ## Modules
 
