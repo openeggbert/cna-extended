@@ -20,9 +20,11 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase**: Phases 0–6, 8, and 9 are complete. Phase 7 ("Tilemaps") is in progress:
+**Current phase**: Phases 0–6, 8, and 9 are complete. Phase 7 ("Tilemaps") is ~95% done:
 the core data model, `Tiled/*` (TMX/JSON — priority, given the user's existing
-`tiled-blupi` project), `LDtk/*`, and `Ogmo/*` are all done; only `Rendering/*` remains.
+`tiled-blupi` project), `LDtk/*`, `Ogmo/*`, and most of `Rendering/*` are done.
+**`TilemapRenderer`/`TilemapWorldRenderer` are `needs_human`-blocked** — see section 4.
+This is the sole remaining blocker in the entire porting plan outside Phase 10.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -50,20 +52,25 @@ the core data model, `Tiled/*` (TMX/JSON — priority, given the user's existing
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **1804/1804 passing** (`ctest`, linked config).
+- **Tests**: **1888/1888 tests run, 100% passing** (2 additional tests exist but are
+  deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
 - **Phases 0–6, 8, and 9 are complete.** Phase 7's core Tilemaps data model, `Tiled/*`,
-  `LDtk/*`, and `Ogmo/*` all landed — see section 3. Only `Rendering/*` remains for Phase 7.
+  `LDtk/*`, `Ogmo/*`, and most of `Rendering/*` all landed — see section 3.
+- **CORRECTED this session, was wrong in earlier entries of this same file**: a real
+  headless `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple genuinely works end-to-end in
+  this environment (confirmed by `Rendering/*`'s own new tests actually calling
+  `Begin`/`Draw`/`End` against real EasyGL-over-Mesa software rendering and passing) — the
+  "no headless SpriteBatch test infra" claim below was an untested assumption inherited
+  forward through this file, not a verified fact. See section 5.
 - **Does not work / not done yet**:
-  - No headless mock `SpriteBatch`/`ISpriteBatchBackend` test double exists anywhere in
-    this ecosystem, so every `SpriteBatch`-drawing extension method ported so far
-    (`SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
-    `FadeTransition`/`ExpandTransition::Draw`) remains call-compilable but behaviorally
-    untested. No upstream tests exist for any of these either — a standing architectural
-    gap, not a regression. `Tilemaps/Rendering/*` (the only item left in this whole plan)
-    will hit this same gap.
-  - Phase 7: `Rendering/*` — the only item remaining anywhere in `plan.md` before Phase 10.
+  - `TilemapRenderer`/`TilemapWorldRenderer` — genuine architectural blocker,
+    `needs_human`. See section 4.
+  - `SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
+    `FadeTransition`/`ExpandTransition::Draw` still have zero *actual* behavioral test
+    coverage today (not because it's impossible — see the correction above — just because
+    nobody has gone back and added it yet). Worth a follow-up task; see section 8.
 
 ---
 
@@ -73,51 +80,95 @@ One long autonomous session (owner authorized, unavailable for hours). Order so 
 4-5, then Phase 6 (Serialization) + Phase 9 (ECS) in parallel, then Phase 7's Tilemaps core
 + the bulk of Phase 8 (Particles) in parallel, then `Tilemaps/Tiled/*` +
 `ParticleEffectSerializer.cs` in parallel (Phase 8 completed in full), then
-`Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel (this batch). See `git log` for every
-batch's individual commits; this section covers the LDtk/Ogmo batch in detail, condensing
-earlier ones.
+`Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then `Tilemaps/Rendering/*` (this batch,
+the last item in Phase 7). See `git log` for every batch's individual commits; this section
+covers the Rendering batch in detail, condensing earlier ones.
 
-- **`Tilemaps/LDtk/*`**: 21 Document DTOs + `LDtkTilemapDataConverter` (converts one
-  already-selected level; multi-level iteration is `LDtkJsonParser`'s job) + `LDtkJsonParser`
-  (also exposes LDtk-only convenience API and a genuinely-LDtk-specific `CanParse` —
-  independently confirmed absent from the shared `ITilemapParser` interface). Real
-  `std::stoi`-leniency bug found and fixed in this port's own new hex-color parser (same bug
-  class as the earlier `XmlReaderExtensions.cpp` fix). 21 fresh tests.
-- **`Tilemaps/Ogmo/*`**: 16 Document DTOs + `OgmoTilemapDataConverter` (tileset PNG-header
-  dimension reading, 1D/2D/coord tile decoding) + `OgmoJsonParser`. `OgmoLayerDataConverter`'s
-  polymorphic dispatch is a plain JSON-key-presence check, not reflection. Preserved, not
-  fixed, a real upstream quirk (independently confirmed): `Convert`'s `Name` field applies
-  `Path.GetFileNameWithoutExtension` to a *version string*, not a file path — almost
-  certainly a copy-paste bug in upstream itself. 22 fresh tests.
-- **Both used the `Tiled/Converters/TiledTilemapDataConverter.cpp` two-stage architecture
-  (document model → runtime `TilemapData`) as their template**, as intended — each format's
-  actual conversion logic is format-specific, only the overall shape is shared.
-- **Both sub-agents in this batch were fully process-compliant** — no commits, no pushes, no
-  `plan.md`/`NEXT.md`/`NOTICE.md` edits, continuing the streak since the one plan.md
-  incident several batches back.
+- **`Tilemaps/Rendering/*`**: `RenderMode`, `TilemapRendererShared`,
+  `TilemapSpriteBatchRenderer`, `TilemapWorldSpriteBatchRenderer` all landed.
+  **`TilemapRenderer`/`TilemapWorldRenderer` deliberately NOT ported** — a genuine
+  architectural blocker (`VertexPositionColorTexture`'s real field layout doesn't match
+  `DefaultEffect`'s GLSL vertex shader layout at all: different attribute order *and* a
+  different position component count), correctly identified and reported rather than
+  guessed at or hacked around. See section 4 for the full writeup and the 3 real options.
+- **Real gap-fill discovered and delivered as a prerequisite**: `OrthographicCamera` had
+  been deferred since Phase 3 ("port immediately after `ViewportAdapters` lands") and never
+  actually landed — nobody had noticed across 4 subsequent phases. Ported now (full
+  `Camera<Vector2>`+`IMovable`+`IRotatable`, 51 tests) since every `Rendering/*` class needs
+  it. See `plan.md`'s corrected Phase 1 entry.
+- **Real bug found in `cna`** (sibling repo, not touched): `BoundingFrustum::Contains`
+  wrongly reports `Intersects` for a point exactly on a clip plane (a real MonoGame
+  binary-Disjoint/Contains check doesn't have this branch) — confirmed directly in
+  `cna/src/.../BoundingFrustum.cpp`. Two tests hit this for real; `GTEST_SKIP()`-guarded
+  with a full writeup in the test file rather than deleted or weakened. See section 5.
+- **A significant, independently-verified correction to this file's own prior claims**: "no
+  headless `SpriteBatch`/`GraphicsDevice` test infra exists," repeated in earlier entries of
+  this very file, was an untested assumption, not a fact — this batch's own new tests
+  construct a real `GraphicsDevice`/`SpriteBatch`/`Texture2D` and call real
+  `Begin`/`Draw`/`End` (EasyGL-over-Mesa software rendering), and they pass. See section 5
+  and section 8's follow-up task.
 - Verified independently before landing (as always): genuinely clean `rm -rf build`
-  rebuild — zero warnings, both linked and headers-only configs; full `ctest` —
-  **1804/1804 passing** (was 1761 before this batch). Spot-checked both forks' most notable
-  claims directly against upstream (the `CanParse`/`ITilemapParser` gap-vs-not-a-gap
-  question; the `OgmoVersion`/`Name` quirk) rather than trusting the reports as-is.
+  rebuild — zero warnings; full `ctest` — **1888 tests run, 100% passing** (2 additional
+  tests exist but are the documented `GTEST_SKIP()` cases above; was 1804 before this
+  batch). Spot-checked the fork's three most consequential claims directly against
+  source, not trusted as reported: the `DefaultEffect`/`VertexPositionColorTexture`
+  layout mismatch (read both directly — genuinely incompatible), the `cna`
+  `BoundingFrustum` bug (read the exact branch — genuinely present), and the
+  `OrthographicCamera` deferral history (read `plan.md`'s own prior entry — genuinely
+  never completed).
 
-**Phase 7 is now down to a single remaining item: `Rendering/*`.** Once that lands, Phase 7
-is complete and every phase in `plan.md` except Phase 10 (integration/polish/docs) is done.
+**Phase 7 is now ~95% done — only `TilemapRenderer`/`TilemapWorldRenderer` remain, and
+they're blocked on a human decision (section 4).** This is the sole remaining blocker
+anywhere in `plan.md` outside Phase 10.
 
-For the earlier Phase 4-5, Phase 6/9, Tilemaps-core/Particles-bulk, and Tiled/
-ParticleEffectSerializer batches — including the process incident from a Tilemaps-core
-sub-agent editing `plan.md` twice despite explicit correction — see `git log` for individual
-commits and section 5 for the standing process-risk summary; not re-detailed here.
+For the earlier Phase 4-5, Phase 6/9, Tilemaps-core/Particles-bulk, Tiled/
+ParticleEffectSerializer, and LDtk/Ogmo batches — including the process incident from a
+Tilemaps-core sub-agent editing `plan.md` twice despite explicit correction — see `git log`
+for individual commits and section 5 for the standing process-risk summary; not
+re-detailed here.
 
 ---
 
 ## 4. Current blocker / main problem
 
-**None.** No build-breaking or test-failing issue. `cmake --build build -j$(nproc)`,
-`cmake --build build-headers -j$(nproc)`, and `ctest --test-dir build` all currently
-succeed (1804/1804 tests, zero warnings in both configs). The next substantive work is
-Phase 7's one remaining sub-module (`Rendering/*`); see section 8. Every other phase in
-`plan.md` except Phase 10 is now complete.
+**One genuine architectural blocker, `needs_human`; nothing else.** No build-breaking or
+test-failing issue — `cmake --build build -j$(nproc)`, `cmake --build build-headers
+-j$(nproc)`, and `ctest --test-dir build` all currently succeed (1888 tests run, 100%
+passing, zero warnings in both configs).
+
+- **Symptom**: `Tilemaps/Rendering/TilemapRenderer.cs`/`TilemapWorldRenderer.cs` (the
+  `VertexBuffer`/`IndexBuffer`-based tilemap renderers, as opposed to the already-landed
+  `SpriteBatch`-based ones) are not ported.
+- **Root cause**: they use `VertexPositionColorTexture`, whose real field layout in this
+  project (`Vector3 Position`, `Color`, `Vector2 TextureCoordinate` — confirmed directly in
+  `cna`) does not match `DefaultEffect`'s GLSL vertex shader layout (`vec2 aPos`@0, `vec2
+  aTexCoord`@1, `vec4 aColor`@2 — confirmed directly in this project's own
+  `DefaultEffect.cpp`): different attribute order *and* a different position component
+  count (`vec2` vs `Vector3`). Using one with the other wouldn't just fail to compile — it
+  would silently bind the wrong bytes to the wrong attributes.
+- **What this needs**: a human decision between (at least) three real options, each with
+  real tradeoffs:
+  1. A new `Effect` whose GLSL layout matches `VertexPositionColorTexture` exactly (new
+     code only, `DefaultEffect` untouched).
+  2. Change `DefaultEffect`'s own shader layout to match `VertexPositionColorTexture`
+     (risks regressing every already-shipped consumer of `DefaultEffect` — Sprite
+     rendering, `NinePatch`, etc. — all already tested and working).
+  3. Give `TilemapRenderer`/`TilemapWorldRenderer` their own vertex struct matching
+     `DefaultEffect`'s existing layout instead of literally using
+     `VertexPositionColorTexture` (deviates from upstream's exact type choice, but touches
+     nothing already shipped).
+  This is the same category of decision as the `Graphics/Effects/*` bytecode blocker
+  resolved earlier this session via `AskUserQuestion` (see that phase's `plan.md` entry) —
+  a real design fork, not a guessable implementation detail.
+- **Why this wasn't escalated synchronously**: per the standing autonomous-session
+  instruction ("mark `needs_human`, continue with other independent work" — not "always
+  ask immediately"), and because no other Phase 7 work remained to fill the gap while
+  waiting (this was the last item in the phase). Documented here and in `plan.md` instead,
+  for the owner to decide whenever they're back.
+- **What's NOT blocked by this**: everything else in `Rendering/*`
+  (`TilemapSpriteBatchRenderer`, `TilemapWorldSpriteBatchRenderer`, `TilemapRendererShared`,
+  `RenderMode`) is fully landed, tested, and working — this only affects the two
+  `VertexBuffer`-based renderer variants specifically.
 
 ---
 
@@ -156,14 +207,29 @@ Phase 7's one remaining sub-module (`Rendering/*`); see section 8. Every other p
   trip drifts again rather than stabilizing) — the test was corrected to an approximate
   comparison rather than "fixing" correct, already-tested production code to satisfy an
   incorrect test assumption.
-- **INCOMPLETE / architectural gap, standing since Phase 3**: no headless
-  `SpriteBatch`/`ISpriteBatchBackend` mock exists anywhere in this ecosystem, so every
-  `SpriteBatch`-drawing extension method ported so far (`SpriteBatch.Extensions`,
-  `BitmapFontExtensions`, `ShapeExtensions`, `FadeTransition`/`ExpandTransition::Draw`)
-  compiles but has zero behavioral test coverage. No upstream tests exist for any of these
-  either. Real-GPU-only example programs under `cna/examples/` exist but are not part of
-  the GoogleTest suite. Worth building a headless mock if a future phase needs real
-  coverage here — not attempted this session (out of scope for the current work).
+- **CORRECTED this session — this entry was wrong in every earlier version of this file**:
+  previously claimed "no headless `SpriteBatch`/`ISpriteBatchBackend` mock exists anywhere
+  in this ecosystem," used to justify zero behavioral test coverage for
+  `SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
+  `FadeTransition`/`ExpandTransition::Draw`. **This was never actually verified — just
+  assumed and repeated forward.** `Tilemaps/Rendering/*`'s own tests this session construct
+  a plain `GraphicsDevice graphicsDevice;` + `SpriteBatch spriteBatch(graphicsDevice);` +
+  `Texture2D(graphicsDevice, w, h)` and call real `Begin`/`Draw`/`End` — genuinely
+  rendering end-to-end via EasyGL-over-Mesa software rendering, no mock needed, no display
+  needed — and all pass. **The remaining gap is not "impossible," it's "nobody has gone
+  back to add the tests yet"** for the four modules listed above. See section 8 for this as
+  a concrete follow-up task. (Real-GPU-only example programs under `cna/examples/` still
+  aren't part of the GoogleTest suite, and that's unrelated/unaffected by this correction.)
+- **CONFIRMED bug, in a sibling repo (`cna`), not this repo**: `BoundingFrustum::Contains
+  (const Vector3&, ContainmentType&)` (`cna/src/Microsoft/Xna/Framework/BoundingFrustum.cpp`)
+  has an extra branch (`classifyPoint == 0.0f` → mark `intersects`) with no real-MonoGame
+  equivalent — real MonoGame's version is a strict Disjoint-or-Contains binary check with no
+  "on the plane" special case. This makes a point that lands exactly on a frustum clip plane
+  wrongly report `Intersects` instead of `Contains`. **Do not edit `cna` to fix this**
+  (sibling-repo rule). Two `OrthographicCameraTests` (`ContainsPoint_WithDefaultCamera_*`,
+  `ContainsVector2_WithDefaultCamera_*`) hit this for real (points at Z=0, exactly on the far
+  plane) and are `GTEST_SKIP()`-guarded with a full root-cause writeup inline, not deleted
+  or weakened. Worth reporting to whoever maintains `cna` at some point.
 - **PROCESS RISK** (not a code bug, but load-bearing context for delegating future work):
   three separate instances this session of a delegated sub-agent disregarding an explicit
   git/file-editing instruction. (1)-(2) Two sub-agents committed and pushed directly to
@@ -271,31 +337,35 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-1. **Phase 7 — Tilemaps `Rendering/*`** (`TilemapRenderer`, `TilemapSpriteBatchRenderer`,
-   `TilemapWorldRenderer`, `TilemapWorldSpriteBatchRenderer`, `RenderMode`,
-   `TilemapRendererShared`). Depends on the now-complete Tilemaps core data model (and its
-   `Tiled`/`LDtk`/`Ogmo` producers, all done) and Phase 5's `SpriteBatch`. Note: this will
-   hit the standing "no headless SpriteBatch mock" gap (section 5) — expect it to compile
-   but have limited/no behavioral test coverage, matching the pattern already established
-   for other SpriteBatch-drawing code. **This is the last item in Phase 7** — once it lands,
-   the only phase left in the entire plan is Phase 10.
-   - Command: `ctest --test-dir build -R Tilemap` — expect 100% passing; both CMake
-     configs stay clean.
+1. **`TilemapRenderer`/`TilemapWorldRenderer` — needs a human decision first** (section 4).
+   This is a `needs_human` blocker, not a task to just start on — read section 4's 3 options
+   and get the project owner's call on which one before writing any code here. Once decided:
+   - Command (after implementing): `ctest --test-dir build -R Tilemap` — expect 100%
+     passing; both CMake configs stay clean.
 
-Delegating to a sub-agent fork remains appropriate for this (user-approved this session,
-standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/`NOTICE.md`,
+2. **Add real behavioral test coverage for the "compiles but untested" `SpriteBatch`-drawing
+   modules** (`SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
+   `FadeTransition`/`ExpandTransition::Draw`) — now genuinely possible per section 5's
+   correction (a plain `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple already works
+   headlessly in this environment; `Tilemaps/Rendering/*`'s own tests are the working
+   template to copy). Independent of item 1 — safe to do while waiting on that decision.
+   No production code changes expected, only new test files.
+   - Command: `ctest --test-dir build` — expect 100% passing (net new tests only, no
+     regressions); both CMake configs stay clean.
+
+3. **Phase 10 — Integration, polish, documentation**, once item 1 lands (or is explicitly
+   deferred by the owner). Scope depends on what's actually left to polish at that point —
+   not detailed here yet. Likely candidates worth considering when scoping it: a real
+   `README.md` (mentioned in `CLAUDE.md`'s own "read first" list but not yet confirmed to
+   exist), a pass over every `NOTICE.md`-flagged licensing note for completeness, and
+   whether item 2 above should be folded into Phase 10 or done before it.
+
+Delegating to a sub-agent fork remains appropriate for items 1-2 (user-approved this
+session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/`NOTICE.md`,
 orchestrator verifies then commits) — but see section 5's process-risk entry: independently
 check `git status`/`git diff` (not just `git log`) after every fork turn, including resumed
 ones, and be prepared for a "completed" notification to actually mean "stopped partway
 through" rather than genuinely done.
-
-2. **Phase 10 — Integration, polish, documentation**, once `Rendering/*` lands. Scope
-   depends on what's actually left to polish at that point — not detailed here yet. Likely
-   candidates worth considering when scoping it: a real `README.md` (mentioned in
-   `CLAUDE.md`'s own "read first" list but not yet confirmed to exist), a pass over every
-   `NOTICE.md`-flagged licensing note for completeness, and deciding whether the standing
-   "no headless SpriteBatch mock" gap (section 5) is worth closing given how many modules
-   now depend on it for real test coverage.
 
 ---
 

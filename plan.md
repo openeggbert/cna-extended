@@ -1,10 +1,12 @@
 # cna-extended — Porting Plan
 
 Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-6, 8, and 9 complete
-(2026-07-13). Phase 7 ("Tilemaps") in progress: core data model, `Tiled/*`, `LDtk/*`, and
-`Ogmo/*` all done — only `Rendering/*` remains. Fidelity requirement: port 1:1 wherever
-C#/C++ differences allow — no simplification. See `NEXT.md`
-for current state.**
+(2026-07-13). Phase 7 ("Tilemaps") 95% done: everything landed except
+`TilemapRenderer`/`TilemapWorldRenderer`, blocked on a genuine `needs_human` architectural
+decision (`VertexPositionColorTexture` vs `DefaultEffect` vertex-layout mismatch — see that
+phase's entry for the 3 real options). This is the sole remaining blocker outside Phase 10.
+Fidelity requirement: port 1:1 wherever C#/C++ differences allow — no simplification. See
+`NEXT.md` for current state.**
 
 ## 1. What this project is
 
@@ -198,14 +200,20 @@ No dependency on CNA graphics — pure math/data types. Blocks almost every late
       tests exist for this abstract type; a compile-only smoke test was added, with real
       instantiation-based tests deferred until `RectangleF` lands (a concrete override
       returning `RectangleF` by value needs the complete type).
-- [ ] `OrthographicCamera` — **deferred, not just its `RectangleF` bits**: unlike the
-      `Transform2`/`Matrix3x2` case, this is a deep structural dependency, not a narrow one.
-      `OrthographicCamera` stores a `ViewportAdapter` as a required field, takes one as a
-      required constructor parameter, and calls into it from multiple methods (not a couple
-      of peripheral helpers) — `ViewportAdapters` is a whole separate module scheduled for
-      **Phase 3** ("Input, Timers, Tweening, ViewportAdapters, VectorDraw"), not this phase.
-      Port `OrthographicCamera` immediately after `ViewportAdapters` lands in Phase 3, not
-      standalone.
+- [x] `OrthographicCamera` — **COMPLETE (2026-07-13), landed very late**: unlike the
+      `Transform2`/`Matrix3x2` case, this had a deep structural dependency, not a narrow
+      one (`OrthographicCamera` stores a `ViewportAdapter` as a required field). The plan
+      here always said to port it "immediately after `ViewportAdapters` lands in Phase 3" —
+      `ViewportAdapters` landed in Phase 3 as scheduled, but this specific follow-up was
+      never actually done and nobody noticed until a Phase 7 `Rendering/*` fork needed it as
+      a prerequisite and discovered the gap by reading this very entry. Full
+      `Camera<Vector2>`+`IMovable`+`IRotatable` implementation, world-bounds/zoom clamping,
+      parallax view matrices, frustum/containment; 51 tests (2 `GTEST_SKIP()`-guarded — see
+      Phase 7's `Rendering/*` entry for the real `cna` `BoundingFrustum::Contains` bug those
+      two hit). **Lesson for future sessions**: an explicit "port X immediately after Y" note
+      in this file is not self-enforcing — it needs an actual task/reminder, or it can sit
+      forgotten for many phases (in this case, from Phase 3 all the way to Phase 7) even
+      though every individual phase along the way was completed and verified.
 - [x] Color helpers: `ColorExtensions`, `ColorHelper`, `HslColor` (2026-07-13) — ported
       directly (no fork needed, ~620 lines total). `ColorHelper`'s name→`Color` lookup table
       is built via reflection upstream (`typeof(Color).GetRuntimeProperties()`); C++ has no
@@ -1070,9 +1078,56 @@ all now complete.
       uncommitted and discarded (`git checkout -- plan.md`) before ever being committed; the
       actual ported code was independently verified separately and is unaffected. See
       `NEXT.md` for the full incident note.
-- [ ] `Rendering/*` (`TilemapRenderer`, `TilemapSpriteBatchRenderer`, `TilemapWorldRenderer`,
-      `TilemapWorldSpriteBatchRenderer`, `RenderMode`, `TilemapRendererShared`) — depends on
-      the now-complete Core above and Phase 5's `SpriteBatch`; not yet started.
+- [x] `RenderMode`, `TilemapRendererShared`, `TilemapSpriteBatchRenderer`,
+      `TilemapWorldSpriteBatchRenderer` — **COMPLETE (2026-07-13)**.
+      **`TilemapRenderer`/`TilemapWorldRenderer` — NOT PORTED, genuine architectural
+      blocker, `needs_human`**: these two draw via raw `VertexBuffer`/`IndexBuffer` +
+      `VertexPositionColorTexture`, not `SpriteBatch`. `VertexPositionColorTexture`'s real
+      field layout (`Vector3 Position`, `Color`, `Vector2 TextureCoordinate` — checked
+      directly in `cna`) is structurally incompatible with `DefaultEffect`'s GLSL vertex
+      shader (`vec2 aPos`@0, `vec2 aTexCoord`@1, `vec4 aColor`@2 — checked directly in this
+      project's own `DefaultEffect.cpp`): different attribute order *and* a different
+      position component count. Binding one to the other would silently read wrong data
+      into wrong attributes, not just fail to compile. Three real options, each with real
+      tradeoffs, none yet decided:
+        1. Add a new `Effect` whose GLSL layout matches `VertexPositionColorTexture` exactly
+           (new code, `DefaultEffect` untouched).
+        2. Change `DefaultEffect`'s shader to `VertexPositionColorTexture`'s layout (risks
+           regressing every already-shipped, tested consumer of `DefaultEffect` — Sprite
+           rendering, `NinePatch`, etc.).
+        3. Give `TilemapRenderer`/`TilemapWorldRenderer` their own vertex struct matching
+           `DefaultEffect`'s existing layout instead of using `VertexPositionColorTexture`
+           (deviates from upstream's literal type choice, but changes nothing already
+           shipped).
+      This is the same category of decision as the `Graphics/Effects/*` bytecode blocker
+      resolved earlier this session (see that phase's entry) — a real C#/C++-adjacent
+      design fork requiring a human call, not a guessable detail. Not escalated
+      synchronously this session per the standing autonomous-session instruction ("mark
+      `needs_human`, continue with other work" — no other Phase 7 work remained to
+      continue with; this is the last item in the phase). **This is the sole remaining
+      blocker in the entire porting plan outside of Phase 10.**
+      **Real gap-fill needed and delivered as a prerequisite**: `OrthographicCamera` (see
+      its own corrected Phase 1 entry above) had been deferred since Phase 3 and never
+      actually landed — ported here since every `Rendering/*` class needs it.
+      **Real bug found in `cna` (sibling repo, not touched)**: `BoundingFrustum::Contains
+      (const Vector3&, ContainmentType&)` has an extra `classifyPoint == 0.0f → Intersects`
+      branch with no upstream MonoGame equivalent (real MonoGame's version is a strict
+      Disjoint/Contains binary) — confirmed directly in `cna/src/.../BoundingFrustum.cpp`.
+      Makes a point exactly on a clip plane wrongly report `Intersects`. Two
+      `OrthographicCameraTests` hit this for real; `GTEST_SKIP()`-guarded with a full
+      root-cause writeup in the test file, not deleted or weakened.
+      **Significant correction to this project's own documentation, independently
+      re-verified before accepting it**: the "no headless `SpriteBatch`/`GraphicsDevice`
+      test infra exists" claim repeated throughout this session's `NEXT.md` (for
+      `ShapeExtensions`, `SpriteBatchExtensions`, `BitmapFontExtensions`,
+      `FadeTransition`/`ExpandTransition`) turns out to have been an untested assumption,
+      not a verified fact — a bare `GraphicsDevice graphicsDevice;` + `SpriteBatch
+      spriteBatch(graphicsDevice);` + `Texture2D(graphicsDevice, w, h)` genuinely
+      construct and render end-to-end in this environment (real EasyGL-over-Mesa software
+      rendering, confirmed by this phase's own new tests actually calling
+      `Begin`/`Draw`/`End` and passing). Nobody had actually tried it until this task did.
+      This means the other modules listed above are very likely real-test-coverable too,
+      not just compile-checkable — worth revisiting; see `NEXT.md`.
 - [x] `Tiled/*` (TMX/JSON parser — `TiledTmxParser` and friends) — **COMPLETE (2026-07-13)**,
       priority given the user's existing `tiled-blupi` project. Preserves upstream's
       two-stage design (raw XML → `TiledMapXml` document model → `TilemapData`), since
