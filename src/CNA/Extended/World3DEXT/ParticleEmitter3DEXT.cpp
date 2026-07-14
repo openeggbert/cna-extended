@@ -52,12 +52,33 @@ namespace CNA::Extended::World3DEXT
     {
         for (int i = 0; i < count && static_cast<int>(ParticlesEXT.size()) < MaxParticlesEXT; ++i)
         {
+            // Note on "reversed" ranges (Min > Max): not a bug -- `min + t*(max-min)` for t in
+            // [0,1) already lands in [min,max] (inclusive/exclusive as appropriate) regardless
+            // of which of the two is larger, since a negative (max-min) just reverses the
+            // interpolation direction. The real hazard is non-finite (NaN/Infinity) inputs, not
+            // reversed order: an infinite or NaN LifetimeEXT makes IsExpiredEXT()'s
+            // `AgeEXT >= LifetimeEXT` false forever (NaN compares false against everything in
+            // IEEE 754), leaking the particle permanently instead of ever removing it. Guarded
+            // below by falling back to the "already expired" value (0) for the actually-broken
+            // (non-finite) case only, not by forcing Min <= Max.
             Particle3DEXT particle;
             particle.PositionEXT = origin;
             particle.LifetimeEXT = MinLifetimeEXT + randomEXT_.NextSingle() * (MaxLifetimeEXT - MinLifetimeEXT);
-            const float speed = MinSpeedEXT + randomEXT_.NextSingle() * (MaxSpeedEXT - MinSpeedEXT);
+            if (!std::isfinite(particle.LifetimeEXT))
+            {
+                particle.LifetimeEXT = 0.0f;
+            }
+            float speed = MinSpeedEXT + randomEXT_.NextSingle() * (MaxSpeedEXT - MinSpeedEXT);
+            if (!std::isfinite(speed))
+            {
+                speed = 0.0f;
+            }
             particle.VelocityEXT = SampleConeDirectionEXT() * speed;
             particle.ScaleEXT = MinScaleEXT + randomEXT_.NextSingle() * (MaxScaleEXT - MinScaleEXT);
+            if (!std::isfinite(particle.ScaleEXT))
+            {
+                particle.ScaleEXT = 0.0f;
+            }
             particle.ColorEXT = StartColorEXT;
             // A-06: clamp here too, not just in UpdateEXT's per-frame recompute below --
             // EmitEXT runs at the end of this same UpdateEXT call, so a newly-emitted

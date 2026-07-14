@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <gtest/gtest.h>
+#include <limits>
 #include <memory>
 
 namespace CNA::Extended::World3DEXT
@@ -171,6 +172,87 @@ namespace CNA::Extended::World3DEXT
         const float opacity = emitter.ParticlesEXT[0].OpacityEXT;
         EXPECT_GE(opacity, 0.0f);
         EXPECT_LE(opacity, 1.0f);
+    }
+
+    // Follow-up robustness pass on A-06 (2026-07-14): not a new audit finding, but a
+    // deliberate broadening of the same "validate at EmitEXT/UpdateEXT boundaries"
+    // principle, per a follow-up review confirming NaN/reversed-range handling wasn't
+    // fully nailed down yet.
+
+    TEST(ParticleEmitter3DEXTTests, EmitEXT_ReversedLifetimeRange_StillProducesValueWithinRange)
+    {
+        // Min > Max is not actually a bug: min + t*(max-min) for t in [0,1) always lands
+        // between min and max regardless of which is larger (a negative (max-min) just
+        // reverses the interpolation direction). This locks that in as a real invariant,
+        // not an assumption.
+        ParticleEmitter3DEXT emitter;
+        emitter.MinLifetimeEXT = 5.0f;
+        emitter.MaxLifetimeEXT = 1.0f;
+        emitter.EmitEXT(20, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 20u);
+        for (const Particle3DEXT& particle : emitter.ParticlesEXT)
+        {
+            EXPECT_GE(particle.LifetimeEXT, 1.0f);
+            EXPECT_LE(particle.LifetimeEXT, 5.0f);
+        }
+    }
+
+    TEST(ParticleEmitter3DEXTTests, EmitEXT_NonFiniteLifetimeRange_ProducesFiniteLifetimeThatExpiresImmediately)
+    {
+        // A NaN/Infinite LifetimeEXT would make IsExpiredEXT()'s `AgeEXT >= LifetimeEXT`
+        // false forever (NaN compares false against everything in IEEE 754), leaking the
+        // particle permanently. Guarded by falling back to 0 (== already expired).
+        ParticleEmitter3DEXT emitter;
+        emitter.IsEmittingEXT = false;
+        emitter.MinLifetimeEXT = std::nan("");
+        emitter.MaxLifetimeEXT = std::nan("");
+        emitter.EmitEXT(1, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 1u);
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].LifetimeEXT));
+
+        emitter.UpdateEXT(0.0f, Vector3::Zero);
+        EXPECT_TRUE(emitter.ParticlesEXT.empty()) << "non-finite-lifetime particle should have been treated as already expired";
+    }
+
+    TEST(ParticleEmitter3DEXTTests, EmitEXT_InfiniteLifetimeRange_ProducesFiniteLifetimeThatExpiresImmediately)
+    {
+        ParticleEmitter3DEXT emitter;
+        emitter.IsEmittingEXT = false;
+        emitter.MinLifetimeEXT = std::numeric_limits<float>::infinity();
+        emitter.MaxLifetimeEXT = std::numeric_limits<float>::infinity();
+        emitter.EmitEXT(1, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 1u);
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].LifetimeEXT));
+
+        emitter.UpdateEXT(0.0f, Vector3::Zero);
+        EXPECT_TRUE(emitter.ParticlesEXT.empty());
+    }
+
+    TEST(ParticleEmitter3DEXTTests, EmitEXT_NonFiniteSpeedRange_ProducesFiniteVelocity)
+    {
+        ParticleEmitter3DEXT emitter;
+        emitter.MinSpeedEXT = std::nan("");
+        emitter.MaxSpeedEXT = std::nan("");
+        emitter.EmitEXT(1, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 1u);
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].VelocityEXT.X));
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].VelocityEXT.Y));
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].VelocityEXT.Z));
+    }
+
+    TEST(ParticleEmitter3DEXTTests, EmitEXT_NonFiniteScaleRange_ProducesFiniteScale)
+    {
+        ParticleEmitter3DEXT emitter;
+        emitter.MinScaleEXT = std::numeric_limits<float>::infinity();
+        emitter.MaxScaleEXT = std::numeric_limits<float>::infinity();
+        emitter.EmitEXT(1, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 1u);
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].ScaleEXT));
     }
 
     TEST(ParticleEffect3DEXTTests, AddEmitterEXT_UpdateEXT_ForwardsToEveryOwnedEmitter)

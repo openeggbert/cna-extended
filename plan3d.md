@@ -572,6 +572,18 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       zero `ConeDirectionEXT` in `EmitEXT`/`SampleConeDirectionEXT`; clamp opacity to
       [0,1] before the byte conversion (in `ParticleEmitter3DEXT::UpdateEXT`, where
       `OpacityEXT` is actually computed, not at the render call site). Add tests for both.
+      **Follow-up robustness pass (2026-07-14, not a new audit finding — a follow-up review
+      confirming NaN/reversed-range handling wasn't fully nailed down yet)**: "reversed"
+      Min/Max ranges (Min > Max) turned out not to be a bug at all — `min + t*(max-min)`
+      for `t` in `[0,1)` always lands in `[min,max]` regardless of which is larger, proven
+      and locked in by a new test. The real gap was non-finite (NaN/Infinity) inputs: a
+      non-finite `LifetimeEXT` makes `IsExpiredEXT()`'s `AgeEXT >= LifetimeEXT` false
+      forever (NaN compares false against everything in IEEE 754), leaking the particle
+      permanently instead of ever removing it. `EmitEXT` now guards `LifetimeEXT`,
+      speed-derived `VelocityEXT`, and `ScaleEXT` against non-finite results, falling back
+      to values that keep the particle either already-expired (lifetime) or harmlessly
+      invisible (velocity/scale) rather than propagating NaN/Infinity. 5 new tests. Both
+      configs verified; full suite green (2181/2181).
 - [x] **A-08 (Medium)** — `ModelComponentEXT`/`SkinnedModelComponentEXT::BoundsEXT`
       default to a zero-radius `BoundingSphere` and are easy to leave unset, silently
       culling a real model every frame with no warning. Added `ComputeModelBoundsEXT(const
