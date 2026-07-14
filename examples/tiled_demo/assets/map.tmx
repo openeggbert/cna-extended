@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT
+  Hand-authored for cna-extended's examples/tiled_demo (Phase 10 end-to-end example).
+
+  A tiny 10x6 orthogonal Tiled map: a grass field with a single east-west dirt road on
+  row 2, plus an object layer marking where the player sprite spawns and where it's
+  headed. Loaded end-to-end by CNA::Extended::Tilemaps::Tiled::TiledTmxParser
+  (real TMX XML parsing, not a synthetic in-code Tilemap) and rendered by
+  TilemapSpriteBatchRenderer. "tileset.bmp" is a real 64x32 24bpp BMP sitting next to
+  this file (see assets/tileset.bmp) -- resolved via ExternalResourceResolver's default
+  local-filesystem resolver, exactly like a real Tiled-authored map referencing an
+  external tileset image.
+-->
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down"
+     width="10" height="6" tilewidth="32" tileheight="32" infinite="0" nextlayerid="3" nextobjectid="3">
+ <tileset firstgid="1" name="ground" tilewidth="32" tileheight="32" tilecount="2" columns="2">
+  <image source="tileset.bmp" width="64" height="32"/>
+ </tileset>
+ <layer id="1" name="Ground" width="10" height="6">
+  <data encoding="csv">
+1,1,1,1,1,1,1,1,1,1,
+2,2,2,2,2,2,2,2,2,2,
+2,2,2,2,2,2,2,2,2,2,
+2,2,2,2,2,2,2,2,2,2,
+1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1
+</data>
+ </layer>
+ <objectgroup id="2" name="Markers">
+  <object id="1" name="PlayerStart" x="16" y="80">
+   <point/>
+  </object>
+  <object id="2" name="Goal" x="208" y="80">
+   <point/>
+  </object>
+ </objectgroup>
+</map>
