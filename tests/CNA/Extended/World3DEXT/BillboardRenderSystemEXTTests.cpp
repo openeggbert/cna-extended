@@ -12,6 +12,8 @@
 #include "CNA/Extended/World3DEXT/BillboardMeshEXT.hpp"
 #include "CNA/Extended/World3DEXT/Camera3DEXT.hpp"
 #include "CNA/Extended/World3DEXT/Transform3ComponentEXT.hpp"
+#include "Microsoft/Xna/Framework/BoundingFrustum.hpp"
+#include "Microsoft/Xna/Framework/BoundingSphere.hpp"
 #include "Microsoft/Xna/Framework/Color.hpp"
 #include "Microsoft/Xna/Framework/GameTime.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
@@ -25,6 +27,7 @@
 #include "Microsoft/Xna/Framework/Graphics/Viewport.hpp"
 #include "System/TimeSpan.hpp"
 
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <memory>
 #include <vector>
@@ -166,5 +169,38 @@ namespace CNA::Extended::World3DEXT
 
         EXPECT_EQ(frontCenter, sideCenter);
         EXPECT_GT(sideCenter.getBProperty(), 0);
+    }
+
+    // A-04 regression test: BillboardRenderSystemEXT::Draw's frustum-culling check is
+    // `frustum.Intersects(BoundingSphere(objectPosition, boundingRadius))` where
+    // boundingRadius is exactly SizeEXT.Length() * 0.5f (see BillboardRenderSystemEXT.cpp).
+    // This mirrors that check directly with both the pre-fix radius (max(width,height)/2)
+    // and the fixed radius, at a position found by sweeping outward along the frustum's
+    // top-right corner diagonal (see BillboardRenderSystemEXT.cpp's file header for why a
+    // single-axis offset can't distinguish the two formulas: the max-dimension radius is
+    // only ever an under-estimate once *two* axes contribute simultaneously). The chosen
+    // position falls in a stable window (verified for k in [2.78, 3.48] at k increments of
+    // 0.02) where the old radius is excluded and the new radius is included, so this isn't
+    // a hairline/flaky boundary case.
+    TEST_F(BillboardRenderSystemEXTTest, DiagonallyOffsetBillboard_OldRadiusWouldCull_NewRadiusDoesNot)
+    {
+        camera.setPositionProperty(Vector3(0.0f, 0.0f, 10.0f));
+        camera.setTargetProperty(Vector3::Zero);
+        camera.setAspectRatioProperty(800.0f / 480.0f);
+        const Microsoft::Xna::Framework::BoundingFrustum frustum = camera.GetBoundingFrustumEXT();
+
+        const Vector2 size(40.0f, 40.0f);
+        const Vector3 position(41.421f, 24.853f, -10.0f);
+
+        const float oldRadius = std::max(size.X, size.Y) * 0.5f;
+        const float newRadius = size.Length() * 0.5f;
+
+        const Microsoft::Xna::Framework::BoundingSphere oldBounds(position, oldRadius);
+        const Microsoft::Xna::Framework::BoundingSphere newBounds(position, newRadius);
+
+        EXPECT_FALSE(frustum.Intersects(oldBounds))
+            << "test setup assumption violated: the pre-fix max(width,height)/2 radius should "
+               "have excluded this position, or this position no longer demonstrates the bug";
+        EXPECT_TRUE(frustum.Intersects(newBounds));
     }
 }

@@ -538,7 +538,7 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       self-parenting and any candidate parent whose own ancestor chain already contains
       this entity, falling back to no-parent (detached) for the rejected edge. Add tests:
       self-parent, 2-node cycle, 3+-node cycle, parent entity with no `Transform3ComponentEXT`.
-- [ ] **A-04 (Medium)** — `BillboardRenderSystemEXT`'s frustum-culling radius is
+- [x] **A-04 (Medium)** — `BillboardRenderSystemEXT`'s frustum-culling radius is
       `max(width, height) / 2`, not `Vector2(width, height).Length() / 2` (half the
       diagonal) — confirmed by re-reading the code. A billboard's corners can be
       incorrectly culled while still on-screen. Fix: use the diagonal-based radius. Add a

@@ -13,7 +13,6 @@
 #include "Microsoft/Xna/Framework/Graphics/PrimitiveType.hpp"
 #include "Microsoft/Xna/Framework/Graphics/VertexBuffer.hpp"
 
-#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <typeindex>
@@ -72,7 +71,11 @@ namespace CNA::Extended::World3DEXT
                 objectPosition = transformComponent->TransformEXT.getWorldPositionProperty();
             }
 
-            const float boundingRadius = std::max(billboardComponent->SizeEXT.X, billboardComponent->SizeEXT.Y) * 0.5f;
+            // Audit finding A-04 (audit.md), independently re-verified: a quad's enclosing sphere
+            // needs the half-*diagonal* (Length()/2), not half of its longer side --
+            // max(width,height)/2 under-covers the corners, so a billboard near a frustum plane
+            // could have a visible corner culled as "not intersecting" the frustum.
+            const float boundingRadius = billboardComponent->SizeEXT.Length() * 0.5f;
             const BoundingSphere worldBounds(objectPosition, boundingRadius);
             if (!frustum.Intersects(worldBounds))
             {
