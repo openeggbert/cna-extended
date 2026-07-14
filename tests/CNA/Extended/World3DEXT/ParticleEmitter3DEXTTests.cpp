@@ -7,6 +7,7 @@
 
 #include "CNA/Extended/World3DEXT/ParticleEffect3DEXT.hpp"
 
+#include <cmath>
 #include <gtest/gtest.h>
 #include <memory>
 
@@ -114,6 +115,62 @@ namespace CNA::Extended::World3DEXT
         emitter.UpdateEXT(1.0f, Vector3::Zero);
 
         EXPECT_EQ(emitter.ParticlesEXT.size(), 10u);
+    }
+
+    // A-06 regression tests (audit.md): ParticleEmitter3DEXT's public fields had no
+    // validation at EmitEXT/UpdateEXT boundaries -- see ParticleEmitter3DEXT.cpp's fix
+    // sites for details.
+
+    TEST(ParticleEmitter3DEXTTests, EmitEXT_ZeroConeDirection_ProducesFiniteVelocity)
+    {
+        ParticleEmitter3DEXT emitter;
+        emitter.ConeDirectionEXT = Vector3::Zero;
+        emitter.MinSpeedEXT = 1.0f;
+        emitter.MaxSpeedEXT = 1.0f;
+        emitter.EmitEXT(20, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 20u);
+        for (const Particle3DEXT& particle : emitter.ParticlesEXT)
+        {
+            EXPECT_TRUE(std::isfinite(particle.VelocityEXT.X));
+            EXPECT_TRUE(std::isfinite(particle.VelocityEXT.Y));
+            EXPECT_TRUE(std::isfinite(particle.VelocityEXT.Z));
+        }
+    }
+
+    TEST(ParticleEmitter3DEXTTests, EmitEXT_ClampsOutOfRangeStartOpacity)
+    {
+        ParticleEmitter3DEXT emitter;
+        emitter.StartOpacityEXT = 5.0f;
+        emitter.EmitEXT(1, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 1u);
+        EXPECT_NEAR(emitter.ParticlesEXT[0].OpacityEXT, 1.0f, 1e-6f);
+
+        ParticleEmitter3DEXT negativeEmitter;
+        negativeEmitter.StartOpacityEXT = -3.0f;
+        negativeEmitter.EmitEXT(1, Vector3::Zero);
+
+        ASSERT_EQ(negativeEmitter.ParticlesEXT.size(), 1u);
+        EXPECT_NEAR(negativeEmitter.ParticlesEXT[0].OpacityEXT, 0.0f, 1e-6f);
+    }
+
+    TEST(ParticleEmitter3DEXTTests, UpdateEXT_ClampsOutOfRangeInterpolatedOpacity)
+    {
+        ParticleEmitter3DEXT emitter;
+        emitter.IsEmittingEXT = false;
+        emitter.MinLifetimeEXT = 1.0f;
+        emitter.MaxLifetimeEXT = 1.0f;
+        emitter.StartOpacityEXT = 2.0f;
+        emitter.EndOpacityEXT = -1.0f;
+        emitter.EmitEXT(1, Vector3::Zero);
+
+        emitter.UpdateEXT(0.5f, Vector3::Zero);
+
+        ASSERT_EQ(emitter.ParticlesEXT.size(), 1u);
+        const float opacity = emitter.ParticlesEXT[0].OpacityEXT;
+        EXPECT_GE(opacity, 0.0f);
+        EXPECT_LE(opacity, 1.0f);
     }
 
     TEST(ParticleEffect3DEXTTests, AddEmitterEXT_UpdateEXT_ForwardsToEveryOwnedEmitter)

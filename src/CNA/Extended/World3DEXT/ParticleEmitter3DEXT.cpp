@@ -35,7 +35,12 @@ namespace CNA::Extended::World3DEXT
 
         const Vector3 localDirection(sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta);
 
-        const Vector3 forward = Vector3::Normalize(ConeDirectionEXT);
+        // Audit finding A-06 (audit.md), independently re-verified: Vector3::Normalize of a
+        // zero (or near-zero) vector is undefined/NaN, and ConeDirectionEXT is a public,
+        // caller-settable field with no constructor-level guarantee it stays nonzero. Fall
+        // back to the field's own documented default (Vector3::Up) rather than propagate NaN
+        // into every sampled particle direction.
+        const Vector3 forward = ConeDirectionEXT.LengthSquared() > 1e-12f ? Vector3::Normalize(ConeDirectionEXT) : Vector3::Up;
         const Vector3 arbitrary = std::abs(forward.Y) < 0.99f ? Vector3::Up : Vector3::Right;
         const Vector3 right = Vector3::Normalize(Vector3::Cross(arbitrary, forward));
         const Vector3 up = Vector3::Cross(forward, right);
@@ -54,7 +59,10 @@ namespace CNA::Extended::World3DEXT
             particle.VelocityEXT = SampleConeDirectionEXT() * speed;
             particle.ScaleEXT = MinScaleEXT + randomEXT_.NextSingle() * (MaxScaleEXT - MinScaleEXT);
             particle.ColorEXT = StartColorEXT;
-            particle.OpacityEXT = StartOpacityEXT;
+            // A-06: clamp here too, not just in UpdateEXT's per-frame recompute below --
+            // EmitEXT runs at the end of this same UpdateEXT call, so a newly-emitted
+            // particle wouldn't otherwise get its opacity clamped until next frame.
+            particle.OpacityEXT = std::clamp(StartOpacityEXT, 0.0f, 1.0f);
             ParticlesEXT.push_back(particle);
         }
     }
@@ -69,7 +77,10 @@ namespace CNA::Extended::World3DEXT
 
             const float ageRatio = particle.GetAgeRatioEXT();
             particle.ColorEXT = LerpColor(StartColorEXT, EndColorEXT, ageRatio);
-            particle.OpacityEXT = StartOpacityEXT + (EndOpacityEXT - StartOpacityEXT) * ageRatio;
+            // A-06 (audit.md): out-of-[0,1] opacity is real UB at the render call site's
+            // `static_cast<std::uint8_t>(opacity * 255.0f)` (ParticleRenderSystem3DEXT.cpp),
+            // not just an implausible value -- clamp where opacity is actually computed.
+            particle.OpacityEXT = std::clamp(StartOpacityEXT + (EndOpacityEXT - StartOpacityEXT) * ageRatio, 0.0f, 1.0f);
         }
 
         ParticlesEXT.erase(std::remove_if(ParticlesEXT.begin(), ParticlesEXT.end(),

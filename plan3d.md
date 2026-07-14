@@ -544,7 +544,7 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       incorrectly culled while still on-screen. Fix: use the diagonal-based radius. Add a
       boundary test: a wide/tall billboard whose center sits just outside a frustum plane
       while a corner should still be visible under the corrected radius.
-- [ ] **A-06 (Medium)** — confirmed by re-reading the code: (1)
+- [x] **A-06 (Medium)** — confirmed by re-reading the code: (1)
       `ParticleEmitter3DEXT::SampleConeDirectionEXT` calls `Vector3::Normalize
       (ConeDirectionEXT)` with no zero-vector guard (undefined/NaN result if a caller
       leaves or sets it to `Vector3::Zero`); (2) `ParticleRenderSystem3DEXT` casts
