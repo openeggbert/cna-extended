@@ -553,15 +553,27 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       zero `ConeDirectionEXT` in `EmitEXT`/`SampleConeDirectionEXT`; clamp opacity to
       [0,1] before the byte conversion (in `ParticleEmitter3DEXT::UpdateEXT`, where
       `OpacityEXT` is actually computed, not at the render call site). Add tests for both.
-- [ ] **A-08 (Medium)** — `ModelComponentEXT`/`SkinnedModelComponentEXT::BoundsEXT`
+- [x] **A-08 (Medium)** — `ModelComponentEXT`/`SkinnedModelComponentEXT::BoundsEXT`
       default to a zero-radius `BoundingSphere` and are easy to leave unset, silently
-      culling a real model every frame with no warning. Add a helper (e.g.
-      `ComputeModelBoundsEXT(const Model&)`) that derives a real bounding sphere from a
-      `Model`'s mesh bounds (`ModelMesh::getBoundingSphereProperty()`, merged via
-      `BoundingSphere::CreateMerged`), so callers have a real alternative to hand-rolling
-      one. Documenting the "must set this yourself" contract more prominently in the
-      component's own header comment is the minimum bar if the helper turns out to need a
-      Phase 11 of its own.
+      culling a real model every frame with no warning. Added `ComputeModelBoundsEXT(const
+      Model&)` (`ModelBoundsEXT.hpp`/`.cpp`) that merges `ModelMesh::getBoundingSphereProperty()`
+      across every mesh via `BoundingSphere::CreateMerged`, per the audit's own suggestion.
+      **Important limitation found while implementing, not caught by the audit itself**:
+      `cna`'s `ModelMesh::boundingSphere_` has no public setter and is never written by any
+      code path in `cna` today (confirmed by grepping `cna`'s entire src/include tree) --
+      `getBoundingSphereProperty()` always returns a zero-radius sphere at the origin for
+      every `Model` constructible today. The helper is correct and forward-compatible (the
+      moment `cna` gains any way to populate real per-mesh bounds, this starts working with
+      zero `cna-extended` changes), but is NOT yet a full fix for the silent-culling concern
+      -- a real fix needs per-vertex position data, and `cna`'s `VertexBuffer::GetData` only
+      exposes fixed per-vertex-type overloads, not a generic/type-erased read, so doing that
+      generically means changing `cna` itself (out of scope without the user's explicit
+      go-ahead — root `CLAUDE.md`: "Do NOT modify sibling repositories"). Documented
+      prominently in `ModelBoundsEXT.hpp`'s header comment and both components' `BoundsEXT`
+      doc comments rather than silently declared "fixed". `SkinnedModelComponentEXT::BoundsEXT`
+      has no equivalent helper at all (`SkinnedModelEXT` parts have no per-part
+      `BoundingSphere`, same vertex-readback blocker) — its doc comment was strengthened
+      instead, matching this finding's own documented fallback bar.
 - [ ] **A-09 (Medium)** — status docs are stale/contradictory, confirmed directly:
       `3d.md`'s own top status line still says "still needs explicit phase-by-phase
       approval before any code is written" despite `plan3d.md` recording that approval and

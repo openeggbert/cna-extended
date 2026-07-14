@@ -71,7 +71,18 @@ namespace CNA::Extended::World3DEXT
         /** @brief Whether playback wraps around the clip's Duration instead of clamping to it. */
         bool LoopEXT = true;
 
-        /** @brief The model's bounds in its own local (untransformed, bind-pose) space, used for frustum culling. */
+        /**
+         * @brief The model's bounds in its own local (untransformed, bind-pose) space, used
+         * for frustum culling. Defaults to a zero-radius sphere at the origin, which the
+         * caller MUST replace with real bounds -- a zero-radius sphere almost never
+         * intersects the view frustum once the entity has moved, silently culling a real,
+         * visible model with no warning. Unlike ModelComponentEXT (see ComputeModelBoundsEXT,
+         * ModelBoundsEXT.hpp), there is no equivalent helper here yet: SkinnedModelEXT's
+         * PartEXT::Part is a plain ModelMeshPart with no per-part BoundingSphere of its own
+         * (unlike ModelMesh), so deriving real bounds would mean reading back each part's
+         * VertexBuffer and computing BoundingSphere::CreateFromPoints -- left for a future
+         * session (audit.md finding A-08's documented fallback) rather than guessed at here.
+         */
         Microsoft::Xna::Framework::BoundingSphere BoundsEXT;
 
         /** @brief Skinning-ready world bone matrices, recomputed each frame by AnimationSystem3DEXT. */

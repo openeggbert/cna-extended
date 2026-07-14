@@ -35,7 +35,14 @@ namespace CNA::Extended::World3DEXT
         /** @brief The model to draw. Not owned by this component -- caller/asset system manages lifetime. */
         Microsoft::Xna::Framework::Graphics::Model* ModelEXT = nullptr;
 
-        /** @brief The model's bounds in its own local (untransformed) space, used for frustum culling. */
+        /**
+         * @brief The model's bounds in its own local (untransformed) space, used for
+         * frustum culling. Defaults to a zero-radius sphere at the origin, which the caller
+         * MUST replace with real bounds -- a zero-radius sphere almost never intersects the
+         * view frustum once the entity has moved, silently culling a real, visible model
+         * with no warning. See ComputeModelBoundsEXT (ModelBoundsEXT.hpp) for a helper that
+         * derives real bounds directly from ModelEXT.
+         */
         Microsoft::Xna::Framework::BoundingSphere BoundsEXT;
     };
 }
