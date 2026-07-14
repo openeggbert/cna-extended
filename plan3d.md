@@ -332,6 +332,19 @@ note on how its design actually differs from `cna-scene`'s immediate-mode API).
       configure + build), full suite **2131/2133 passing** (was 2119/2121; 2 pre-existing
       skips unrelated to this phase).
 
+      **Revisited after Phase 9, same day**: `CubeMeshRenderSystemEXT`'s original fully
+      unlit rendering (`VertexPositionTexture`, no normals) was visually flat when the
+      owner reviewed `world3d_demo`'s screenshot. Switched to `VertexPositionNormalTexture`
+      with real per-face flat normals, enabled `BasicEffect` lighting (ambient +
+      `EnableDefaultLighting()`, `SpecularColor` forced to zero — its default specular
+      highlight produced its own bright pseudo-"seam" artifact across many adjacent
+      flat-shaded cubes at a shallow angle, easy to mistake for a real bug). All existing
+      tests re-verified passing unchanged (their assertions tolerate real shading; see
+      `NEXT.md` section 5 for the full account, including a second, unrelated, genuinely
+      serious bug found in the same pass — a missing depth buffer in this project's
+      established headless-render-test `RenderTarget2D` idiom, invisible until a real
+      multi-object 3D scene existed to expose it).
+
 ### Phase 7 — `Particles3DEXT` (3D counterpart of `Particles`) — **COMPLETE (2026-07-14)**
 
 Mirrors `CNA::Extended::Particles`'s `ParticleEffect`/`ParticleEmitter`/`ParticleBuffer`

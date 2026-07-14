@@ -41,7 +41,6 @@
 #include <CNA/Extended/World3DEXT/RenderSystem3DEXT.hpp>
 #include <CNA/Extended/World3DEXT/SkinnedModelComponentEXT.hpp>
 #include <CNA/Extended/World3DEXT/Tilemap3DEXT.hpp>
-#include <CNA/Extended/World3DEXT/Tilemap3DFactoryEXT.hpp>
 #include <CNA/Extended/World3DEXT/TilemapRenderer3DEXT.hpp>
 #include <CNA/Extended/World3DEXT/TilemapTileset3DEXT.hpp>
 #include <CNA/Extended/World3DEXT/Transform3ComponentEXT.hpp>
@@ -53,10 +52,12 @@
 #include <Microsoft/Xna/Framework/GameTime.hpp>
 #include <Microsoft/Xna/Framework/MathHelper.hpp>
 #include <Microsoft/Xna/Framework/Matrix.hpp>
+#include <Microsoft/Xna/Framework/Quaternion.hpp>
 #include <Microsoft/Xna/Framework/Vector2.hpp>
 #include <Microsoft/Xna/Framework/Vector3.hpp>
 #include <Microsoft/Xna/Framework/Vector4.hpp>
 #include <Microsoft/Xna/Framework/Graphics/BasicEffect.hpp>
+#include <Microsoft/Xna/Framework/Graphics/DepthFormat.hpp>
 #include <Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp>
 #include <Microsoft/Xna/Framework/Graphics/IndexBuffer.hpp>
 #include <Microsoft/Xna/Framework/Graphics/Model.hpp>
@@ -67,6 +68,7 @@
 #include <Microsoft/Xna/Framework/Graphics/RenderTarget2D.hpp>
 #include <Microsoft/Xna/Framework/Graphics/SkinnedEffect.hpp>
 #include <Microsoft/Xna/Framework/Graphics/SkinnedModelEXT.hpp>
+#include <Microsoft/Xna/Framework/Graphics/SurfaceFormat.hpp>
 #include <Microsoft/Xna/Framework/Graphics/Texture2D.hpp>
 #include <Microsoft/Xna/Framework/Graphics/VertexBuffer.hpp>
 #include <Microsoft/Xna/Framework/Graphics/VertexPositionNormalTextureSkinned.hpp>
@@ -120,6 +122,27 @@ namespace
         Texture2D texture(graphicsDevice, 1, 1);
         const std::vector<Color> pixel(1, color);
         texture.SetData(pixel.data(), 1);
+        return texture;
+    }
+
+    // A small procedural checkerboard, so cube/tile faces read as real textured surfaces
+    // instead of flat solid color under lighting -- this project has no content pipeline
+    // in scope (see the root CLAUDE.md's exclusion list), so this demo generates its own
+    // pixels directly, the same way MakeSkinnedCharacterEXT below hand-builds its geometry.
+    Texture2D MakeCheckerTexture(GraphicsDevice& graphicsDevice, int size, int squares, const Color& colorA, const Color& colorB)
+    {
+        Texture2D texture(graphicsDevice, size, size);
+        std::vector<Color> pixels(static_cast<std::size_t>(size) * static_cast<std::size_t>(size), colorA);
+        const int squareSize = std::max(1, size / squares);
+        for (int y = 0; y < size; ++y)
+        {
+            for (int x = 0; x < size; ++x)
+            {
+                const bool isEven = ((x / squareSize) + (y / squareSize)) % 2 == 0;
+                pixels[static_cast<std::size_t>(y) * static_cast<std::size_t>(size) + static_cast<std::size_t>(x)] = isEven ? colorA : colorB;
+            }
+        }
+        texture.SetData(pixels.data(), static_cast<int>(pixels.size()));
         return texture;
     }
 
@@ -183,12 +206,22 @@ namespace
         {
             World3DScreenEXT::Initialize();
 
-            GetCamera3DEXT().setPositionProperty(Vector3(4.0f, 6.0f, 14.0f));
-            GetCamera3DEXT().setTargetProperty(Vector3(0.0f, 1.0f, 0.0f));
+            GetCamera3DEXT().setPositionProperty(Vector3(9.0f, 9.0f, 12.0f));
+            GetCamera3DEXT().setTargetProperty(Vector3(-0.5f, 1.5f, 0.5f));
             GetCamera3DEXT().setFieldOfViewProperty(MathHelper::PiOver4);
             GetCamera3DEXT().setAspectRatioProperty(static_cast<float>(kWidth) / static_cast<float>(kHeight));
             GetCamera3DEXT().setNearPlaneProperty(0.1f);
             GetCamera3DEXT().setFarPlaneProperty(200.0f);
+
+            // Real per-pixel lighting on the skinned character too (its
+            // VertexPositionNormalTextureSkinned geometry already carries normals -- see
+            // MakeSkinnedCharacterEXT below), matching AvatarRenderer::DrawRealEXT's own
+            // proven ambient + one directional light recipe.
+            characterEffect_.setAmbientLightColorProperty(Vector3(0.55f, 0.55f, 0.55f));
+            characterEffect_.EnableDefaultLighting();
+            characterEffect_.getDirectionalLight0Property().setEnabledProperty(true);
+            characterEffect_.getDirectionalLight0Property().setDirectionProperty(Vector3::Normalize(Vector3(0.3f, -0.6f, -0.7f)));
+            characterEffect_.getDirectionalLight0Property().setDiffuseColorProperty(Vector3::One);
 
             // ---- Transform hierarchy: a pillar with a smaller cube riding on top of it ----
             ECS::Entity& pillar = GetWorld3DEXT().CreateEntity();
@@ -217,8 +250,14 @@ namespace
             hidden.Attach(&hiddenCube_);
 
             // ---- Skinned character, bobbing up and down via its one animated bone ----
+            // Rotated to face roughly toward the camera: RenderSystem3DEXT's skinned path
+            // uses the entity's full world matrix (position AND rotation), unlike the
+            // billboard path, so the character's fixed local-space +Z-facing triangle
+            // needs an explicit yaw to actually face the viewer instead of showing edge-on.
             ECS::Entity& character = GetWorld3DEXT().CreateEntity();
-            characterTransform_.TransformEXT.setPositionProperty(Vector3(4.0f, 1.0f, 2.0f));
+            characterTransform_.TransformEXT.setPositionProperty(Vector3(-3.5f, 1.0f, 2.5f));
+            characterTransform_.TransformEXT.setRotationProperty(
+                Microsoft::Xna::Framework::Quaternion::CreateFromYawPitchRoll(0.92f, 0.0f, 0.0f));
             character.Attach(&characterTransform_);
             characterComponent_.ModelEXT = characterModel_.get();
             characterComponent_.EffectEXT = &characterEffect_;
@@ -249,11 +288,19 @@ namespace
             sparks.Attach(&sparksComponent_);
 
             // ---- Voxel floor, drawn directly each frame (TilemapRenderer3DEXT is a
-            // standalone renderer, not an ECS system -- see its own header comment) ----
-            constexpr int kFloorSize = 6;
-            std::vector<int> tileIds(static_cast<std::size_t>(kFloorSize) * kFloorSize, 1);
-            floorTilemap_ = std::make_unique<Tilemap3DEXT>(
-                Tilemap3DFactoryEXT::BuildFromArrayEXT(tileIds, kFloorSize, 1, kFloorSize, Vector3(2.0f, 0.5f, 2.0f)));
+            // standalone renderer, not an ECS system -- see its own header comment).
+            // Populated directly via SetTileEXT (not Tilemap3DFactoryEXT::BuildFromArrayEXT,
+            // which always starts its grid at the world origin corner) so the floor is
+            // centered under the pillar instead of having the pillar sit at one corner. ----
+            constexpr int kFloorHalfExtent = 3;
+            floorTilemap_ = std::make_unique<Tilemap3DEXT>(Vector3(2.0f, 0.5f, 2.0f));
+            for (int x = -kFloorHalfExtent; x <= kFloorHalfExtent; ++x)
+            {
+                for (int z = -kFloorHalfExtent; z <= kFloorHalfExtent; ++z)
+                {
+                    floorTilemap_->SetTileEXT(x, 0, z, 1);
+                }
+            }
             floorTileset_.SetTileTextureEXT(1, floorTexture_);
         }
 
@@ -311,13 +358,24 @@ namespace
         std::unique_ptr<TilemapRenderer3DEXT> tilemapRenderer_;
     };
 
-    // Mirrors TilemapIntegrationTests.cpp's/tiled_demo's own RenderToPixels helper.
+    // Mirrors TilemapIntegrationTests.cpp's/tiled_demo's own RenderToPixels helper, with
+    // one real difference: this scene has several independent, adjacent/overlapping 3D
+    // objects (many floor tile cubes, the pillar, the character), unlike every *EXT test
+    // file's single-isolated-object render (where draw order alone always happens to look
+    // correct even with no depth buffer -- nothing else is there to be occluded by). The
+    // project's established 3-arg RenderTarget2D constructor has DepthFormat::None (no
+    // depth buffer at all -- see that constructor's own doc comment), so multi-object
+    // scenes drawn through it render in pure hash-map-iteration draw order with no real
+    // depth testing: adjacent floor tiles' touching faces incorrectly overwrote each other
+    // in a visible "seam" pattern until this was diagnosed. The 7-arg constructor with a
+    // real DepthFormat fixes it; Clear(color, depth) clears the depth buffer alongside color.
     template <typename Fn>
     std::vector<Color> RenderToPixels(GraphicsDevice& graphicsDevice, Fn&& render)
     {
-        RenderTarget2D rt(graphicsDevice, kWidth, kHeight);
+        RenderTarget2D rt(graphicsDevice, kWidth, kHeight, false, Microsoft::Xna::Framework::Graphics::SurfaceFormat::Color,
+                           Microsoft::Xna::Framework::Graphics::DepthFormat::Depth24);
         graphicsDevice.SetRenderTarget(&rt);
-        graphicsDevice.Clear(Color::Black);
+        graphicsDevice.Clear(Color::Black, 1.0f);
 
         render();
 
@@ -358,10 +416,16 @@ namespace
         graphicsDevice.setViewportProperty(Microsoft::Xna::Framework::Graphics::Viewport(0, 0, kWidth, kHeight));
         graphicsDevice.setRasterizerStateProperty(RasterizerState::CullNone);
 
-        Texture2D pillarTexture = MakeSolidTexture(graphicsDevice, Color::White);
-        Texture2D floorTexture = MakeSolidTexture(graphicsDevice, Color::White);
+        Texture2D pillarTexture = MakeCheckerTexture(graphicsDevice, 16, 4, Color(235, 235, 235, 255), Color(190, 190, 190, 255));
+        // Solid, not checkered: a large tiled floor viewed at a shallow angle shows visible
+        // seams between adjacent tiles' side faces at a checker pattern's contrast (each
+        // tile is its own cube, not a single continuous mesh -- see TilemapRenderer3DEXT's
+        // own header comment on per-tile, not per-chunk, drawing), which read as visual
+        // noise rather than texture detail; a flat color under the same per-face lighting
+        // still reads as a real lit 3D surface without that artifact.
+        Texture2D floorTexture = MakeSolidTexture(graphicsDevice, Color(210, 205, 195, 255));
         Texture2D particleTexture = MakeSolidTexture(graphicsDevice, Color::White);
-        Texture2D characterTexture = MakeSolidTexture(graphicsDevice, Color::White);
+        Texture2D characterTexture = MakeCheckerTexture(graphicsDevice, 8, 2, Color(235, 235, 235, 255), Color(170, 170, 170, 255));
 
         World3DDemoScreen screen(graphicsDevice, pillarTexture, floorTexture, particleTexture, characterTexture);
         screen.Initialize();

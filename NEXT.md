@@ -389,6 +389,35 @@ how they were resolved, not because any is still open.
 
 ## 5. Known bugs and limitations
 
+- **FOUND AND FIXED this session, `World3DEXT` — a real gotcha for future 3D render
+  tests/examples, not just a `world3d_demo` bug**: this whole project's established
+  headless-render-test idiom (`TilemapIntegrationTests.cpp`'s `RenderToPixels`, copied into
+  every `*EXT` render test this session) uses `RenderTarget2D`'s 3-arg constructor, which
+  has **`DepthFormat::None` — no depth buffer at all** (confirmed directly in
+  `RenderTarget2D.hpp`'s own doc comment). With no depth buffer, `GraphicsDevice`'s depth
+  test is a well-defined no-op (see that file's own header comment) and primitives
+  composite in pure draw-submission order. Every `*EXT` test file this session only ever
+  draws ONE isolated object per frame, so this never mattered — but `examples/world3d_demo/`
+  legitimately draws many adjacent objects (floor tile cubes touching edge-to-edge), and
+  its `Tilemap3DEXT::getTilesProperty()` is a `std::unordered_map` (hash-order iteration,
+  not spatial order) — so touching tiles' coincident boundary faces overwrote each other in
+  an incorrect, visibly "seamed" pattern that first looked like a lighting/Z-fighting bug,
+  not a missing-depth-buffer one. Fixed in `world3d_demo/main.cpp`'s own `RenderToPixels` by
+  using `RenderTarget2D`'s 7-arg constructor with `DepthFormat::Depth24` and
+  `GraphicsDevice::Clear(color, depth)` (clears the depth buffer alongside color). **Any
+  future multi-object 3D render test/example must do the same** — the 3-arg
+  `RenderTarget2D` + plain `Clear(color)` idiom is only correct for single-isolated-object
+  renders, which is why it was never caught until a real multi-object scene existed.
+- **Visual quality follow-up, same session**: `CubeMeshRenderSystemEXT` originally rendered
+  fully unlit (`VertexPositionTexture`, no normals) — correct but visually flat. Switched to
+  `VertexPositionNormalTexture` with real per-face flat normals and enabled
+  `BasicEffect` lighting (ambient + `EnableDefaultLighting()`, with `SpecularColor` forced
+  to zero — the default specular highlight, at a shallow viewing angle across many adjacent
+  flat-shaded cubes, produced its own separate bright "seam"-like artifact, unrelated to the
+  depth-buffer bug above but easy to mistake for the same thing). All existing
+  `CubeMeshRenderSystemEXT`/`TilemapRenderer3DEXT`/`World3DScreenEXT` tests re-verified
+  passing unchanged after both changes (their assertions only check `>0`/exact-zero
+  channels, not exact lit values, so they tolerate real shading fine).
 - **FIXED this session**: `cna-extended`'s own headers-only CMake build branch never added
   `sharp-runtime/vendor` to the include path, so any header pulling in a vendored
   third-party dependency (`tinyxml2/tinyxml2.h`) failed to compile in that config. Fixed in

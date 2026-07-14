@@ -10,7 +10,7 @@
 #include "Microsoft/Xna/Framework/BoundingSphere.hpp"
 #include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
 #include "Microsoft/Xna/Framework/Graphics/PrimitiveType.hpp"
-#include "Microsoft/Xna/Framework/Graphics/VertexPositionTexture.hpp"
+#include "Microsoft/Xna/Framework/Graphics/VertexPositionNormalTexture.hpp"
 
 #include <array>
 #include <cstdint>
@@ -29,34 +29,44 @@ namespace CNA::Extended::World3DEXT
     using Microsoft::Xna::Framework::Vector3;
     using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
     using Microsoft::Xna::Framework::Graphics::PrimitiveType;
-    using Microsoft::Xna::Framework::Graphics::VertexPositionTexture;
+    using Microsoft::Xna::Framework::Graphics::VertexPositionNormalTexture;
 
     namespace
     {
         // A unit cube (-0.5..0.5 on every axis), 24 vertices (4 per face, so each face gets
-        // its own full [0,1] UV square rather than sharing corner vertices between faces),
-        // wound counter-clockwise as seen from outside each face -- matches cna-scene::
-        // CubeMesh's own documented winding convention (see CubeMeshComponentEXT.hpp).
-        void BuildUnitCubeMeshEXT(std::vector<VertexPositionTexture>& vertices, std::vector<std::uint16_t>& indices)
+        // its own full [0,1] UV square and its own outward face normal rather than sharing
+        // corner vertices/averaged normals between faces -- this is what gives each face a
+        // distinct, flat-shaded brightness under lighting instead of a smoothed/rounded
+        // look), wound counter-clockwise as seen from outside each face -- matches
+        // cna-scene::CubeMesh's own documented winding convention (see
+        // CubeMeshComponentEXT.hpp).
+        void BuildUnitCubeMeshEXT(std::vector<VertexPositionNormalTexture>& vertices, std::vector<std::uint16_t>& indices)
         {
             struct Face
             {
                 std::array<Vector3, 4> Corners;
+                Vector3 Normal;
             };
 
             const std::array<Face, 6> faces = {{
                 // +Z (front)
-                {{Vector3(-0.5f, -0.5f, 0.5f), Vector3(0.5f, -0.5f, 0.5f), Vector3(0.5f, 0.5f, 0.5f), Vector3(-0.5f, 0.5f, 0.5f)}},
+                {{Vector3(-0.5f, -0.5f, 0.5f), Vector3(0.5f, -0.5f, 0.5f), Vector3(0.5f, 0.5f, 0.5f), Vector3(-0.5f, 0.5f, 0.5f)},
+                 Vector3(0.0f, 0.0f, 1.0f)},
                 // -Z (back)
-                {{Vector3(0.5f, -0.5f, -0.5f), Vector3(-0.5f, -0.5f, -0.5f), Vector3(-0.5f, 0.5f, -0.5f), Vector3(0.5f, 0.5f, -0.5f)}},
+                {{Vector3(0.5f, -0.5f, -0.5f), Vector3(-0.5f, -0.5f, -0.5f), Vector3(-0.5f, 0.5f, -0.5f), Vector3(0.5f, 0.5f, -0.5f)},
+                 Vector3(0.0f, 0.0f, -1.0f)},
                 // +X (right)
-                {{Vector3(0.5f, -0.5f, 0.5f), Vector3(0.5f, -0.5f, -0.5f), Vector3(0.5f, 0.5f, -0.5f), Vector3(0.5f, 0.5f, 0.5f)}},
+                {{Vector3(0.5f, -0.5f, 0.5f), Vector3(0.5f, -0.5f, -0.5f), Vector3(0.5f, 0.5f, -0.5f), Vector3(0.5f, 0.5f, 0.5f)},
+                 Vector3(1.0f, 0.0f, 0.0f)},
                 // -X (left)
-                {{Vector3(-0.5f, -0.5f, -0.5f), Vector3(-0.5f, -0.5f, 0.5f), Vector3(-0.5f, 0.5f, 0.5f), Vector3(-0.5f, 0.5f, -0.5f)}},
+                {{Vector3(-0.5f, -0.5f, -0.5f), Vector3(-0.5f, -0.5f, 0.5f), Vector3(-0.5f, 0.5f, 0.5f), Vector3(-0.5f, 0.5f, -0.5f)},
+                 Vector3(-1.0f, 0.0f, 0.0f)},
                 // +Y (top)
-                {{Vector3(-0.5f, 0.5f, 0.5f), Vector3(0.5f, 0.5f, 0.5f), Vector3(0.5f, 0.5f, -0.5f), Vector3(-0.5f, 0.5f, -0.5f)}},
+                {{Vector3(-0.5f, 0.5f, 0.5f), Vector3(0.5f, 0.5f, 0.5f), Vector3(0.5f, 0.5f, -0.5f), Vector3(-0.5f, 0.5f, -0.5f)},
+                 Vector3(0.0f, 1.0f, 0.0f)},
                 // -Y (bottom)
-                {{Vector3(-0.5f, -0.5f, -0.5f), Vector3(0.5f, -0.5f, -0.5f), Vector3(0.5f, -0.5f, 0.5f), Vector3(-0.5f, -0.5f, 0.5f)}},
+                {{Vector3(-0.5f, -0.5f, -0.5f), Vector3(0.5f, -0.5f, -0.5f), Vector3(0.5f, -0.5f, 0.5f), Vector3(-0.5f, -0.5f, 0.5f)},
+                 Vector3(0.0f, -1.0f, 0.0f)},
             }};
 
             const std::array<Vector2, 4> uvs = {Vector2(0.0f, 0.0f), Vector2(1.0f, 0.0f), Vector2(1.0f, 1.0f), Vector2(0.0f, 1.0f)};
@@ -66,7 +76,7 @@ namespace CNA::Extended::World3DEXT
                 const auto base = static_cast<std::uint16_t>(vertices.size());
                 for (int i = 0; i < 4; ++i)
                 {
-                    vertices.emplace_back(face.Corners[static_cast<std::size_t>(i)], uvs[static_cast<std::size_t>(i)]);
+                    vertices.emplace_back(face.Corners[static_cast<std::size_t>(i)], face.Normal, uvs[static_cast<std::size_t>(i)]);
                 }
                 indices.push_back(base + 0);
                 indices.push_back(base + 1);
@@ -83,7 +93,7 @@ namespace CNA::Extended::World3DEXT
           graphicsDevice_(&graphicsDevice), camera_(&camera), cubeVertexBuffer_(graphicsDevice, 24),
           cubeIndexBuffer_(graphicsDevice, 36), effect_(graphicsDevice)
     {
-        std::vector<VertexPositionTexture> vertices;
+        std::vector<VertexPositionNormalTexture> vertices;
         std::vector<std::uint16_t> indices;
         BuildUnitCubeMeshEXT(vertices, indices);
 
@@ -91,6 +101,23 @@ namespace CNA::Extended::World3DEXT
         cubeIndexBuffer_.SetData(indices.data(), static_cast<int>(indices.size()));
 
         effect_.setTextureEnabledProperty(true);
+
+        // Real per-face lighting (each face has its own flat normal -- see
+        // BuildUnitCubeMeshEXT's comment) rather than the module's original fully unlit
+        // rendering, so cubes read as solid 3D volumes instead of flat silhouettes.
+        // Ambient is kept bright enough that unlit-looking test assertions (exact tint
+        // color on the lit side facing the camera) still hold -- see
+        // CubeMeshRenderSystemEXTTests.cpp. Specular is explicitly zeroed:
+        // EnableDefaultLighting()'s own default specular highlight is bright white and, for
+        // adjoining flat-shaded cubes (e.g. a tiled floor -- see TilemapRenderer3DEXT),
+        // several coplanar tile-boundary side faces can all catch that highlight from a
+        // shallow camera angle at once, producing a visible bright "seam" grid that reads
+        // as a rendering bug rather than lighting -- flat diffuse-only shading avoids it
+        // and suits plain colored "toy block" cubes better anyway.
+        effect_.setLightingEnabledProperty(true);
+        effect_.EnableDefaultLighting();
+        effect_.setAmbientLightColorProperty(Vector3(0.4f, 0.4f, 0.4f));
+        effect_.setSpecularColorProperty(Vector3::Zero);
     }
 
     void CubeMeshRenderSystemEXT::Initialize(ComponentManager& componentManager)
