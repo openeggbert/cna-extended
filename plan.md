@@ -1128,6 +1128,21 @@ all now complete.
       `Begin`/`Draw`/`End` and passing). Nobody had actually tried it until this task did.
       This means the other modules listed above are very likely real-test-coverable too,
       not just compile-checkable — worth revisiting; see `NEXT.md`.
+      **Follow-up done the same session**: real behavioral test coverage added for all four
+      previously-"compile-checked-only" modules (`ShapeExtensions` — 21 tests covering all
+      8 shape functions; `SpriteBatchExtensions` — 9 tests covering `NinePatch`/`Sprite`/
+      `Texture2D`/`Texture2DRegion`; `BitmapFontExtensions` — 9 tests covering all 6
+      `string`/`StringBuilder` `DrawString` overload pairs; `FadeTransition`/
+      `ExpandTransition` — 4 tests each, driven through real `Update()` calls to exercise
+      `Draw()` past `Value == 0`) — all genuinely exercising `Begin`/`Draw`/`End` against a
+      real headless `GraphicsDevice`, not mocks. **Found and fixed a real, previously
+      undetected bug in this process**: `FadeTransition`/`ExpandTransition` (landed earlier
+      this session) never overrode `System::Object::GetTypeName()` (pure virtual,
+      independently confirmed via `grep` on `Object.hpp`), making both classes genuinely
+      **non-instantiable** the whole time since landing — invisible because nothing had
+      ever actually tried to construct one (no prior test did). Fixed by adding the
+      override, matching `AnimationComponent::GetTypeName()`'s established convention.
+      1888 → 1935 tests (+47), zero regressions.
 - [x] `Tiled/*` (TMX/JSON parser — `TiledTmxParser` and friends) — **COMPLETE (2026-07-13)**,
       priority given the user's existing `tiled-blupi` project. Preserves upstream's
       two-stage design (raw XML → `TiledMapXml` document model → `TilemapData`), since

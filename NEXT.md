@@ -52,7 +52,7 @@ This is the sole remaining blocker in the entire porting plan outside Phase 10.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **1888/1888 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **1935/1935 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
@@ -60,17 +60,16 @@ This is the sole remaining blocker in the entire porting plan outside Phase 10.
   `LDtk/*`, `Ogmo/*`, and most of `Rendering/*` all landed — see section 3.
 - **CORRECTED this session, was wrong in earlier entries of this same file**: a real
   headless `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple genuinely works end-to-end in
-  this environment (confirmed by `Rendering/*`'s own new tests actually calling
-  `Begin`/`Draw`/`End` against real EasyGL-over-Mesa software rendering and passing) — the
-  "no headless SpriteBatch test infra" claim below was an untested assumption inherited
-  forward through this file, not a verified fact. See section 5.
+  this environment (real EasyGL-over-Mesa software rendering) — the "no headless
+  SpriteBatch test infra" claim was an untested assumption inherited forward through this
+  file, not a verified fact. `SpriteBatch.Extensions`, `BitmapFontExtensions`,
+  `ShapeExtensions`, `FadeTransition`/`ExpandTransition::Draw` now all have real
+  behavioral test coverage as a direct follow-up (47 new tests) — see section 3. This
+  correction is now fully closed out, not just noted.
 - **Does not work / not done yet**:
   - `TilemapRenderer`/`TilemapWorldRenderer` — genuine architectural blocker,
-    `needs_human`. See section 4.
-  - `SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
-    `FadeTransition`/`ExpandTransition::Draw` still have zero *actual* behavioral test
-    coverage today (not because it's impossible — see the correction above — just because
-    nobody has gone back and added it yet). Worth a follow-up task; see section 8.
+    `needs_human`. See section 4. **This is the only thing left undone anywhere in
+    `plan.md` outside Phase 10.**
 
 ---
 
@@ -80,9 +79,11 @@ One long autonomous session (owner authorized, unavailable for hours). Order so 
 4-5, then Phase 6 (Serialization) + Phase 9 (ECS) in parallel, then Phase 7's Tilemaps core
 + the bulk of Phase 8 (Particles) in parallel, then `Tilemaps/Tiled/*` +
 `ParticleEffectSerializer.cs` in parallel (Phase 8 completed in full), then
-`Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then `Tilemaps/Rendering/*` (this batch,
-the last item in Phase 7). See `git log` for every batch's individual commits; this section
-covers the Rendering batch in detail, condensing earlier ones.
+`Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then `Tilemaps/Rendering/*` (the last item
+in Phase 7), then a follow-up test-coverage task (this batch) closing out the discovery from
+the Rendering batch. See `git log` for every batch's individual commits; this section covers
+the two most recent batches (Rendering + test-coverage follow-up) in detail, condensing
+earlier ones.
 
 - **`Tilemaps/Rendering/*`**: `RenderMode`, `TilemapRendererShared`,
   `TilemapSpriteBatchRenderer`, `TilemapWorldSpriteBatchRenderer` all landed.
@@ -103,19 +104,28 @@ covers the Rendering batch in detail, condensing earlier ones.
   with a full writeup in the test file rather than deleted or weakened. See section 5.
 - **A significant, independently-verified correction to this file's own prior claims**: "no
   headless `SpriteBatch`/`GraphicsDevice` test infra exists," repeated in earlier entries of
-  this very file, was an untested assumption, not a fact — this batch's own new tests
+  this very file, was an untested assumption, not a fact — `Rendering/*`'s own new tests
   construct a real `GraphicsDevice`/`SpriteBatch`/`Texture2D` and call real
-  `Begin`/`Draw`/`End` (EasyGL-over-Mesa software rendering), and they pass. See section 5
-  and section 8's follow-up task.
-- Verified independently before landing (as always): genuinely clean `rm -rf build`
-  rebuild — zero warnings; full `ctest` — **1888 tests run, 100% passing** (2 additional
-  tests exist but are the documented `GTEST_SKIP()` cases above; was 1804 before this
-  batch). Spot-checked the fork's three most consequential claims directly against
-  source, not trusted as reported: the `DefaultEffect`/`VertexPositionColorTexture`
-  layout mismatch (read both directly — genuinely incompatible), the `cna`
-  `BoundingFrustum` bug (read the exact branch — genuinely present), and the
-  `OrthographicCamera` deferral history (read `plan.md`'s own prior entry — genuinely
-  never completed).
+  `Begin`/`Draw`/`End` (EasyGL-over-Mesa software rendering), and they pass.
+- **Follow-up in the same session, closing out that discovery**: added real behavioral test
+  coverage (47 tests, not just compile-checks) to the four modules that correction directly
+  implicated — `ShapeExtensions` (21 tests, all 8 shape functions), `SpriteBatchExtensions`
+  (9 tests, `NinePatch`/`Sprite`/`Texture2D`/`Texture2DRegion`), `BitmapFontExtensions` (9
+  tests, all 6 `DrawString` overload pairs), `FadeTransition`/`ExpandTransition` (4 tests
+  each, driven through real `Update()` calls to exercise `Draw()` past `Value == 0`).
+  **Found a second real bug in the process**: `FadeTransition`/`ExpandTransition` (landed
+  earlier this session) never overrode `System::Object::GetTypeName()` (pure virtual,
+  confirmed via `grep` on `sharp-runtime`'s `Object.hpp`) — both classes had been genuinely
+  **non-instantiable** the entire time since landing, invisible because no prior test had
+  ever tried to construct one. Fixed by adding the override.
+- Verified independently before landing both batches (as always): genuinely clean
+  `rm -rf build` rebuilds — zero warnings; full `ctest` — **1935 tests run, 100% passing**
+  (2 additional tests are the documented `GTEST_SKIP()` cases above; was 1804 before the
+  Rendering batch, 1888 after it, 1935 after the test-coverage follow-up). Spot-checked the
+  most consequential claims directly against source rather than trusted as reported: the
+  `DefaultEffect`/`VertexPositionColorTexture` layout mismatch, the `cna` `BoundingFrustum`
+  bug, the `OrthographicCamera` deferral history, and the `GetTypeName()` pure-virtual
+  claim — all confirmed genuine by reading the actual source, not just the reports.
 
 **Phase 7 is now ~95% done — only `TilemapRenderer`/`TilemapWorldRenderer` remain, and
 they're blocked on a human decision (section 4).** This is the sole remaining blocker
@@ -133,7 +143,7 @@ re-detailed here.
 
 **One genuine architectural blocker, `needs_human`; nothing else.** No build-breaking or
 test-failing issue — `cmake --build build -j$(nproc)`, `cmake --build build-headers
--j$(nproc)`, and `ctest --test-dir build` all currently succeed (1888 tests run, 100%
+-j$(nproc)`, and `ctest --test-dir build` all currently succeed (1935 tests run, 100%
 passing, zero warnings in both configs).
 
 - **Symptom**: `Tilemaps/Rendering/TilemapRenderer.cs`/`TilemapWorldRenderer.cs` (the
@@ -207,19 +217,20 @@ passing, zero warnings in both configs).
   trip drifts again rather than stabilizing) — the test was corrected to an approximate
   comparison rather than "fixing" correct, already-tested production code to satisfy an
   incorrect test assumption.
-- **CORRECTED this session — this entry was wrong in every earlier version of this file**:
-  previously claimed "no headless `SpriteBatch`/`ISpriteBatchBackend` mock exists anywhere
-  in this ecosystem," used to justify zero behavioral test coverage for
+- **CORRECTED AND CLOSED OUT this session — this entry was wrong in every earlier version
+  of this file**: previously claimed "no headless `SpriteBatch`/`ISpriteBatchBackend` mock
+  exists anywhere in this ecosystem," used to justify zero behavioral test coverage for
   `SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
   `FadeTransition`/`ExpandTransition::Draw`. **This was never actually verified — just
-  assumed and repeated forward.** `Tilemaps/Rendering/*`'s own tests this session construct
-  a plain `GraphicsDevice graphicsDevice;` + `SpriteBatch spriteBatch(graphicsDevice);` +
-  `Texture2D(graphicsDevice, w, h)` and call real `Begin`/`Draw`/`End` — genuinely
-  rendering end-to-end via EasyGL-over-Mesa software rendering, no mock needed, no display
-  needed — and all pass. **The remaining gap is not "impossible," it's "nobody has gone
-  back to add the tests yet"** for the four modules listed above. See section 8 for this as
-  a concrete follow-up task. (Real-GPU-only example programs under `cna/examples/` still
-  aren't part of the GoogleTest suite, and that's unrelated/unaffected by this correction.)
+  assumed and repeated forward.** A plain `GraphicsDevice graphicsDevice;` + `SpriteBatch
+  spriteBatch(graphicsDevice);` + `Texture2D(graphicsDevice, w, h)` genuinely render
+  end-to-end via EasyGL-over-Mesa software rendering, no mock needed, no display needed.
+  All four modules above now have real test coverage (47 new tests) as a direct follow-up —
+  this also caught a real bug: `FadeTransition`/`ExpandTransition` had never overridden the
+  pure-virtual `System::Object::GetTypeName()`, making both classes non-instantiable since
+  they landed, invisible because nothing had ever tried to construct one before. Fixed.
+  (Real-GPU-only example programs under `cna/examples/` still aren't part of the GoogleTest
+  suite, and that's unrelated/unaffected by this correction.)
 - **CONFIRMED bug, in a sibling repo (`cna`), not this repo**: `BoundingFrustum::Contains
   (const Vector3&, ContainmentType&)` (`cna/src/Microsoft/Xna/Framework/BoundingFrustum.cpp`)
   has an extra branch (`classifyPoint == 0.0f` → mark `intersects`) with no real-MonoGame
@@ -339,33 +350,23 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 1. **`TilemapRenderer`/`TilemapWorldRenderer` — needs a human decision first** (section 4).
    This is a `needs_human` blocker, not a task to just start on — read section 4's 3 options
-   and get the project owner's call on which one before writing any code here. Once decided:
+   and get the project owner's call on which one before writing any code here. **This is now
+   the only remaining item in the entire porting plan outside Phase 10.** Once decided:
    - Command (after implementing): `ctest --test-dir build -R Tilemap` — expect 100%
      passing; both CMake configs stay clean.
 
-2. **Add real behavioral test coverage for the "compiles but untested" `SpriteBatch`-drawing
-   modules** (`SpriteBatch.Extensions`, `BitmapFontExtensions`, `ShapeExtensions`,
-   `FadeTransition`/`ExpandTransition::Draw`) — now genuinely possible per section 5's
-   correction (a plain `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple already works
-   headlessly in this environment; `Tilemaps/Rendering/*`'s own tests are the working
-   template to copy). Independent of item 1 — safe to do while waiting on that decision.
-   No production code changes expected, only new test files.
-   - Command: `ctest --test-dir build` — expect 100% passing (net new tests only, no
-     regressions); both CMake configs stay clean.
-
-3. **Phase 10 — Integration, polish, documentation**, once item 1 lands (or is explicitly
+2. **Phase 10 — Integration, polish, documentation**, once item 1 lands (or is explicitly
    deferred by the owner). Scope depends on what's actually left to polish at that point —
    not detailed here yet. Likely candidates worth considering when scoping it: a real
    `README.md` (mentioned in `CLAUDE.md`'s own "read first" list but not yet confirmed to
-   exist), a pass over every `NOTICE.md`-flagged licensing note for completeness, and
-   whether item 2 above should be folded into Phase 10 or done before it.
+   exist), and a pass over every `NOTICE.md`-flagged licensing note for completeness.
 
-Delegating to a sub-agent fork remains appropriate for items 1-2 (user-approved this
-session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/`NOTICE.md`,
-orchestrator verifies then commits) — but see section 5's process-risk entry: independently
-check `git status`/`git diff` (not just `git log`) after every fork turn, including resumed
-ones, and be prepared for a "completed" notification to actually mean "stopped partway
-through" rather than genuinely done.
+Delegating to a sub-agent fork remains appropriate once item 1 has a decision (user-approved
+this session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/
+`NOTICE.md`, orchestrator verifies then commits) — but see section 5's process-risk entry:
+independently check `git status`/`git diff` (not just `git log`) after every fork turn,
+including resumed ones, and be prepared for a "completed" notification to actually mean
+"stopped partway through" rather than genuinely done.
 
 ---
 
