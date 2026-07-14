@@ -52,7 +52,7 @@ what a future session might reasonably still do (all optional/non-blocking).
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2042/2042 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2046/2046 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -237,9 +237,30 @@ re-detailed here.
 
 **No blocker remains anywhere. The plan is complete — all 10 phases, including Phase 10.**
 `cmake --build build -j$(nproc)`, `cmake --build build-headers -j$(nproc)`, and
-`ctest --test-dir build` all currently succeed (**2042 tests run, 100% passing**, zero
-warnings in both configs). The three historical blockers/gaps below are kept for context on
+`ctest --test-dir build` all currently succeed (**2046 tests run, 100% passing**, zero
+warnings in both configs). The four historical blockers/gaps below are kept for context on
 how they were resolved, not because any is still open.
+
+### Resolved: `SizeJsonConverter.cs` — the one genuine gap found in a full completeness audit
+
+- **Symptom**: after everything above was already marked complete, the project owner
+  spot-checked for `Tweening/LinearOperations.cs` and didn't find it in the ported tree,
+  worried the port might have systematic gaps.
+- **Investigation**: `LinearOperations<T>` itself turned out to be a legitimate, documented
+  elimination (C++ templates use `operator+`/`-`/`*` directly instead of upstream's
+  runtime expression-tree compilation — see `LinearTween.hpp`'s header comment). But the
+  underlying worry deserved a real answer: reconciled all 388 upstream `.cs` files
+  (excluding `tests/`) against the ported tree, module by module, hand-checking every
+  raw-file-count mismatch against `plan.md`'s decision log or the actual upstream source.
+- **Result**: exactly one genuine, undocumented gap found —
+  `Serialization/Json/SizeJsonConverter.cs` (the JSON converter for the integer `Size`
+  type, distinct from the already-ported `Size2JsonConverter`/`SizeF`). Everything else
+  that looked like a gap on a raw file-count basis was legitimate: documented exclusions,
+  multi-file-to-one-file DTO consolidations (Tiled/LDtk/Ogmo), or naming differences
+  (`Ray2.cs`→`Ray2D.hpp`). Full account in `plan.md`'s Phase 6 entry.
+- **Fix**: ported `SizeJsonConverter.hpp`/`.cpp` following `Size2JsonConverter`'s exact
+  established pattern, plus 4 fresh tests. Both configs verified clean, full suite
+  2046/2046 (was 2042).
 
 ### Resolved: Phase 10 (end-to-end example, Doxygen pass, README/NOTICE.md)
 

@@ -1032,6 +1032,56 @@ Depends on Phase 1. Feeds Phase 7 (Tilemaps).
       drifts to `(9,20,30,255)`, and a further round trip drifts again rather than
       stabilizing. Renamed to `RoundTripPreservesRgbColorApproximately` with a
       documented tolerance.
+- [x] **Correction (2026-07-14, found via a user-prompted full-plan completeness
+      audit — see below)**: `Serialization/Json/SizeJsonConverter.cs` (the JSON
+      converter for the integer `Size` type — distinct from `Size2JsonConverter.cs`,
+      which converts `SizeF` and was already ported) was **genuinely missed** during
+      Phase 6 — not documented as excluded anywhere, just absent. Now ported as
+      `SizeJsonConverter.hpp`/`.cpp`, following `Size2JsonConverter`'s exact
+      established pattern (`nlohmann::adl_serializer<Size>`, reusing
+      `ReadAsMultiDimensional<int>`). No upstream tests exist for it either (same as
+      `Size2JsonConverter`); 4 fresh tests added mirroring
+      `Size2JsonConverterTests.cpp`'s structure. This is the **only genuine gap**
+      found across the entire ~388-file upstream source tree in that audit — see the
+      new "Post-completion completeness audit" note below for the full account of
+      what was checked and why everything else that looked like a gap on a first
+      pass (raw file-count mismatches per module) turned out to be legitimate
+      (consolidated files, documented exclusions, or naming differences).
+
+**Post-completion completeness audit (2026-07-14)**: after Phase 10 was already
+marked complete, the project owner spot-checked for `LinearOperations` (a
+reflection-based C# arithmetic-delegate class, `Tweening/LinearOperations.cs`) and
+didn't find it, worrying the port might have systematic gaps. Investigation
+confirmed `LinearOperations<T>` itself was legitimately, deliberately eliminated
+(documented in `LinearTween.hpp`'s own header comment: C++ templates use
+`operator+`/`operator-`/`operator*` directly, a strictly better compile-time
+equivalent of what upstream's runtime expression-tree compilation worked around) —
+but the underlying worry deserved a real answer, not just clearing that one
+spot-check. Did a full reconciliation of all 388 upstream `.cs` files (excluding
+`tests/`) against the ported tree, module by module: counted files per top-level
+upstream directory, compared against the ported directory's file count, and for
+every directory with a raw-count mismatch, checked each individual missing
+filename by hand against `plan.md`'s decision log or by reading the upstream file
+directly. Result: every single mismatch across every module (Collections,
+Content, ECS, Graphics, Input, Serialization, Tilemaps/Tiled/LDtk/Ogmo, Tweening,
+all of Math/, all 35 root-level files) was one of: (a) an already-documented,
+reasoned exclusion in `plan.md` (`ObservableCollection`/`IObservableCollection`,
+`ComponentType.cs`, `BaseTypeJsonConverter.cs`, `EffectResource.cs`,
+`KeyboardState.Extensions.cs`'s `internal`-only FNA shim methods,
+`TiledDataDecoder.cs`/`TiledPropertyConverter.cs`, the xnb `ContentReaders`/
+`Content/*Reader` family); (b) a legitimate multi-file-to-one-file consolidation,
+each with its own explaining header comment (Tiled/LDtk/Ogmo's ~65 combined
+Document-DTO `.cs` files each folded into one `*Document.hpp` per format;
+`OgmoLayerDataConverter.cs`/`OgmoTileCoordConverter.cs`'s polymorphic-dispatch and
+custom-coordinate-parsing logic folded into `ParseOgmoLayerData`/`ParseCoordPair`
+free functions rather than kept as separate `JsonConverter<T>` classes;
+`TweenFieldMember.cs`/`TweenPropertyMember.cs`/`TweenMember.cs`'s reflection-based
+3-class hierarchy replaced by one pointer-to-member-based `TweenMember<TTarget,
+TMember>`, an explicit user-approved redesign); (c) a trivial naming difference
+(`Ray2.cs` → `Ray2D.hpp`, matching the sibling `Line2D`/`LineSegment2D` naming
+convention); or (d) `SizeJsonConverter.cs` — the one real, undocumented gap,
+fixed above. No other gaps found. Both build configs verified clean and the full
+suite (2046/2046) passing after the fix.
 
 ### Phase 7 — Tilemaps (Tiled / LDtk / Ogmo)
 
