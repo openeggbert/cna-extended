@@ -615,24 +615,30 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       actual test suite. Add a depth-enabled multi-object test (two overlapping cubes
       drawn in both submission orders, asserting the *nearer* one's color wins either way)
       to lock in that fix.
-- [ ] **A-05 (Medium, partially addressed)** — `OctreeEXT` was honestly documented as a
-      fixed-cell spatial hash, not a hierarchical octree (its own header comment already
-      said so), but the audit was right that the class *name* still invited the opposite
-      assumption. **Renamed to `SpatialHash3DEXT` (2026-07-14, user-requested)** — pure
-      rename, no behavior change, all 8 referencing files updated
-      (`SpatialHash3DEXT.hpp`/`.cpp`, `SpatialHash3DEXTTests.cpp` — itself renamed from
-      `OctreeEXTTests.cpp` — plus `CollisionWorld3DEXT.hpp`/`.cpp`,
-      `CollisionWorld3DEXTTests.cpp`, and two unrelated files with only a comment
-      cross-reference: `ParticleEmitter3DEXT.hpp`, `Text3DEXT.hpp`), both configs rebuilt
-      clean, full suite unchanged at 2176/2176 (rename only, no test count change).
-      **Still open**: `Query`'s candidate dedup is `std::find`-in-a-loop (linear, O(K) per
-      candidate) — left for a future session since the dedup performance concern needs a
-      real large-scene benchmark before "optimize" is well-defined, not a guess. A true
-      recursive octree (matching the class's *algorithm* to what its original name implied,
-      as an alternative to the rename) remains a documented future option
-      (`SpatialHash3DEXT.hpp`'s own header comment) if profiling ever shows the uniform-grid
-      approach is insufficient — not pursued now for the same "needs a real benchmark"
-      reason.
+- [x] **A-05 (Medium, addressed)** — `OctreeEXT` was honestly documented as a fixed-cell
+      spatial hash, not a hierarchical octree (its own header comment already said so), but
+      the audit was right that the class *name* still invited the opposite assumption.
+      **Renamed to `SpatialHash3DEXT` (2026-07-14, user-requested)** — pure rename, no
+      behavior change, all 8 referencing files updated (`SpatialHash3DEXT.hpp`/`.cpp`,
+      `SpatialHash3DEXTTests.cpp` — itself renamed from `OctreeEXTTests.cpp` — plus
+      `CollisionWorld3DEXT.hpp`/`.cpp`, `CollisionWorld3DEXTTests.cpp`, and two unrelated
+      files with only a comment cross-reference: `ParticleEmitter3DEXT.hpp`,
+      `Text3DEXT.hpp`), both configs rebuilt clean, full suite unchanged at 2176/2176
+      (rename only, no test count change).
+      **Dedup fix landed (2026-07-14)**: `Query`'s candidate dedup was `std::find`-in-a-loop
+      (linear, O(K) per candidate, O(K^2) worst case) — replaced with a local
+      `std::unordered_set<ICollisionActor3DEXT*>` for O(1) average membership checks. Pure
+      internal change, no API/behavior change (existing
+      `QueryWhenActorOverlapsMultipleCellsReturnsUniqueActor` test already exercises the
+      dedup path and still passes). Not persisted across calls, so no invalidation concern
+      on `Insert`/`Remove`/`Reset`.
+      **Still explicitly not pursued**: a true recursive octree (matching the class's
+      *algorithm* to what its original name implied, as an alternative to the rename)
+      remains a documented future option (`SpatialHash3DEXT.hpp`'s own header comment) if
+      profiling ever shows the uniform-grid approach's O(N³) cell iteration for
+      large/sparse actors is insufficient — not pursued without real large-scene benchmark
+      data justifying it, matching this project's own stated "don't optimize on a guess"
+      principle.
 - [x] **A-03 (High, addressed as documentation, not a code fix)** — the audit's own 22
       graphics-test failures were caused by its sandbox lacking any SDL video device
       (`SDL_InitSubSystem(SDL_INIT_VIDEO) failed: No available video device`), not a

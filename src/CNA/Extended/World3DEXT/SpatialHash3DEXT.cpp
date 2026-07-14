@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 namespace CNA::Extended::World3DEXT
 {
@@ -65,6 +66,13 @@ namespace CNA::Extended::World3DEXT
     std::vector<ICollisionActor3DEXT*> SpatialHash3DEXT::Query(const BoundingBox& bounds) const
     {
         std::vector<ICollisionActor3DEXT*> results;
+        // A-05 (audit.md), still-open performance concern: an actor spanning multiple
+        // cells is a candidate in each of them, so a duplicate check is required here.
+        // std::find against `results` was an O(K) scan per candidate (O(K^2) worst case
+        // for K total results); an unordered_set gives O(1) average membership checks
+        // instead. Local to this call, not persisted across queries, so there is no
+        // invalidation concern on Insert/Remove/Reset.
+        std::unordered_set<ICollisionActor3DEXT*> seen;
         int minX = 0, minY = 0, minZ = 0, maxX = 0, maxY = 0, maxZ = 0;
         GetCellRange(bounds, minX, minY, minZ, maxX, maxY, maxZ);
 
@@ -80,8 +88,7 @@ namespace CNA::Extended::World3DEXT
                     {
                         for (ICollisionActor3DEXT* actor : cellIt->second)
                         {
-                            if (bounds.Intersects(actor->getShapeProperty().getBoundingBoxProperty())
-                                && std::find(results.begin(), results.end(), actor) == results.end())
+                            if (bounds.Intersects(actor->getShapeProperty().getBoundingBoxProperty()) && seen.insert(actor).second)
                             {
                                 results.push_back(actor);
                             }
