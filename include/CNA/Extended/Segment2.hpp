@@ -80,6 +80,7 @@ namespace CNA::Extended
 
         /**
          * @brief Determines whether this Segment2 intersects with the specified RectangleF.
+         * @param rectangle The rectangle to test for intersection.
          * @param intersectionPoint Receives the point of intersection if found, otherwise
          * Vector2(NaN, NaN).
          */
@@ -88,6 +89,7 @@ namespace CNA::Extended
         /**
          * @brief Determines whether this Segment2 intersects with the specified
          * BoundingRectangle.
+         * @param boundingRectangle The bounding rectangle to test for intersection.
          * @param intersectionPoint Receives the point of intersection if found, otherwise
          * Vector2(NaN, NaN).
          */

@@ -108,6 +108,8 @@ namespace CNA::Extended
 
         /**
          * @brief Computes the RectangleF from a minimum Vector2 and maximum Vector2.
+         * @param minimum The minimum Vector2.
+         * @param maximum The maximum Vector2.
          * @param result Receives the resulting rectangle.
          */
         static void CreateFrom(const Vector2& minimum, const Vector2& maximum, RectangleF& result);
@@ -117,6 +119,7 @@ namespace CNA::Extended
 
         /**
          * @brief Computes the smallest RectangleF that contains the specified points.
+         * @param points The points to compute the bounding rectangle from.
          * @param result Receives the resulting rectangle.
          */
         static void CreateFrom(const std::vector<Vector2>& points, RectangleF& result);
@@ -126,6 +129,8 @@ namespace CNA::Extended
 
         /**
          * @brief Transforms a RectangleF by the specified Matrix3x2.
+         * @param rectangle The rectangle to transform.
+         * @param transformMatrix The transform to apply.
          * @param result Receives the resulting rectangle.
          */
         static void Transform(RectangleF& rectangle, Matrix3x2& transformMatrix, RectangleF& result);
@@ -147,6 +152,8 @@ namespace CNA::Extended
 
         /**
          * @brief Computes the RectangleF that contains the two specified RectangleF structures.
+         * @param first The first rectangle.
+         * @param second The second rectangle.
          * @param result Receives the resulting rectangle.
          */
         static void Union(const RectangleF& first, const RectangleF& second, RectangleF& result);
@@ -160,6 +167,8 @@ namespace CNA::Extended
         /**
          * @brief Computes the RectangleF that represents the intersection of two RectangleF
          * structures.
+         * @param value1 The first rectangle.
+         * @param value2 The second rectangle.
          * @param result Receives the intersection, or RectangleF::Empty if there is none.
          */
         static void Intersect(const RectangleF& value1, const RectangleF& value2, RectangleF& result);
@@ -197,6 +206,7 @@ namespace CNA::Extended
         /**
          * @brief Normalizes a RectangleF so that Width and Height are positive without changing
          * the location of the rectangle.
+         * @param rectangle The rectangle to normalize.
          * @param result Receives the normalized rectangle.
          */
         static void Normalize(const RectangleF& rectangle, RectangleF& result);

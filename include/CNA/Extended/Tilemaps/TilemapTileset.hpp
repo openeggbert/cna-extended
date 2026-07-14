@@ -76,6 +76,7 @@ namespace CNA::Extended::Tilemaps
         /**
          * @brief Resolves the texture and source rectangle to use when rendering tile @p localId, applying current
          * animation-frame advancement and any per-tile custom image automatically.
+         * @param localId The local tile ID (within this tileset) to resolve.
          * @param texture Receives the texture to draw from.
          * @param sourceRect Receives the source rectangle within @p texture.
          */

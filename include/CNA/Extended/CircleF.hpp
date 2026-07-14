@@ -70,6 +70,8 @@ namespace CNA::Extended
 
         /**
          * @brief Computes the bounding CircleF from a minimum and maximum Vector2.
+         * @param minimum The minimum Vector2.
+         * @param maximum The maximum Vector2.
          * @param result Receives the resulting circle.
          */
         static void CreateFrom(const Vector2& minimum, const Vector2& maximum, CircleF& result);
@@ -79,6 +81,7 @@ namespace CNA::Extended
 
         /**
          * @brief Computes the bounding CircleF from a list of points.
+         * @param points The points to compute the bounding circle from.
          * @param result Receives the resulting circle.
          */
         static void CreateFrom(const std::vector<Vector2>& points, CircleF& result);

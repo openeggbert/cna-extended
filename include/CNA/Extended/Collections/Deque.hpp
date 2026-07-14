@@ -477,6 +477,7 @@ namespace CNA::Extended::Collections
 
         /**
          * @brief Gets the element at the specified logical index without throwing.
+         * @param index The logical index to retrieve.
          * @param item Receives the element if found; otherwise T{}.
          * @return true if @p index was non-negative and less than Count.
          */

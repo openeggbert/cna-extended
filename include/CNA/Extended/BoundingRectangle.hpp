@@ -55,6 +55,8 @@ namespace CNA::Extended
 
         /**
          * @brief Computes the BoundingRectangle from a minimum Vector2 and maximum Vector2.
+         * @param minimum The minimum Vector2.
+         * @param maximum The maximum Vector2.
          * @param result Receives the resulting bounding rectangle.
          */
         static void CreateFrom(const Vector2& minimum, const Vector2& maximum, BoundingRectangle& result);
@@ -64,6 +66,7 @@ namespace CNA::Extended
 
         /**
          * @brief Computes the BoundingRectangle from a list of Vector2 structures.
+         * @param points The points to compute the bounding rectangle from.
          * @param result Receives the resulting bounding rectangle.
          */
         static void CreateFrom(const std::vector<Vector2>& points, BoundingRectangle& result);
@@ -75,6 +78,8 @@ namespace CNA::Extended
          * @brief Computes the BoundingRectangle from the specified BoundingRectangle transformed
          * by the specified Matrix3x2. Note: mutates @p boundingRectangle's Center/HalfExtents in
          * place (matches upstream, which passes @p boundingRectangle by `ref`).
+         * @param boundingRectangle The bounding rectangle to transform.
+         * @param transformMatrix The transform to apply.
          * @param result Receives the resulting bounding rectangle.
          */
         static void Transform(BoundingRectangle& boundingRectangle, Matrix3x2& transformMatrix, BoundingRectangle& result);
@@ -97,6 +102,8 @@ namespace CNA::Extended
         /**
          * @brief Computes the BoundingRectangle that contains the two specified
          * BoundingRectangle structures.
+         * @param first The first bounding rectangle.
+         * @param second The second bounding rectangle.
          * @param result Receives the resulting bounding rectangle.
          */
         static void Union(const BoundingRectangle& first, const BoundingRectangle& second, BoundingRectangle& result);
@@ -113,6 +120,8 @@ namespace CNA::Extended
         /**
          * @brief Computes the BoundingRectangle that is in common between the two specified
          * BoundingRectangle structures.
+         * @param first The first bounding rectangle.
+         * @param second The second bounding rectangle.
          * @param result Receives the intersection, or BoundingRectangle::Empty if there is none.
          */
         static void Intersection(const BoundingRectangle& first, const BoundingRectangle& second, BoundingRectangle& result);

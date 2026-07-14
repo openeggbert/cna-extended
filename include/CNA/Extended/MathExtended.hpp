@@ -30,6 +30,8 @@ namespace CNA::Extended
         /**
          * @brief Calculates a new Vector2 with the component-wise minimum values from two given
          * Vector2 values.
+         * @param first The first Vector2 value.
+         * @param second The second Vector2 value.
          * @param result Receives the calculated Vector2 value with the component-wise minimum
          * values.
          */
@@ -44,6 +46,8 @@ namespace CNA::Extended
         /**
          * @brief Calculates a new Vector2 with the component-wise maximum values from two given
          * Vector2 values.
+         * @param first The first Vector2 value.
+         * @param second The second Vector2 value.
          * @param result Receives the calculated Vector2 value with the component-wise maximum
          * values.
          */

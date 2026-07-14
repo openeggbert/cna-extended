@@ -45,6 +45,7 @@ namespace CNA::Extended
     /**
      * @brief Constructs a new T via the specified factory function and adds it to the collection.
      * @tparam T The IGameComponent-implementing type to construct and add.
+     * @param collection The collection to add the newly constructed component to.
      * @param createGameComponent A factory function that constructs and returns the new component.
      * @return A pointer to the newly constructed and added component.
      */

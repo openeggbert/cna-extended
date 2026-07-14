@@ -46,6 +46,8 @@ namespace CNA::Extended::Tilemaps::Parsers
 
         /**
          * @brief Parses a tilemap from @p stream.
+         * @param stream The stream containing the map data.
+         * @param graphicsDevice The graphics device used to create textures for referenced tileset images.
          * @param basePath The base path for resolving relative file references.
          * @throws TilemapParseException the stream cannot be parsed.
          */

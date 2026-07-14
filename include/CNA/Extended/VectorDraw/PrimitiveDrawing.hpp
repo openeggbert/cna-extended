@@ -49,6 +49,10 @@ namespace CNA::Extended::VectorDraw
 
         /**
          * @brief Draws a solid (filled) rectangle with an optional outline.
+         * @param location The top-left corner of the rectangle.
+         * @param width The width of the rectangle.
+         * @param height The height of the rectangle.
+         * @param color The fill (and, when @p outline is true, outline) color.
          * @param outline When true, an outline is drawn over the filled rectangle.
          */
         void DrawSolidRectangle(const Vector2& location, float width, float height, const Color& color, bool outline = true);
@@ -67,9 +71,13 @@ namespace CNA::Extended::VectorDraw
 
         /**
          * @brief Draws an arc outline.
+         * @param center The center of the arc.
+         * @param radius The radius of the arc.
+         * @param startAngle The starting angle, in radians.
          * @param sweepAngle The sweep angle in radians. Positive values sweep counter-clockwise.
          * Use MathHelper::TwoPi to draw a full circle.
          * @param sides The number of line segments used to approximate the arc.
+         * @param color The color of the arc.
          */
         void DrawArc(const Vector2& center, float radius, float startAngle, float sweepAngle, int sides, const Color& color);
 
@@ -87,12 +95,16 @@ namespace CNA::Extended::VectorDraw
          * @brief Draws a polygon outline.
          * @param position The world offset applied to all vertices.
          * @param vertices The polygon vertices in local space.
+         * @param color The color of the polygon outline.
          * @param closed When true, an edge is drawn between the last and first vertex to close the polygon.
          */
         void DrawPolygon(const Vector2& position, const std::vector<Vector2>& vertices, const Color& color, bool closed = true);
 
         /**
          * @brief Draws a solid (filled) polygon with an optional outline.
+         * @param position The world offset applied to all vertices.
+         * @param vertices The polygon vertices in local space.
+         * @param color The fill (and, when @p outline is true, outline) color.
          * @param outline When true, an outline is drawn over the filled polygon.
          */
         void DrawSolidPolygon(const Vector2& position, const std::vector<Vector2>& vertices, const Color& color, bool outline = true);
@@ -102,6 +114,10 @@ namespace CNA::Extended::VectorDraw
 
         /**
          * @brief Draws a solid (filled) ellipse with an optional outline.
+         * @param center The center of the ellipse.
+         * @param radius The x/y radii of the ellipse.
+         * @param sides The number of line segments used to approximate the ellipse.
+         * @param color The fill (and, when @p outline is true, outline) color.
          * @param outline When true, an outline is drawn over the filled ellipse.
          */
         void DrawSolidEllipse(const Vector2& center, const Vector2& radius, int sides, const Color& color, bool outline = true);

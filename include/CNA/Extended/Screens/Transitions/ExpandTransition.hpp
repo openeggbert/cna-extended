@@ -29,6 +29,8 @@ namespace CNA::Extended::Screens::Transitions
         /**
          * @brief Creates an expand transition to/from @p color over @p duration seconds (default 1.0).
          * @param graphicsDevice The device whose viewport is used to size the rectangle and that the internal SpriteBatch draws to.
+         * @param color The solid color the rectangle expands/collapses to/from.
+         * @param duration The transition's duration, in seconds.
          */
         explicit ExpandTransition(GraphicsDevice& graphicsDevice, const Color& color, float duration = 1.0f);
 

@@ -55,6 +55,8 @@ namespace CNA::Extended::Tilemaps::LDtk
 
         /**
          * @brief Parses a tilemap from an LDtk project stream, representing the first level in the project.
+         * @param stream The stream containing the LDtk project JSON data.
+         * @param graphicsDevice The graphics device used to create textures for referenced tileset images.
          * @param basePath The base path for resolving relative file references. If empty, uses the base directory from the constructor, or the current directory if neither is set.
          * @throws Parsers::TilemapParseException the stream cannot be parsed.
          */

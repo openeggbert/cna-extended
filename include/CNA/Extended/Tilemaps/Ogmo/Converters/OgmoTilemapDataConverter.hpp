@@ -20,6 +20,8 @@ namespace CNA::Extended::Tilemaps::Ogmo::Converters
 
     /**
      * @brief Converts a parsed Ogmo level+project pair to the format-agnostic TilemapData intermediate representation.
+     * @param level The parsed Ogmo level document.
+     * @param project The parsed Ogmo project document referenced by @p level.
      * @param baseDirectory Directory relative tileset image paths are resolved against.
      * @param resourceResolver Used to open tileset images to read their pixel dimensions (needed to compute tile-grid column/row counts).
      */

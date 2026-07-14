@@ -59,6 +59,8 @@ namespace CNA::Extended::Tilemaps::Tiled
 
         /**
          * @brief Parses a Tiled TMX file from a stream.
+         * @param stream The stream containing the TMX (XML or JSON) map data.
+         * @param graphicsDevice The graphics device used to create textures for referenced tileset images.
          * @param basePath The base path for resolving relative file references. If empty, uses the base directory from the constructor, or the current directory if neither is set.
          * @throws Parsers::TilemapParseException the stream cannot be parsed.
          */

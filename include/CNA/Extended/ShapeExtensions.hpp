@@ -97,9 +97,15 @@ namespace CNA::Extended
 
     /**
      * @brief Draws an arc outline centered at @p center.
+     * @param spriteBatch The sprite batch to draw with; must have an active Begin/End pair.
+     * @param center The center of the arc.
+     * @param radius The radius of the arc.
      * @param startAngle Starting angle in radians.
      * @param sweepAngle Sweep angle in radians; positive sweeps counter-clockwise. Use two pi for a full circle.
      * @param sides Number of line segments used to approximate the arc.
+     * @param color The color of the arc.
+     * @param thickness The thickness, in pixels, of the arc's line.
+     * @param layerDepth The depth at which the arc is drawn, for depth-sorted batches.
      */
     void DrawArc(SpriteBatch& spriteBatch, const Vector2& center, float radius, float startAngle, float sweepAngle, int sides,
         const Color& color, float thickness = 1.0f, float layerDepth = 0.0f);

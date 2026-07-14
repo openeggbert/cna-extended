@@ -47,6 +47,7 @@ namespace CNA::Extended::Tilemaps::Ogmo
         /**
          * @brief Parses a tilemap from the specified Ogmo level file.
          * @param path The path to the Ogmo level file (.json). Can be absolute or relative to the base directory specified in the constructor.
+         * @param graphicsDevice The graphics device used to create textures for referenced tileset images.
          * @throws std::invalid_argument @p path is empty.
          * @throws System::IO::FileNotFoundException the specified level file does not exist.
          * @throws Parsers::TilemapParseException an error occurred while parsing the file.
@@ -55,6 +56,8 @@ namespace CNA::Extended::Tilemaps::Ogmo
 
         /**
          * @brief Parses a tilemap from a stream containing Ogmo level data.
+         * @param stream The stream containing the Ogmo level JSON data.
+         * @param graphicsDevice The graphics device used to create textures for referenced tileset images.
          * @param basePath Optional base path for resolving relative file references. If empty, uses the project file's directory.
          * @throws Parsers::TilemapParseException an error occurred while parsing the stream.
          */

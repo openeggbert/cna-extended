@@ -30,6 +30,8 @@ namespace CNA::Extended::Screens::Transitions
         /**
          * @brief Creates a fade transition to/from @p color over @p duration seconds (default 1.0).
          * @param graphicsDevice The device whose viewport is faded and that the internal SpriteBatch draws to.
+         * @param color The solid color the viewport fades to/from.
+         * @param duration The transition's duration, in seconds.
          */
         explicit FadeTransition(GraphicsDevice& graphicsDevice, const Color& color, float duration = 1.0f);
 

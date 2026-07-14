@@ -50,6 +50,7 @@ namespace CNA::Extended
     /**
      * @brief Normalizes a Rectangle so that Width and Height are positive without changing the
      * location of the rectangle.
+     * @param rectangle The rectangle to normalize.
      * @param result Receives the normalized rectangle.
      */
     void Normalize(const Rectangle& rectangle, Rectangle& result);

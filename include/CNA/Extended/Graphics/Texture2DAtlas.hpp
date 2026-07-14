@@ -176,6 +176,10 @@ namespace CNA::Extended::Graphics
         /**
          * @brief Creates a new atlas from @p texture by dividing it into a grid of regions, named
          * `"{name}_{index}"` in row-major (left-to-right, top-to-bottom) order.
+         * @param name The base name used to generate each region's `"{name}_{index}"` name.
+         * @param texture The texture to divide into regions.
+         * @param regionWidth The width, in pixels, of each region.
+         * @param regionHeight The height, in pixels, of each region.
          * @param maxRegionCount Maximum number of regions to create. Defaults to INT_MAX.
          * @param margin Margin, in pixels, to leave around the edges of the texture.
          * @param spacing Spacing, in pixels, between regions.

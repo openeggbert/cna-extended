@@ -49,6 +49,8 @@ namespace CNA::Extended::Particles::ParticleEffectSerializer
 
     /**
      * @brief Deserializes a ParticleEffect from a stream containing XML data.
+     * @param stream The stream to read the XML data from.
+     * @param content The content manager used to load referenced textures.
      * @param baseDirectory Base directory for resolving relative texture paths; if empty, uses @p content's RootDirectory.
      * @throws System::Xml::XmlException the XML format is invalid.
      */

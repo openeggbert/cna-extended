@@ -17,8 +17,8 @@ namespace CNA::Extended::Tilemaps::Tiled
     using Microsoft::Xna::Framework::Color;
 
     /**
-     * @brief Parses a Tiled color string (#RRGGBB or #AARRGGBB), or std::nullopt for empty/whitespace input.
-     * @throws Parsers::TilemapParseException @p colorString is non-empty but not a valid #RRGGBB/#AARRGGBB color.
+     * @brief Parses a Tiled color string (`#RRGGBB` or `#AARRGGBB`), or std::nullopt for empty/whitespace input.
+     * @throws Parsers::TilemapParseException @p colorString is non-empty but not a valid `#RRGGBB`/`#AARRGGBB` color.
      */
     [[nodiscard]] std::optional<Color> Parse(const std::string& colorString);
 

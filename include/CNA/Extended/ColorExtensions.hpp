@@ -18,7 +18,7 @@ namespace CNA::Extended
     /**
      * @brief Converts a Color to its hexadecimal string representation in RGBA format.
      * @param color The Color to convert.
-     * @return A hexadecimal string representation of the color in the format #RRGGBBAA.
+     * @return A hexadecimal string representation of the color in the format `#RRGGBBAA`.
      */
     [[nodiscard]] std::string ToHex(const Color& color);
 }
