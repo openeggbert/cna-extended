@@ -1,19 +1,35 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) Robert Vokac and contributors
 //
-// TryGetBoxSphereCollision's "sphere center inside the box" branch previously used a
-// deliberate simplification (box-center-to-sphere-center direction, PenetrationDepth ==
-// Radius) that turned out to be a real correctness bug, not just a simplification: for a
-// center inside the box, that direction is not necessarily an outward face normal, and the
-// returned depth never accounts for the distance from the center to the box surface at
-// all -- so the computed MTV does not actually separate the shapes in general. Found by an
-// independent audit (audit.md, finding A-01) and independently re-verified before fixing
-// (this project's standing "verify before trusting" discipline). Fixed per plan3d.md's
-// Phase 10 entry: find the nearest of the box's 6 faces (the exact axis-aligned-box
-// equivalent of "nearest point on the surface" when the query point is inside), use that
-// face's outward normal, and set depth to the distance to that face *plus* the sphere's
-// full radius -- the box must move that far to clear the sphere entirely, not just until
-// the sphere's center reaches the face.
+// TryGetBoxSphereCollision's "sphere center inside the box" branch has gone through two
+// rounds of fixes for the same finding (audit.md A-01), both times independently
+// re-verified before acting (this project's standing "verify before trusting" discipline
+// -- extended here to a second round: re-verifying a *re-review*, not just the original
+// audit):
+//
+// Round 1 replaced the original deliberate simplification (box-center-to-sphere-center
+// direction, depth == radius -- wrong because that direction isn't necessarily an outward
+// face normal, and the depth ignored the distance from the center to the box surface
+// entirely) with "nearest face's own outward normal, depth = distance-to-that-face +
+// radius". That direction was still wrong, caught by re-review: moving the box *through*
+// its nearest face drags the box's OPPOSITE face across the sphere's entire width, which
+// needs distance-to-the-*opposite*-face + radius, not distance-to-the-near-face + radius.
+// Concrete counter-example that exposed it: box [-2,2] on X, sphere center x=1.5, radius 1
+// -- round 1 returned +X/depth 1.5, translating the box to [-0.5, 3.5], which still
+// overlaps the sphere's [0.5, 2.5] interval on that axis.
+//
+// Round 2 (this fix) keeps round 1's magnitude (nearest-face distance + radius is, in
+// fact, already the correct minimal depth -- proven below) and flips only the direction:
+// escaping *away* from the nearest face (through that face's own opposite side) is what
+// costs distance-to-that-face + radius; escaping *through* it costs
+// distance-to-the-opposite-face + radius, which is larger whenever that face really is the
+// nearest one. Proof via direct SAT-style derivation: translating the box by t along +X
+// requires box.Min.X + t >= sphere.Center.X + radius (box's leading edge must clear the
+// sphere's far side), i.e. t >= (sphere.Center.X - box.Min.X) + radius -- the distance to
+// the box's Min (-X) face, not the Max (+X) face. So the minimal t comes from whichever
+// face is *nearer*, but moving in the direction *away* from it. This also matches the
+// already-correct branch above (sphere strictly outside the box), whose established
+// convention likewise moves the box away from the sphere's approach side, not through it.
 #include "CNA/Extended/World3DEXT/CollisionShape3DEXT.hpp"
 
 #include <algorithm>
@@ -162,9 +178,21 @@ namespace CNA::Extended::World3DEXT
 
         // Sphere center is inside (or exactly on the surface of) the box: GetClosestPoint
         // degenerates to the center itself, so no "nearest surface point" direction exists
-        // from that alone. Find the nearest of the box's 6 faces instead -- the box must
-        // move out through that face by the distance to it, plus the sphere's full radius,
-        // so the sphere clears the face entirely rather than merely touching it.
+        // from that alone.
+        //
+        // ROUND 2 FIX (audit.md A-01, caught by re-review after the first attempt): the
+        // first fix moved the box *through* its nearest face -- e.g. for a box [-2,2] on X
+        // with the sphere center at x=1.5, radius 1, it returned +X/depth 1.5, translating
+        // the box to [-0.5, 3.5], which still overlaps the sphere's [0.5, 2.5] interval.
+        // Proven by direct SAT-style derivation (moving the box by t along +X requires
+        // Min.X+t >= sphere.Center+radius, i.e. t >= (sphere.Center-Min.X)+radius -- the
+        // distance to the *opposite* face, not the near one): escaping through face F
+        // costs distanceToOppositeFace(F)+radius, while escaping *away* from F (through F's
+        // own opposite side) costs only distanceToF+radius -- the minimum of the two.  So
+        // the nearest-face distance is the right magnitude (unchanged from the first fix),
+        // but the escape direction is the *opposite* of that face's own outward normal --
+        // matching the branch above, whose already-correct convention also moves the box
+        // away from the sphere's approach side, not through it.
         const float distToMaxX = box.Max.X - sphere.Center.X;
         const float distToMinX = sphere.Center.X - box.Min.X;
         const float distToMaxY = box.Max.Y - sphere.Center.Y;
@@ -172,32 +200,33 @@ namespace CNA::Extended::World3DEXT
         const float distToMaxZ = box.Max.Z - sphere.Center.Z;
         const float distToMinZ = sphere.Center.Z - box.Min.Z;
 
+        // normal is the *opposite* of the nearest face's own outward direction (see above).
         float faceDistance = distToMaxX;
-        Vector3 normal(1.0f, 0.0f, 0.0f);
+        Vector3 normal(-1.0f, 0.0f, 0.0f);
         if (distToMinX < faceDistance)
         {
             faceDistance = distToMinX;
-            normal = Vector3(-1.0f, 0.0f, 0.0f);
+            normal = Vector3(1.0f, 0.0f, 0.0f);
         }
         if (distToMaxY < faceDistance)
         {
             faceDistance = distToMaxY;
-            normal = Vector3(0.0f, 1.0f, 0.0f);
+            normal = Vector3(0.0f, -1.0f, 0.0f);
         }
         if (distToMinY < faceDistance)
         {
             faceDistance = distToMinY;
-            normal = Vector3(0.0f, -1.0f, 0.0f);
+            normal = Vector3(0.0f, 1.0f, 0.0f);
         }
         if (distToMaxZ < faceDistance)
         {
             faceDistance = distToMaxZ;
-            normal = Vector3(0.0f, 0.0f, 1.0f);
+            normal = Vector3(0.0f, 0.0f, -1.0f);
         }
         if (distToMinZ < faceDistance)
         {
             faceDistance = distToMinZ;
-            normal = Vector3(0.0f, 0.0f, -1.0f);
+            normal = Vector3(0.0f, 0.0f, 1.0f);
         }
 
         const float depth = faceDistance + sphere.Radius;

@@ -19,7 +19,7 @@ non-upstream 3D scene extension — camera, transform hierarchy, model/skinned-m
 rendering, 3D collisions, billboards/text/debug-draw, particles, voxel tilemaps, and an
 end-to-end `world3d_demo` example — with all 9 of its own phases complete and an
 independent audit's follow-up fixes (`plan3d.md`'s Phase 10) in progress. Current test
-count: 2175/2175 passing (see `NEXT.md` for the most up-to-date figure, since this number
+count: 2176/2176 passing (see `NEXT.md` for the most up-to-date figure, since this number
 moves as work continues).
 
 ## Modules

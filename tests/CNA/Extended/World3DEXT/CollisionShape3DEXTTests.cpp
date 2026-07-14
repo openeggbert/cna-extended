@@ -132,44 +132,75 @@ namespace CNA::Extended::World3DEXT
     // degenerates to the center itself, dist == 0), previously mishandled -- see
     // CollisionShape3DEXT.cpp's file header for the bug this fixes.
 
+    namespace
+    {
+        // Directly proves the MTV actually separates the shapes, rather than just checking
+        // specific numeric fields (a round-1 version of these tests checked the fields but
+        // not actual separation, which is exactly how round 1's direction bug slipped
+        // through -- see CollisionShape3DEXT.cpp's file header). Translates the box's AABB
+        // by the MTV and asserts the translated box's interval no longer overlaps the
+        // sphere's own interval on every axis (a sphere's projection onto any axis is
+        // exactly [center-radius, center+radius], so this is an exact check, not an
+        // approximation).
+        void ExpectMtvActuallySeparates(const BoundingBox& box, const BoundingSphere& sphere, const CollisionResult3DEXT& result)
+        {
+            const BoundingBox moved(box.Min + result.MinimumTranslationVector, box.Max + result.MinimumTranslationVector);
+            const auto separatedOnAxis = [](float boxMin, float boxMax, float sphereCenter, float radius) {
+                return boxMax <= sphereCenter - radius + 1e-4f || boxMin >= sphereCenter + radius - 1e-4f;
+            };
+            const bool separated = separatedOnAxis(moved.Min.X, moved.Max.X, sphere.Center.X, sphere.Radius) ||
+                                    separatedOnAxis(moved.Min.Y, moved.Max.Y, sphere.Center.Y, sphere.Radius) ||
+                                    separatedOnAxis(moved.Min.Z, moved.Max.Z, sphere.Center.Z, sphere.Radius);
+            EXPECT_TRUE(separated) << "translated box [" << moved.Min.X << "," << moved.Max.X << "]x[" << moved.Min.Y << ","
+                                    << moved.Max.Y << "]x[" << moved.Min.Z << "," << moved.Max.Z << "] still overlaps sphere center=("
+                                    << sphere.Center.X << "," << sphere.Center.Y << "," << sphere.Center.Z << ") radius=" << sphere.Radius;
+        }
+    }
+
     TEST(CollisionShape3DEXTTests, BoxSphere_TryGetCollision_SphereCenterAtBoxCenter_PicksDeterministicFaceAndFullDepth)
     {
         CollisionShape3DEXT box(kUnitCube);
-        CollisionShape3DEXT sphere(BoundingSphere(Vector3(0.0f, 0.0f, 0.0f), 0.5f));
+        const BoundingSphere sphereShape(Vector3(0.0f, 0.0f, 0.0f), 0.5f);
+        CollisionShape3DEXT sphere(sphereShape);
 
         CollisionResult3DEXT result;
         ASSERT_TRUE(box.TryGetCollision(sphere, result));
         // All six faces are equidistant (1.0) from a dead-center point; the nearest-face scan's
-        // deterministic tie-breaking (first candidate wins ties) always selects +X here.
-        EXPECT_NEAR(result.Normal.X, 1.0f, 1e-4f);
+        // deterministic tie-breaking (first candidate wins ties) always selects +X as
+        // *nearest*, so the escape direction (away from the nearest face) is -X.
+        EXPECT_NEAR(result.Normal.X, -1.0f, 1e-4f);
         EXPECT_NEAR(result.Normal.Y, 0.0f, 1e-4f);
         EXPECT_NEAR(result.Normal.Z, 0.0f, 1e-4f);
-        // Box must clear the sphere entirely: distance to face (1.0) + full radius (0.5).
+        // Box must clear the sphere entirely: distance to the nearest face (1.0) + full radius (0.5).
         EXPECT_NEAR(result.PenetrationDepth, 1.5f, 1e-4f);
+        ExpectMtvActuallySeparates(kUnitCube, sphereShape, result);
     }
 
     TEST(CollisionShape3DEXTTests, BoxSphere_TryGetCollision_EmbeddedNearEachFace_PicksThatFaceAndFullDepth)
     {
-        // (sphere center, expected outward face normal) -- radius is always 1.0, and every
-        // center sits 0.5 units from exactly one face of kBoxAsymmetric, so expected depth is
-        // always 0.5 (distance to face) + 1.0 (radius) = 1.5.
+        // (sphere center, expected escape normal -- the OPPOSITE of the nearest face's own
+        // outward direction, see CollisionShape3DEXT.cpp's file header for why) -- radius is
+        // always 1.0, and every center sits 0.5 units from exactly one face of
+        // kBoxAsymmetric, so expected depth is always 0.5 (distance to that face) + 1.0
+        // (radius) = 1.5.
         const struct
         {
             Vector3 center;
             Vector3 expectedNormal;
         } cases[] = {
-            {Vector3(1.5f, 0.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f)},
-            {Vector3(-1.5f, 0.0f, 0.0f), Vector3(-1.0f, 0.0f, 0.0f)},
-            {Vector3(0.0f, 2.5f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)},
-            {Vector3(0.0f, -2.5f, 0.0f), Vector3(0.0f, -1.0f, 0.0f)},
-            {Vector3(0.0f, 0.0f, 3.5f), Vector3(0.0f, 0.0f, 1.0f)},
-            {Vector3(0.0f, 0.0f, -3.5f), Vector3(0.0f, 0.0f, -1.0f)},
+            {Vector3(1.5f, 0.0f, 0.0f), Vector3(-1.0f, 0.0f, 0.0f)},
+            {Vector3(-1.5f, 0.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f)},
+            {Vector3(0.0f, 2.5f, 0.0f), Vector3(0.0f, -1.0f, 0.0f)},
+            {Vector3(0.0f, -2.5f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)},
+            {Vector3(0.0f, 0.0f, 3.5f), Vector3(0.0f, 0.0f, -1.0f)},
+            {Vector3(0.0f, 0.0f, -3.5f), Vector3(0.0f, 0.0f, 1.0f)},
         };
 
         for (const auto& testCase : cases)
         {
             CollisionShape3DEXT box(kBoxAsymmetric);
-            CollisionShape3DEXT sphere(BoundingSphere(testCase.center, 1.0f));
+            const BoundingSphere sphereShape(testCase.center, 1.0f);
+            CollisionShape3DEXT sphere(sphereShape);
 
             CollisionResult3DEXT result;
             ASSERT_TRUE(box.TryGetCollision(sphere, result));
@@ -177,7 +208,26 @@ namespace CNA::Extended::World3DEXT
             EXPECT_NEAR(result.Normal.Y, testCase.expectedNormal.Y, 1e-4f);
             EXPECT_NEAR(result.Normal.Z, testCase.expectedNormal.Z, 1e-4f);
             EXPECT_NEAR(result.PenetrationDepth, 1.5f, 1e-4f);
+            ExpectMtvActuallySeparates(kBoxAsymmetric, sphereShape, result);
         }
+    }
+
+    TEST(CollisionShape3DEXTTests, BoxSphere_TryGetCollision_EmbeddedNonUniformBox_MtvActuallySeparates)
+    {
+        // Regression for the exact counter-example that caught round 1's direction bug
+        // (see CollisionShape3DEXT.cpp's file header): box [-2,2] on X (part of
+        // kBoxAsymmetric), sphere center x=1.5, radius 1. Round 1 returned +X/depth 1.5,
+        // translating the box to [-0.5, 3.5] -- which still overlaps the sphere's
+        // [0.5, 2.5] interval. The fixed code must return -X/depth 1.5 instead.
+        CollisionShape3DEXT box(kBoxAsymmetric);
+        const BoundingSphere sphereShape(Vector3(1.5f, 0.0f, 0.0f), 1.0f);
+        CollisionShape3DEXT sphere(sphereShape);
+
+        CollisionResult3DEXT result;
+        ASSERT_TRUE(box.TryGetCollision(sphere, result));
+        EXPECT_NEAR(result.Normal.X, -1.0f, 1e-4f);
+        EXPECT_NEAR(result.PenetrationDepth, 1.5f, 1e-4f);
+        ExpectMtvActuallySeparates(kBoxAsymmetric, sphereShape, result);
     }
 
     TEST(CollisionShape3DEXTTests, SphereBox_TryGetCollision_EmbeddedCase_IsInverseOfBoxSphere)

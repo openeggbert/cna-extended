@@ -530,6 +530,21 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       outward normal, and set `depth = distanceToThatFace + sphere.Radius`. Add tests: dead
       center, all 6 near-face cases, a non-uniform (non-cube) box, and the inverse
       (`sphere.TryGetCollision(box)`) call.
+      **Round 2 (caught by a follow-up Codex re-review, 2026-07-14, independently
+      re-verified before fixing — same discipline extended to a re-review of a re-review):
+      round 1's fix moved the box *through* its nearest face, not away from it.**
+      Counter-example: box `[-2,2]` on X, sphere center `x=1.5`, radius `1` — round 1
+      returned `+X`/depth `1.5`, translating the box to `[-0.5, 3.5]`, which still overlaps
+      the sphere's `[0.5, 2.5]` interval. Proven via direct SAT-style derivation: the
+      minimal depth (nearest-face distance + radius) was already correct, but the escape
+      direction must be the *opposite* of the nearest face's own outward normal (matches
+      the already-correct sphere-outside-the-box branch's convention: move away from the
+      sphere's approach side, not through it). Fixed by flipping the sign; round 1's test
+      values (which asserted specific field values matching the buggy direction, not actual
+      separation) were corrected, and a new `ExpectMtvActuallySeparates` helper was added
+      that translates the box by the MTV and checks real non-overlap against the sphere's
+      exact per-axis interval — this is what should have caught round 1's bug and is now in
+      place so a future regression would be caught the same way.
 - [x] **A-02 (High)** — `TransformHierarchySystemEXT::Update` wires any non-negative
       `ParentEntityIdEXT` without checking for self-parenting or indirect cycles —
       confirmed by re-reading the code. `Transform3`'s world-matrix recomputation
