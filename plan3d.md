@@ -212,23 +212,61 @@ enough to warrant one by the time Phase 1 starts — decide then, not now).
       Both build configs clean (genuine `rm -rf` + fresh configure + build), full suite
       **2091/2093 passing** (was 2089/2091; 2 pre-existing skips unrelated to this phase).
 
-### Phase 5 — `Collisions3DEXT` (3D counterpart of `Collisions2D`)
+### Phase 5 — `Collisions3DEXT` (3D counterpart of `Collisions`) — **COMPLETE (2026-07-14)**
 
-Mirrors `CNA::Extended::Collisions2D`'s shape (`CollisionWorld2D`, a broadphase
-(`QuadTree`/`SpatialHash`), narrow-phase `ICollisionActor`) in 3D, reusing `cna`'s real
-`BoundingBox`/`BoundingSphere`/`BoundingFrustum` (already used for frustum culling in
-Phase 3) instead of `cna-extended`'s existing 2D shape types.
+Mirrors `CNA::Extended::Collisions`'s shape (`CollisionWorld2D`, a broadphase
+(`QuadTree`/`SpatialHash`), narrow-phase `ICollisionActor`/`CollisionShape2D`) in 3D,
+reusing `cna`'s real `BoundingBox`/`BoundingSphere` (already used for frustum culling in
+Phase 3) instead of `cna-extended`'s existing 2D shape types. **Corrections made during
+implementation to this task's original wording** (the module is `CNA::Extended::Collisions`,
+not `Collisions2D`; `ICollisionActor` has no `OnCollisionEXT` callback — it is exactly
+`getIdProperty()`/`getShapeProperty()`; real `CollisionWorld2D` is a query-oriented API
+(`QueryCandidates`/`QueryCollisions`/`QueryCollisionPairs`), not an `Update`-driven
+event-raising one — `CollisionWorld3DEXT` mirrors the real, query-oriented shape instead
+of the imagined design):
 
-- [ ] `ICollisionActor3DEXT` (3D counterpart of `Collisions2D::ICollisionActor`):
-      exposes a `BoundingBox`/`BoundingSphere` bounds, an `OnCollisionEXT` callback.
-- [ ] A broadphase: `OctreeEXT` (3D counterpart of `QuadTree`) — start with the simplest
-      correct version (matching `QuadTree`'s own real structure/API shape where it
-      translates cleanly to 3D), optimize later only if a real need appears.
-- [ ] `CollisionWorld3DEXT` (3D counterpart of `CollisionWorld2D`): registers actors,
-      runs broadphase + narrow-phase collision detection per `Update`, raises collision
-      events.
-- [ ] Tests mirroring `Collisions2D`'s existing test coverage/structure
-      (`CollisionWorld2DTests.cpp`, `QuadTreeTests.cpp`) adapted to 3D scenarios.
+- [x] `CollisionShape3DEXT` (3D counterpart of `CollisionShape2D`, scoped to Box/Sphere —
+      not the full Box/Circle/OrientedBox/Capsule/Polygon 5-kind set, which Phase 5's own
+      bullet list never called for) + `CollisionResult3DEXT`/`CollisionShapeKind3DEXT`
+      (3D counterparts of `CollisionResult2D`/`CollisionShapeKind2D`). `Intersects()`
+      delegates to `BoundingBox`/`BoundingSphere`'s own real methods; `TryGetCollision()`'s
+      minimum-translation-vector math (Box/Box per-axis overlap, Sphere/Sphere
+      center-distance-minus-radii, Box/Sphere closest-point) is standard collision-
+      resolution math, not adapted from any specific source — same category as
+      `CollisionShape2D`'s own hand-written legacy-penetration helpers.
+      `include/CNA/Extended/World3DEXT/CollisionShape3DEXT.hpp` +
+      `CollisionResult3DEXT.hpp`/`CollisionShapeKind3DEXT.hpp` + matching `.cpp` files.
+- [x] `ICollisionActor3DEXT` (3D counterpart of `Collisions::ICollisionActor`):
+      `getIdProperty()`/`getShapeProperty() -> CollisionShape3DEXT`, exactly mirroring the
+      real upstream-ported shape. `CollisionEvent3DEXT`/`CollisionPair3DEXT`/
+      `ActorPairKey3DEXT` (3D counterparts of `CollisionEvent2D`/`CollisionPair2D`/
+      `ActorPairKey`) round out the query-result types.
+- [x] `OctreeEXT` (3D counterpart of `QuadTree`) — **design correction, documented
+      transparently in its own header comment**: implemented as a fixed-cell-size 3D
+      spatial hash (`Collisions::SpatialHash`'s own real algorithm extended with a Z
+      axis), not a true recursive octree with node splitting — a uniform grid hash
+      generalizes far more directly from 2D to 3D than `QuadTree`'s recursive-subdivision
+      logic does, while still being a real spatially-accelerated broadphase, matching this
+      task's own "start with the simplest correct version" instruction. True recursive
+      subdivision remains a documented future option if profiling ever shows a need.
+      `include/CNA/Extended/World3DEXT/OctreeEXT.hpp` + `src/.../OctreeEXT.cpp`.
+- [x] `CollisionWorld3DEXT` (3D counterpart of `CollisionWorld2D`): `Insert`/`Remove`/
+      `Contains`/`QueryCandidates`/`QueryCollisions`/`QueryCollisionPairs`/`Rebuild`, owning
+      a single `ICollisionBroadphase3DEXT` (`OctreeEXT` by default). **Deliberately scoped
+      down**: no named-`Layer`/`LayerPair`/cross-layer-filtering system — not called for by
+      this task's own bullet list, and a real multi-layer 3D use case can be added later
+      without touching `ICollisionBroadphase3DEXT` or `CollisionShape3DEXT`.
+      `include/CNA/Extended/World3DEXT/CollisionWorld3DEXT.hpp` + `src/.../CollisionWorld3DEXT.cpp`.
+- [x] Tests mirroring `Collisions`'s existing test coverage/structure
+      (`CollisionShape2DTests.cpp`'s "spot-check pair per delegation branch" philosophy,
+      `SpatialHashTests.cpp`, `CollisionWorld2DTests.cpp`) adapted to 3D scenarios:
+      `CollisionShape3DEXTTests.cpp` (11 tests: None/Box-Box/Sphere-Sphere/Box-Sphere/
+      Sphere-Box `Intersects`+`TryGetCollision`, `CollisionResult3DEXT::Invert`),
+      `OctreeEXTTests.cpp` (9 tests: multi-cell/negative-coordinate/insert-dedup/remove/
+      reset/sphere-bounds scenarios), `CollisionWorld3DEXTTests.cpp` (8 tests: Contains/
+      Remove/QueryCandidates/QueryCollisions/QueryCollisionPairs/Rebuild). 28 tests total.
+      Both build configs clean (genuine `rm -rf` + fresh configure + build), full suite
+      **2119/2121 passing** (was 2091/2093; 2 pre-existing skips unrelated to this phase).
 
 ### Phase 6 — `Graphics3DEXT` (3D counterpart of `Graphics`)
 
