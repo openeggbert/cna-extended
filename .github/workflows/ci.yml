@@ -1,0 +1,116 @@
+name: CI
+
+# audit.md finding A-03: an independent audit's sandbox couldn't run this project's
+# graphics tests at all ("SDL_InitSubSystem(SDL_INIT_VIDEO) failed: No available video
+# device"), and this project had no actual CI wired up to prove headless rendering works
+# anywhere but a developer's own desktop session. NEXT.md documents the concrete recipe
+# that fixes this (a genuinely headless GitHub Actions runner has no real GPU, so it needs
+# `xvfb-run` plus Mesa's `llvmpipe` software rasterizer, not just `xvfb` alone) -- this
+# workflow is that recipe turned into real, running CI, verified against the exact package
+# list confirmed working in this project's own development environment.
+
+on:
+  push:
+    branches: [ develop, master ]
+  pull_request:
+    branches: [ develop, master ]
+  workflow_dispatch: {}
+
+jobs:
+  headers-only:
+    name: Build (headers-only config)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout cna-extended
+        uses: actions/checkout@v4
+        with:
+          submodules: true # vendor/googletest
+
+      - name: Configure (headers-only)
+        run: cmake -S . -B build-headers -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=OFF
+
+      - name: Build
+        run: cmake --build build-headers -j"$(nproc)"
+
+  linked:
+    name: Build + test (linked config, real CNA/EasyGL backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # Sibling repos (cna, sharp-runtime, easy-gl, meta-gl) are plain sibling checkouts
+      # referenced via add_subdirectory(../x) in each project's own CMakeLists.txt, not git
+      # submodules of this repo -- check each out next to this repo's own checkout so the
+      # relative paths resolve, matching cna's own devices-tests.yml CI pattern.
+      - name: Checkout cna-extended
+        uses: actions/checkout@v4
+        with:
+          path: cna-extended
+          submodules: true # vendor/googletest
+
+      - name: Checkout cna
+        uses: actions/checkout@v4
+        with:
+          repository: openeggbert/cna
+          path: cna
+          submodules: true # non-recursive on purpose, matches cna's own CI -- avoids
+                            # unneeded nested SDL_image/SDL_mixer codec submodules
+
+      - name: Checkout sharp-runtime
+        uses: actions/checkout@v4
+        with:
+          repository: openeggbert/sharp-runtime
+          path: sharp-runtime
+
+      - name: Checkout easy-gl
+        uses: actions/checkout@v4
+        with:
+          repository: openeggbert/easy-gl
+          path: easy-gl
+
+      - name: Checkout meta-gl
+        uses: actions/checkout@v4
+        with:
+          repository: openeggbert/meta-gl
+          path: meta-gl
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build pkg-config \
+            libasound2-dev libpulse-dev libaudio-dev libfribidi-dev libjack-dev \
+            libsndio-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
+            libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev \
+            libthai-dev libwayland-dev libdecor-0-dev \
+            libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
+            xvfb libgl1-mesa-dri
+
+      # cna vendors SDL3/SDL_image/SDL_mixer, built from source on first configure
+      # (~6-7 minutes). Cached the same way cna's own CI caches it, keyed off the exact
+      # submodule commits so a submodule bump invalidates it automatically.
+      - name: Cache vendored SDL prebuilt tree
+        uses: actions/cache@v4
+        with:
+          path: cna/.sdl-prebuilt-Linux-x86_64
+          key: sdl-prebuilt-linux-x86_64-${{ hashFiles('cna/third_party/SDL/**', 'cna/third_party/SDL_image/**', 'cna/third_party/SDL_mixer/**') }}
+
+      - name: Configure (linked)
+        working-directory: cna-extended
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=ON
+
+      - name: Build
+        working-directory: cna-extended
+        run: cmake --build build -j"$(nproc)"
+
+      # A genuinely headless runner has no real GPU/DRI device, so GLX falls back to
+      # llvmpipe (Mesa's software rasterizer, provided by libgl1-mesa-dri above) under
+      # xvfb-run's virtual X server. Verified against the exact scenario audit.md's own
+      # sandbox failed on (SDL_InitSubSystem(SDL_INIT_VIDEO): No available video device) --
+      # xvfb-run alone was not sufficient there, which is consistent with libgl1-mesa-dri
+      # (or an equivalent EGL/Mesa software-rasterizer path) being missing in that sandbox.
+      - name: Run tests (xvfb-run + llvmpipe)
+        working-directory: cna-extended
+        run: xvfb-run -a ctest --test-dir build --output-on-failure

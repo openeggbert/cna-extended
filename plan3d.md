@@ -662,6 +662,19 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       to every environment, and this project doesn't document what it actually needs — is
       fair and worth recording explicitly rather than assumed. See `NEXT.md` section 7 for
       the added platform-requirements note.
+      **CI actually wired up (2026-07-14)**: `.github/workflows/ci.yml` turns that
+      documented recipe into running CI — two jobs, `headers-only` (configure+build with
+      `CNA_EXTENDED_LINK_CNA=OFF`, no sibling checkouts needed) and `linked` (checks out
+      `cna`/`sharp-runtime`/`easy-gl`/`meta-gl` as siblings, matching `cna`'s own
+      `devices-tests.yml` checkout pattern, installs the same system package list plus
+      `xvfb`+`libgl1-mesa-dri` for headless software rendering, then runs the full suite
+      via `xvfb-run -a ctest`). **Caveat, stated plainly rather than overclaimed**: this
+      was validated locally via YAML syntax checking and by carefully mirroring `cna`'s own
+      proven-working CI structure + this session's own locally-verified `xvfb-run`
+      recipe — it was NOT end-to-end verified by an actual GitHub Actions run before this
+      commit (no `gh` CLI auth available in this session to check). The push that lands
+      this file will trigger the workflow for real on GitHub's infrastructure; if it fails,
+      that's real, actionable signal, not a regression to hide.
 - [x] **A-10 (Low, already tracked)** — voxel tilemap rendering's lack of chunk
       meshing/hidden-face culling/batching is already recorded as a deliberate,
       documented scope decision (`plan3d.md`'s own Phase 8 entry, `NEXT.md` section 8's
