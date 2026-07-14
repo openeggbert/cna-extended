@@ -99,13 +99,33 @@ enough to warrant one by the time Phase 1 starts — decide then, not now).
       the far plane) — `tests/CNA/Extended/World3DEXT/Camera3DEXTTests.cpp`.
       Both build configs clean, full suite **2086/2086** (was 2079).
 
-### Phase 2 — Transform hierarchy bridge
+### Phase 2 — Transform hierarchy bridge — **COMPLETE (2026-07-14)**
 
-- [ ] `Transform3ComponentEXT` (embeds a `Transform3` + `ParentEntityIdEXT`).
-- [ ] `TransformHierarchySystemEXT` (resolves `ParentEntityIdEXT` → real
-      `Transform3::setParentProperty()` wiring each frame/on change).
-- [ ] Real `ctest`-verified test proving multi-level parent/child world-matrix
-      propagation through a live `ECS::World`.
+- [x] `Transform3ComponentEXT` (embeds a `Transform3` + `ParentEntityIdEXT`).
+      `include/CNA/Extended/World3DEXT/Transform3ComponentEXT.hpp`.
+- [x] `TransformHierarchySystemEXT` (resolves `ParentEntityIdEXT` → real
+      `Transform3::setParentProperty()` wiring each `Update()`; a thin adapter, no new
+      hierarchy logic — `Transform3`'s own dirty-flag world-matrix recompute does the
+      rest unchanged). `include/CNA/Extended/World3DEXT/TransformHierarchySystemEXT.hpp` +
+      `src/.../TransformHierarchySystemEXT.cpp`.
+      Derives from `EntityUpdateSystem`; overriding only the `Initialize(ComponentManager&)`
+      overload hides `EntityUpdateSystem::Initialize(World&)` under
+      `-Werror=overloaded-virtual` — fixed with a `using
+      ECS::Systems::EntityUpdateSystem::Initialize;` declaration.
+- [x] Real `ctest`-verified test proving multi-level parent/child world-matrix
+      propagation through a live `ECS::World`: a 3-level grandparent/parent/child chain
+      (confirms world-position summation through the hierarchy), live parent-move
+      propagation without a second `Update()` call (proving `Transform3`'s existing
+      dirty-flag propagation is doing the work, not this system), and parent detachment
+      falling back to local position. Confirmed by direct reading of `World.cpp`
+      (`ComponentManager`/`EntityManager` are auto-registered in `World`'s own
+      constructor, before any `WorldBuilder`-added system, so `EntityManager::Update()`
+      — which fires `EntityAdded` and populates this system's active-entities set —
+      always runs before this system's own `Update()` within the same
+      `world->Update()` call) that a **single** `world->Update()` call per frame is
+      sufficient, not two. `tests/CNA/Extended/World3DEXT/TransformHierarchySystemEXTTests.cpp`,
+      3 tests. Both build configs clean (genuine `rm -rf` + fresh configure + build),
+      full suite **2089/2089** (was 2086; 2 pre-existing skips unrelated to this phase).
 
 ### Phase 3 — Model rendering, frustum culling, multi-effect pipeline
 

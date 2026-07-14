@@ -20,11 +20,22 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase: DONE.** All 10 phases in `plan.md` are complete as of 2026-07-14 — the
-port itself is finished. There is no active blocker and no phase in progress. See section 4
-for how the two former blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect`
-mismatch, and its trailing pixel-verification test gap) were resolved, and section 8 for
-what a future session might reasonably still do (all optional/non-blocking).
+**Current phase: DONE for the original port.** All 10 phases in `plan.md` are complete as
+of 2026-07-14 — the MonoGame.Extended port itself is finished. See section 4 for how the two
+former blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and
+its trailing pixel-verification test gap) were resolved, and section 8 for what a future
+session might reasonably still do with `plan.md` (all optional/non-blocking).
+
+**A second, separate, owner-approved plan is now active: `plan3d.md`.** Read `3d.md` (the
+design analysis) and `plan3d.md` (the phase-ordered task list, `Status: APPROVED`) before
+touching anything under `World3DEXT/`. It adds `CNA::Extended::World3DEXT` — a 3D scene
+layer (camera, ECS transform hierarchy, model rendering, skinned animation, plus systematic
+3D counterparts of Collisions/Graphics/Particles/Tilemaps) — built on top of the now-complete
+2D port, not a rework of it. This is a genuinely separate, still-in-progress body of work;
+`plan.md`'s "DONE" status above does not apply to it. As of 2026-07-14: Phase 1
+(`Camera3DEXT`) and Phase 2 (`Transform3ComponentEXT`/`TransformHierarchySystemEXT`) are
+complete; Phase 3 (model rendering/frustum culling/multi-effect pipeline) is next — see
+`plan3d.md` §4.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -582,10 +593,12 @@ including resumed ones, and be prepared for a "completed" notification to actual
 
 ## 10. Resume prompt
 
-The porting plan is complete (all 10 phases). There is no required task to resume — if you
-were pointed here expecting unfinished work, re-check `plan.md`'s top `Status:` line and
-this file's section 2 first; something may have changed since this was written, but as of
-2026-07-14 there is nothing outstanding.
+The original porting plan (`plan.md`) is complete (all 10 phases) — nothing outstanding
+there. **The active work is `plan3d.md`** (the `World3DEXT` 3D scene extension, owner-approved
+2026-07-14): Phase 1 (`Camera3DEXT`) and Phase 2 (transform hierarchy bridge) are done; resume
+at Phase 3 (model rendering/frustum culling/multi-effect pipeline) — read `3d.md` and
+`plan3d.md` §4 first. Re-check `plan3d.md`'s checkboxes and this file's section 1 before
+assuming this is still current; something may have changed since this was written.
 
 If the project owner has a new, specific ask (a real request, not "continue the plan"), just
 do that directly rather than inventing work from section 8's optional idea list. If asked to
