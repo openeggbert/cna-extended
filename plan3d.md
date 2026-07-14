@@ -681,6 +681,70 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       deferred-scope list) — the audit independently arriving at the same conclusion is a
       useful confirmation, not a new finding needing its own fix task.
 
+### Phase 11 — 2D/3D parity: collision layers, recursive octree, particles (2026-07-14)
+
+User-requested follow-up after discussing why `World3DEXT` is smaller in scope than the 2D
+port in several places: three deliberately-scoped-down areas (all previously documented as
+"extend later if wanted" candidates in `NEXT.md`) get brought to parity with their 2D
+counterparts, phased smallest/most-mechanical first per the approved plan at
+`/home/robertvokac/.claude/plans/rippling-hugging-stardust.md`. Each sub-phase: implement →
+port tests alongside → verify both CMake configs via genuine `rm -rf` clean rebuild → commit
+→ push → update this file/`NEXT.md` → next phase.
+
+- [x] **Phase A — Collision layers** — mirrors `CollisionWorld2D`'s named-Layer/LayerPair
+      cross-layer-filtering system onto `CollisionWorld3DEXT`, method-for-method against
+      `CollisionWorld2D.hpp`/`.cpp`. New: `Layer3DEXT.hpp`/`.cpp`, `LayerPair3DEXT.hpp`/`.cpp`
+      (mirror `Layer`/`LayerPair`). Reused as-is (no duplicate): `CNA::Extended::Collisions::
+      UndefinedLayerException` — a generic `std::string`-message type with no 2D-specific
+      logic, so a small `World3DEXT` → `Collisions` include was judged an acceptable trade
+      against duplicating an otherwise-identical file (user-confirmed decision).
+      `CollisionWorld3DEXT` restructured from a single implicit `broadphase_` member to
+      `layers_`/`actorLayerNames_`/`layerCollision_`, gaining `DefaultLayerName`,
+      `getLayersProperty`, `SetDefaultLayer`/`AddLayer`/`RemoveLayer`, layer-aware `Insert`,
+      `Contains`/`TryGetLayerName`/`GetLayerName`/`MoveToLayer`/`Remove`,
+      `RebuildDynamicLayers()` (renamed from `Rebuild()`), layer-scoped
+      `QueryCandidates`/`QueryCollisions`/`QueryCollisionPairs`,
+      `EnableCollisionBetweenLayers`/`DisableCollisionBetweenLayers`/
+      `IsCollisionEnabledBetweenLayers`. Two deliberate 3D-specific deviations from the 2D
+      1:1 mirror, both documented in `CollisionWorld3DEXT.hpp`'s own header comment: (1)
+      layer-name parameters default to `""` (2D leaves several required) so existing
+      zero-arg call sites keep compiling; (2) the no-arg constructor auto-registers a
+      `"default"` layer wrapping `SpatialHash3DEXT(16.0f)`, which `CollisionWorld2D()`
+      itself deliberately does *not* do (verified directly against `CollisionWorld2D.cpp` —
+      its own no-arg constructor leaves `layers_` empty, a real upstream-port API trap this
+      port does not reproduce). A third constructor, `CollisionWorld3DEXT(unique_ptr
+      <ICollisionBroadphase3DEXT>)`, was kept alongside the new `CollisionWorld3DEXT(
+      unique_ptr<Layer3DEXT>)` (2D's own shape) purely for the existing test call site that
+      constructs a world directly from a broadphase.
+      Tests: `Layer3DEXTTests.cpp` (5, mirrors `LayerTests.cpp`), `LayerPair3DEXTTests.cpp`
+      (4, mirrors `LayerPairTests.cpp`), plus 15 new layer-focused cases added to
+      `CollisionWorld3DEXTTests.cpp` (named-layer insert, undefined-layer-name throws,
+      already-present throws, `TryGetLayerName`/`GetLayerName`/`MoveToLayer`,
+      `RebuildDynamicLayers`, cross-layer enable/disable including the
+      `CountingShapeActor3DEXT` shape-access-count proof that a disabled pair short-circuits
+      before touching actor shapes, `RemoveLayer`) — mirroring the layer-filtering subset of
+      `CollisionWorld2DTests.cpp`. 32 new tests total (5+4+23, the last file's original 8
+      pre-layer tests kept and 1 renamed for the `Rebuild()`→`RebuildDynamicLayers()` rename).
+      Both configs verified; full suite green.
+- [ ] **Phase B — True recursive octree broadphase** — `OctreeNode3DEXT`/`OctreeNodeData3DEXT`
+      (pure recursive tree, mirrors `QuadTree`/`QuadtreeData`, 8 octants not 4 quadrants) +
+      `Octree3DEXT` (the public `ICollisionBroadphase3DEXT` adapter, mirrors `QuadTreeSpace`).
+      Not the default broadphase — usable via the existing
+      `CollisionWorld3DEXT(unique_ptr<ICollisionBroadphase3DEXT>)` constructor, exactly as
+      `SpatialHash3DEXT.hpp`'s header comment already promised.
+- [ ] **Phase C-1 — Particles core architecture + proving slice** — `Profile3DEXT`/
+      `Modifier3DEXT`/`ModifierExecutionStrategy3DEXT` (Serial only)/`Interpolator3DEXT`/
+      `InterpolatorOfT3DEXT<T>` base types; `Particle3DEXT` gains `RotationEXT`/`MassEXT`/
+      `TriggeredPositionEXT`, `ScaleEXT` changes `float`→`Vector2` (user-confirmed); a
+      representative slice (point + cone Profile, Age + LinearGravity Modifiers, Color +
+      Opacity Interpolators) proves the new architecture reproduces today's exact baked-in
+      `ParticleEmitter3DEXT::UpdateEXT` behavior before expanding further.
+- [ ] **Phase C-2 — Remaining Profiles (6)**: Line/Ring/Box/BoxFill/BoxUniform/Circle.
+- [ ] **Phase C-3 — Remaining Modifiers (8)**: Drag/OpacityFastFade/Rotation/VelocityColor/
+      Velocity/Vortex + Sphere/Box/BoxLoop Container modifiers (3D analogs of 2D's
+      Circle/Rectangle/RectangleLoop containers).
+- [ ] **Phase C-4 — Remaining Interpolators (4)**: Hue/Rotation/Scale/Velocity.
+
 ## 5. After meaningful changes
 
 - Check off completed tasks above; add newly discovered tasks under the right phase.

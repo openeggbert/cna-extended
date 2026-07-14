@@ -21,12 +21,16 @@ simplification. Scope was explicitly negotiated with the project owner and is re
 `plan.md` (`Status: APPROVED`, no longer draft).
 
 **Current phase: `plan.md` DONE (all 10 phases); `plan3d.md`'s original 9 phases DONE, its
-Phase 10 (audit follow-ups) in progress.** An independent audit (Codex, `audit.md`,
-2026-07-14) reviewed the completed port and `World3DEXT`; `plan3d.md`'s Phase 10 tracks the
-findings, most already fixed (see that file for current per-finding status). See section 4
-for how `plan.md`'s two former blockers (the `TilemapRenderer`/`TilemapWorldRenderer`
-`DefaultEffect` mismatch, and its trailing pixel-verification test gap) were resolved, and
-section 8 for optional, non-blocking follow-up ideas for either plan.
+Phase 10 (audit follow-ups) DONE except A-05's octree-vs-hash naming/perf split (renamed +
+dedup fixed; a true recursive octree is now folded into Phase 11 below), its Phase 11
+(2D/3D parity: collision layers, recursive octree, particles plugin architecture) in
+progress.** An independent audit (Codex, `audit.md`, 2026-07-14) reviewed the completed port
+and `World3DEXT`; `plan3d.md`'s Phase 10 tracks those findings (see that file for current
+per-finding status). Phase 11 is separate, user-requested parity work (not an audit finding)
+— see that file's own entry for scope/sequencing. See section 4 for how `plan.md`'s two
+former blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and
+its trailing pixel-verification test gap) were resolved, and section 8 for optional,
+non-blocking follow-up ideas for either plan.
 
 **`plan3d.md`** (read `3d.md` first for the design rationale behind every decision) added
 `CNA::Extended::World3DEXT` — a 3D scene layer (camera, ECS transform hierarchy, model
@@ -44,7 +48,9 @@ itself):
    `SkinnedModelEXT`/`AvatarRenderer::DrawRealEXT` draw recipe rather than reinventing either.
 5. `Collisions3DEXT` — `CollisionShape3DEXT`/`ICollisionActor3DEXT`/`SpatialHash3DEXT`
    (a 3D spatial hash, not a true recursive octree; renamed from `OctreeEXT` in Phase 10,
-   audit.md A-05)/`CollisionWorld3DEXT` (no named-layer system).
+   audit.md A-05; a true recursive octree alternative is in progress, `plan3d.md` Phase 11
+   B)/`CollisionWorld3DEXT` (named-`Layer`/`LayerPair` cross-layer filtering added
+   2026-07-14, `plan3d.md` Phase 11 A).
 6. `Graphics3DEXT` — cube meshes, billboards (`Matrix::CreateBillboard`), animated
    billboards, world-space `Text3DEXT` billboarded labels, `DebugDrawSystemEXT` line-batch
    drawing.
@@ -63,7 +69,7 @@ itself):
    transform hierarchy, a frustum-culled entity, a skinned character, particles, and a
    voxel floor) — screenshot inspected, not just pixel-sampled.
 
-Full test suite: **2176/2178 passing** (2 pre-existing skips predating `plan3d.md`,
+Full test suite: **2205/2207 passing** (2 pre-existing skips predating `plan3d.md`,
 unrelated to it — `OrthographicCameraTest`'s two `ContainsPoint`/`ContainsVector2` tests,
 see section 5). Both `plan.md` and `plan3d.md` checkboxes are fully checked off; there is
 no in-progress phase in either.
@@ -94,7 +100,7 @@ no in-progress phase in either.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2176/2176 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2205/2205 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -650,12 +656,15 @@ applies to it. Several phases deliberately scoped down rather than porting the 2
 full generality (each documented in-place in `plan3d.md`/`3d.md`, not hidden); these are
 the concrete "extend later if wanted" candidates, should the owner ask for any of them:
 - `Particles3DEXT`: the full `Profiles`/`Modifiers`/`Interpolators` plugin architecture
-  (only cone emission + gravity/expiry/color-opacity interpolation exist today).
+  (only cone emission + gravity/expiry/color-opacity interpolation exist today) — **in
+  progress, Phase 11 C-1 through C-4 in `plan3d.md`, 2026-07-14**.
 - `SpatialHash3DEXT` (renamed from `OctreeEXT` in Phase 10, audit.md A-05): true recursive
-  octree subdivision (currently a fixed-cell-size spatial hash); also `Query`'s
-  `std::find`-in-a-loop candidate dedup (linear, O(K) per candidate) could become an
-  `unordered_set`-based O(1) check if a real large-scene benchmark shows it matters.
-- `CollisionWorld3DEXT`: a named-`Layer`/`LayerPair` cross-layer-filtering system.
+  octree subdivision (currently a fixed-cell-size spatial hash) — **in progress, Phase 11 B
+  in `plan3d.md`, 2026-07-14**. (`Query`'s O(K) `std::find`-in-a-loop candidate dedup was
+  already fixed to an O(1) `unordered_set` check the same day, part of A-05's own closure —
+  see `plan3d.md`.)
+- ~~`CollisionWorld3DEXT`: a named-`Layer`/`LayerPair` cross-layer-filtering system.~~ Done
+  (Phase 11 A, `plan3d.md`, 2026-07-14).
 - `Collisions3DEXT` ↔ `Tilemaps3DEXT`: a purpose-built tilemap-aware collision broadphase
   shortcut (today: insert one `ICollisionActor3DEXT` per populated tile manually).
 - `DebugDrawComponentEXT`: sphere wireframes (only box/frustum wireframes exist).
