@@ -19,9 +19,9 @@ non-upstream 3D scene extension — camera, transform hierarchy, model/skinned-m
 rendering, 3D collisions, billboards/text/debug-draw, particles, voxel tilemaps, and an
 end-to-end `world3d_demo` example — with all 9 of its own phases complete and an
 independent audit's follow-up fixes (`plan3d.md`'s Phase 10) done, and 2D/3D parity work
-(`plan3d.md`'s Phase 11 — collision layers, a recursive octree broadphase, and a particles
-plugin architecture) in progress. Current test count: 2327/2327 passing (see `NEXT.md` for
-the most up-to-date figure, since this number moves as work continues).
+(`plan3d.md`'s Phase 11 — collision layers, a recursive octree broadphase, and a full
+particles plugin architecture) done. Current test count: 2336/2336 passing (see `NEXT.md`
+for the most up-to-date figure, since this number moves as work continues).
 
 ## Modules
 

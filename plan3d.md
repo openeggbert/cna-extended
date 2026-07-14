@@ -852,7 +852,30 @@ port tests alongside → verify both CMake configs via genuine `rm -rf` clean re
       `ContainerModifier3DEXTTests.cpp` (6, bundling all three containers, matching 2D's own
       single-file `ContainerModifierTests.cpp`). 22 new tests total. Both configs verified via
       genuine `rm -rf` clean rebuild; full suite green (2327/2327).
-- [ ] **Phase C-4 — Remaining Interpolators (4)**: Hue/Rotation/Scale/Velocity.
+- [x] **Phase C-4 — Remaining Interpolators (4)**: `HueInterpolator3DEXT`,
+      `RotationInterpolator3DEXT`, `ScaleInterpolator3DEXT`, `VelocityInterpolator3DEXT` —
+      completing all 6 Interpolators, all 11 Modifiers, and all 8 Profiles from the approved
+      plan; Phase 11's Particles plugin architecture is now at full parity with 2D's own
+      shape. `HueInterpolator3DEXT` is not a literal port: 2D writes directly to
+      `Data::Particle::Color[0]` since 2D's particle color is natively HSL; 3D converts the
+      particle's *current* RGB `ColorEXT` to HSL via `CNA::Extended::HslColor::FromRgb`
+      (reusing that existing utility rather than re-deriving conversion math — a small
+      `World3DEXT` → `CNA::Extended` dependency, matching Phase 11 A's
+      `UndefinedLayerException`-reuse precedent), overwrites only the H channel, and converts
+      back with `HslColor::ToRgb` — preserving Saturation/Lightness exactly as 2D's own
+      "hue-only" semantic intends. `ScaleInterpolator3DEXT` uses `Vector2` (meaningful now
+      that `Particle3DEXT::ScaleEXT` is `Vector2` since Phase 11 C-1).
+      `VelocityInterpolator3DEXT` deliberately deviates from a literal port: 2D's
+      `VelocityInterpolator` uses `Vector2` and only ever touches Velocity's X/Y; per the
+      "genuinely 3D, not a 2D vector embedded in 3D" principle established throughout Phase
+      11 C-2/C-3, this interpolates the full `Vector3 VelocityEXT` (X/Y/Z).
+      Tests: one new file per interpolator (`HueInterpolator3DEXT` 3 — including a
+      hue-changes/saturation-lightness-preserved pair, `RotationInterpolator3DEXT` 2,
+      `ScaleInterpolator3DEXT` 2, `VelocityInterpolator3DEXT` 2). 9 new tests total. Both
+      configs verified via genuine `rm -rf` clean rebuild; full suite green (2336/2336).
+      **Phase 11 (2D/3D parity: collision layers, recursive octree, particles plugin
+      architecture) is now COMPLETE** — see this file's Phase 11 A/B/C-1/C-2/C-3/C-4 entries
+      above for the full record.
 
 ## 5. After meaningful changes
 

@@ -21,16 +21,16 @@ simplification. Scope was explicitly negotiated with the project owner and is re
 `plan.md` (`Status: APPROVED`, no longer draft).
 
 **Current phase: `plan.md` DONE (all 10 phases); `plan3d.md`'s original 9 phases DONE, its
-Phase 10 (audit follow-ups) DONE except A-05's octree-vs-hash naming/perf split (renamed +
-dedup fixed; a true recursive octree is now folded into Phase 11 below), its Phase 11
-(2D/3D parity: collision layers, recursive octree, particles plugin architecture) in
-progress.** An independent audit (Codex, `audit.md`, 2026-07-14) reviewed the completed port
-and `World3DEXT`; `plan3d.md`'s Phase 10 tracks those findings (see that file for current
-per-finding status). Phase 11 is separate, user-requested parity work (not an audit finding)
-— see that file's own entry for scope/sequencing. See section 4 for how `plan.md`'s two
-former blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and
-its trailing pixel-verification test gap) were resolved, and section 8 for optional,
-non-blocking follow-up ideas for either plan.
+Phase 10 (audit follow-ups) DONE, its Phase 11 (2D/3D parity: collision layers, recursive
+octree, particles plugin architecture) DONE (A/B/C-1/C-2/C-3/C-4 all complete, 2026-07-14).
+There is no remaining phase in either plan.** An independent audit (Codex, `audit.md`,
+2026-07-14) reviewed the completed port and `World3DEXT`; `plan3d.md`'s Phase 10 tracks those
+findings (see that file for current per-finding status). Phase 11 was separate,
+user-requested parity work (not an audit finding) — see that file's own entry for the full
+scope/sequencing/rationale record. See section 4 for how `plan.md`'s two former blockers (the
+`TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and its trailing
+pixel-verification test gap) were resolved, and section 8 for optional, non-blocking
+follow-up ideas for either plan.
 
 **`plan3d.md`** (read `3d.md` first for the design rationale behind every decision) added
 `CNA::Extended::World3DEXT` — a 3D scene layer (camera, ECS transform hierarchy, model
@@ -57,14 +57,13 @@ itself):
    drawing.
 7. `Particles3DEXT` — originally a scoped-down emitter with cone emission +
    gravity/expiry/color-opacity-interpolation baked directly into `UpdateEXT`; now (Phase 11
-   C-1, `plan3d.md`, 2026-07-14) owns a real `Profile3DEXT`/`Modifier3DEXT`/
-   `ModifierExecutionStrategy3DEXT`/`Interpolator3DEXT` plugin architecture matching 2D's
-   shape, proven behavior-preserving against the pre-existing test suite; all 8 Profiles
-   (Phase 11 C-2 — Point/Cone/Line/Ring/Circle/Box/BoxFill/BoxUniform) and all 11 Modifiers
-   (Phase 11 C-3, `plan3d.md`, 2026-07-14 — Age/LinearGravity/Drag/OpacityFastFade/Rotation/
-   VelocityColor/Velocity/Vortex + Sphere/Box/BoxLoop Container modifiers) now exist; only
-   the representative slice of Interpolators (Color/Opacity) exists so far — the remaining 4
-   Interpolators are Phase 11 C-4, not yet started. Drawing still goes through a
+   C-1 through C-4, `plan3d.md`, 2026-07-14, COMPLETE) owns a real `Profile3DEXT`/
+   `Modifier3DEXT`/`ModifierExecutionStrategy3DEXT`/`Interpolator3DEXT` plugin architecture at
+   full parity with 2D's own shape: all 8 Profiles (Point/Cone/Line/Ring/Circle/Box/BoxFill/
+   BoxUniform), all 11 Modifiers (Age/LinearGravity/Drag/OpacityFastFade/Rotation/
+   VelocityColor/Velocity/Vortex + Sphere/Box/BoxLoop Container modifiers), and all 6
+   Interpolators (Color/Opacity/Hue/Rotation/Scale/Velocity) exist, proven
+   behavior-preserving against the pre-existing test suite. Drawing still goes through a
    `BillboardRenderSystemEXT::DrawBillboardEXT` extraction so particle rendering genuinely
    reuses the billboard draw path.
 8. `Tilemaps3DEXT` — a sparse `Tilemap3DEXT` voxel grid (tile ID 0 = empty),
@@ -77,7 +76,7 @@ itself):
    transform hierarchy, a frustum-culled entity, a skinned character, particles, and a
    voxel floor) — screenshot inspected, not just pixel-sampled.
 
-Full test suite: **2240/2242 passing** (2 pre-existing skips predating `plan3d.md`,
+Full test suite: **2336/2338 passing** (2 pre-existing skips predating `plan3d.md`,
 unrelated to it — `OrthographicCameraTest`'s two `ContainsPoint`/`ContainsVector2` tests,
 see section 5). Both `plan.md` and `plan3d.md` checkboxes are fully checked off; there is
 no in-progress phase in either.
@@ -108,7 +107,7 @@ no in-progress phase in either.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2327/2327 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2336/2336 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -659,15 +658,14 @@ independently check `git status`/`git diff` (not just `git log`) after every for
 including resumed ones, and be prepared for a "completed" notification to actually mean
 "stopped partway through" rather than genuinely done.
 
-**`plan3d.md` is also complete (all 9 phases, 2026-07-14)** — same standing preference
-applies to it. Several phases deliberately scoped down rather than porting the 2D module's
-full generality (each documented in-place in `plan3d.md`/`3d.md`, not hidden); these are
-the concrete "extend later if wanted" candidates, should the owner ask for any of them:
-- `Particles3DEXT`: the full `Profiles`/`Modifiers`/`Interpolators` plugin architecture —
-  **in progress, Phase 11 C-1 through C-4 in `plan3d.md`, 2026-07-14**. C-1 (core
-  architecture + a representative Profile/Modifier/Interpolator slice), C-2 (remaining 6
-  Profiles), and C-3 (remaining 8 Modifiers) are done; C-4 (remaining 4 Interpolators) is
-  not started.
+**`plan3d.md` is also complete (all 9 original phases, plus Phase 10 audit follow-ups and
+Phase 11 2D/3D parity work, 2026-07-14)** — same standing preference applies to it. Several
+phases deliberately scoped down rather than porting the 2D module's full generality (each
+documented in-place in `plan3d.md`/`3d.md`, not hidden); Phase 11 (user-requested, not an
+audit finding) closed all three of the concrete gaps that remained:
+- ~~`Particles3DEXT`: the full `Profiles`/`Modifiers`/`Interpolators` plugin architecture.~~
+  Done (Phase 11 C-1 through C-4, `plan3d.md`, 2026-07-14) — all 8 Profiles, all 11
+  Modifiers, all 6 Interpolators now exist, matching 2D's own shape.
 - ~~`SpatialHash3DEXT` (renamed from `OctreeEXT` in Phase 10, audit.md A-05): true recursive
   octree subdivision (currently a fixed-cell-size spatial hash).~~ Done as an alternative
   broadphase, `Octree3DEXT`/`OctreeNode3DEXT`/`OctreeNodeData3DEXT` (Phase 11 B, `plan3d.md`,
@@ -677,6 +675,8 @@ the concrete "extend later if wanted" candidates, should the owner ask for any o
   check the same day, part of A-05's own closure — see `plan3d.md`.)
 - ~~`CollisionWorld3DEXT`: a named-`Layer`/`LayerPair` cross-layer-filtering system.~~ Done
   (Phase 11 A, `plan3d.md`, 2026-07-14).
+
+Remaining, smaller "extend later if wanted" candidates, should the owner ask for any of them:
 - `Collisions3DEXT` ↔ `Tilemaps3DEXT`: a purpose-built tilemap-aware collision broadphase
   shortcut (today: insert one `ICollisionActor3DEXT` per populated tile manually).
 - `DebugDrawComponentEXT`: sphere wireframes (only box/frustum wireframes exist).
