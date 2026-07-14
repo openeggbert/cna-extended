@@ -271,6 +271,9 @@ of the imagined design):
       Remove/QueryCandidates/QueryCollisions/QueryCollisionPairs/Rebuild). 28 tests total.
       Both build configs clean (genuine `rm -rf` + fresh configure + build), full suite
       **2119/2121 passing** (was 2091/2093; 2 pre-existing skips unrelated to this phase).
+      **`OctreeEXT` renamed to `SpatialHash3DEXT` in Phase 10 (2026-07-14, A-05)** — see that
+      entry below; this Phase 5 entry is left describing the original name/files as they
+      actually were at the time, not rewritten to match the later rename.
 
 ### Phase 6 — `Graphics3DEXT` (3D counterpart of `Graphics`) — **COMPLETE (2026-07-14)**
 
@@ -362,7 +365,7 @@ age-based expiry, start/end color+opacity interpolation) — covering `AgeModifi
 without their extensibility framework. A real, working, tested particle system, just not a
 plugin architecture; the full `Profile`/`Modifier`/`Interpolator` port can be added later
 if a real need appears — matching this plan's repeated "start with the simplest correct
-version" precedent (`OctreeEXT`, `CollisionWorld3DEXT`).
+version" precedent (`SpatialHash3DEXT`, `CollisionWorld3DEXT`).
 
 - [x] `Particle3DEXT` (3D counterpart of `Particles::Data::Particle` — position/velocity/
       color/scale as `Vector3`/`Color`/`float` fields instead of the 2D packed-float-array,
@@ -457,7 +460,7 @@ this task's own "decide during this phase" wording):
       phase**: `Tilemap3DEXT`/`CollisionWorld3DEXT` are independently usable today (a
       caller can insert one `ICollisionActor3DEXT` per populated tile via
       `Tilemap3DEXT::getTilesProperty()`), but a purpose-built "tilemap-aware" broadphase
-      shortcut (e.g. querying the grid directly instead of via `OctreeEXT`) was not called
+      shortcut (e.g. querying the grid directly instead of via `SpatialHash3DEXT`) was not called
       for by this task's own bullet list beyond "building on Collisions3DEXT for tile
       collision" — no code needed writing to satisfy that; can be added later as a
       dedicated integration if a real need appears.
@@ -612,15 +615,24 @@ keep the audit's own IDs (A-01 etc.) for traceability back to `audit.md`.
       actual test suite. Add a depth-enabled multi-object test (two overlapping cubes
       drawn in both submission orders, asserting the *nearer* one's color wins either way)
       to lock in that fix.
-- [ ] **A-05 (Medium, deferred)** — `OctreeEXT` is honestly documented as a fixed-cell
-      spatial hash, not a hierarchical octree (`OctreeEXT.hpp`'s own header comment
-      already says so), but the audit is right that the class *name* still invites the
-      opposite assumption, and `Query`'s candidate dedup is `std::find`-in-a-loop (linear).
-      Left for a future session: renaming is a real breaking API change (touches
-      `CollisionWorld3DEXT`'s default construction and every test/example referencing
-      `OctreeEXT` by name) and the dedup performance concern needs a real large-scene
-      benchmark before "optimize" is well-defined, not a guess — recorded here rather than
-      done reflexively.
+- [ ] **A-05 (Medium, partially addressed)** — `OctreeEXT` was honestly documented as a
+      fixed-cell spatial hash, not a hierarchical octree (its own header comment already
+      said so), but the audit was right that the class *name* still invited the opposite
+      assumption. **Renamed to `SpatialHash3DEXT` (2026-07-14, user-requested)** — pure
+      rename, no behavior change, all 8 referencing files updated
+      (`SpatialHash3DEXT.hpp`/`.cpp`, `SpatialHash3DEXTTests.cpp` — itself renamed from
+      `OctreeEXTTests.cpp` — plus `CollisionWorld3DEXT.hpp`/`.cpp`,
+      `CollisionWorld3DEXTTests.cpp`, and two unrelated files with only a comment
+      cross-reference: `ParticleEmitter3DEXT.hpp`, `Text3DEXT.hpp`), both configs rebuilt
+      clean, full suite unchanged at 2176/2176 (rename only, no test count change).
+      **Still open**: `Query`'s candidate dedup is `std::find`-in-a-loop (linear, O(K) per
+      candidate) — left for a future session since the dedup performance concern needs a
+      real large-scene benchmark before "optimize" is well-defined, not a guess. A true
+      recursive octree (matching the class's *algorithm* to what its original name implied,
+      as an alternative to the rename) remains a documented future option
+      (`SpatialHash3DEXT.hpp`'s own header comment) if profiling ever shows the uniform-grid
+      approach is insufficient — not pursued now for the same "needs a real benchmark"
+      reason.
 - [x] **A-03 (High, addressed as documentation, not a code fix)** — the audit's own 22
       graphics-test failures were caused by its sandbox lacking any SDL video device
       (`SDL_InitSubSystem(SDL_INIT_VIDEO) failed: No available video device`), not a

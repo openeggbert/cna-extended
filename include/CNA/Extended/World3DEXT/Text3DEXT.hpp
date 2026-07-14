@@ -16,8 +16,8 @@
 // texture (true for any single-page BMFont, the overwhelmingly common case); a glyph on a
 // different page than the first is skipped rather than starting a second draw batch --
 // matches this phase's "start with the simplest correct version" precedent (see
-// OctreeEXT.hpp/CollisionWorld3DEXT.hpp for the same principle applied elsewhere in this
-// plan).
+// SpatialHash3DEXT.hpp/CollisionWorld3DEXT.hpp for the same principle applied elsewhere in
+// this plan).
 #pragma once
 
 #include "Microsoft/Xna/Framework/Color.hpp"

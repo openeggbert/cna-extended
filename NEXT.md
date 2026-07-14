@@ -42,8 +42,9 @@ itself):
 3. `ModelComponentEXT`/`RenderSystem3DEXT` — frustum-culled `Model` rendering.
 4. `SkinnedModelComponentEXT`/`AnimationSystem3DEXT` — reuses `cna`'s own
    `SkinnedModelEXT`/`AvatarRenderer::DrawRealEXT` draw recipe rather than reinventing either.
-5. `Collisions3DEXT` — `CollisionShape3DEXT`/`ICollisionActor3DEXT`/`OctreeEXT` (a 3D
-   spatial hash, not a true recursive octree)/`CollisionWorld3DEXT` (no named-layer system).
+5. `Collisions3DEXT` — `CollisionShape3DEXT`/`ICollisionActor3DEXT`/`SpatialHash3DEXT`
+   (a 3D spatial hash, not a true recursive octree; renamed from `OctreeEXT` in Phase 10,
+   audit.md A-05)/`CollisionWorld3DEXT` (no named-layer system).
 6. `Graphics3DEXT` — cube meshes, billboards (`Matrix::CreateBillboard`), animated
    billboards, world-space `Text3DEXT` billboarded labels, `DebugDrawSystemEXT` line-batch
    drawing.
@@ -650,7 +651,10 @@ full generality (each documented in-place in `plan3d.md`/`3d.md`, not hidden); t
 the concrete "extend later if wanted" candidates, should the owner ask for any of them:
 - `Particles3DEXT`: the full `Profiles`/`Modifiers`/`Interpolators` plugin architecture
   (only cone emission + gravity/expiry/color-opacity interpolation exist today).
-- `OctreeEXT`: true recursive octree subdivision (currently a fixed-cell-size spatial hash).
+- `SpatialHash3DEXT` (renamed from `OctreeEXT` in Phase 10, audit.md A-05): true recursive
+  octree subdivision (currently a fixed-cell-size spatial hash); also `Query`'s
+  `std::find`-in-a-loop candidate dedup (linear, O(K) per candidate) could become an
+  `unordered_set`-based O(1) check if a real large-scene benchmark shows it matters.
 - `CollisionWorld3DEXT`: a named-`Layer`/`LayerPair` cross-layer-filtering system.
 - `Collisions3DEXT` ↔ `Tilemaps3DEXT`: a purpose-built tilemap-aware collision broadphase
   shortcut (today: insert one `ICollisionActor3DEXT` per populated tile manually).

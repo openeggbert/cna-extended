@@ -9,7 +9,7 @@
 #include "CNA/Extended/World3DEXT/CollisionWorld3DEXT.hpp"
 
 #include "CNA/Extended/World3DEXT/ICollisionActor3DEXT.hpp"
-#include "CNA/Extended/World3DEXT/OctreeEXT.hpp"
+#include "CNA/Extended/World3DEXT/SpatialHash3DEXT.hpp"
 
 #include <gtest/gtest.h>
 #include <memory>
@@ -124,7 +124,7 @@ namespace CNA::Extended::World3DEXT
 
     TEST(CollisionWorld3DEXTTests, Rebuild_UsesActorsUpdatedBoundsForSubsequentQueries)
     {
-        auto world = CollisionWorld3DEXT(std::make_unique<OctreeEXT>(16.0f));
+        auto world = CollisionWorld3DEXT(std::make_unique<SpatialHash3DEXT>(16.0f));
         TestActor3DEXT actor(1, BoundingBox(Vector3(0.0f, 0.0f, 0.0f), Vector3(2.0f, 2.0f, 2.0f)));
         world.Insert(&actor);
 

@@ -5,7 +5,7 @@
 #include "CNA/Extended/World3DEXT/ICollisionActor3DEXT.hpp"
 #include "CNA/Extended/World3DEXT/ICollisionBroadphase3DEXT.hpp"
 #include "CNA/Extended/World3DEXT/ActorPairKey3DEXT.hpp"
-#include "CNA/Extended/World3DEXT/OctreeEXT.hpp"
+#include "CNA/Extended/World3DEXT/SpatialHash3DEXT.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -15,7 +15,7 @@ namespace CNA::Extended::World3DEXT
 {
     using Microsoft::Xna::Framework::BoundingBox;
 
-    CollisionWorld3DEXT::CollisionWorld3DEXT() : broadphase_(std::make_unique<OctreeEXT>(16.0f))
+    CollisionWorld3DEXT::CollisionWorld3DEXT() : broadphase_(std::make_unique<SpatialHash3DEXT>(16.0f))
     {
     }
 

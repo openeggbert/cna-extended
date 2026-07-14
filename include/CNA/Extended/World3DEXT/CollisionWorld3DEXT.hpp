@@ -13,7 +13,7 @@
 // no mention of layer filtering), so adding that whole subsystem (Layer/LayerPair/
 // UndefinedLayerException 3D counterparts) was judged out of scope for "start with the
 // simplest correct version" -- can be added later as a real CollisionWorld3DEXT feature
-// if a real multi-layer use case appears, the same way OctreeEXT.hpp documents true
+// if a real multi-layer use case appears, the same way SpatialHash3DEXT.hpp documents true
 // recursive octree subdivision as a future option.
 #pragma once
 
@@ -41,7 +41,7 @@ namespace CNA::Extended::World3DEXT
     class CollisionWorld3DEXT
     {
     public:
-        /** @brief Initializes a new CollisionWorld3DEXT with a default OctreeEXT broadphase (16-unit cells). */
+        /** @brief Initializes a new CollisionWorld3DEXT with a default SpatialHash3DEXT broadphase (16-unit cells). */
         CollisionWorld3DEXT();
 
         /**

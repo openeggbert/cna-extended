@@ -6,7 +6,7 @@
 //
 // 3D counterpart of CNA::Extended::Particles::ParticleEmitter, deliberately scoped down
 // (matching this whole plan's repeated "start with the simplest correct version"
-// precedent -- see OctreeEXT.hpp/CollisionWorld3DEXT.hpp for the same principle applied
+// precedent -- see SpatialHash3DEXT.hpp/CollisionWorld3DEXT.hpp for the same principle applied
 // elsewhere): rather than porting the full Profiles/Modifiers/Interpolators plugin
 // architecture (5 emission-shape Profile subclasses, ~13 Modifier subclasses, 6
 // Interpolator subclasses in the 2D module), this emitter has ONE built-in emission shape
