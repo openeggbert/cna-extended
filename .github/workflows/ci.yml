@@ -22,15 +22,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # Headers-only mode still #includes CNA's Microsoft::Xna::Framework::* and
+      # sharp-runtime's System::* headers (it just doesn't link/build those projects) --
+      # CMakeLists.txt looks for them at ../cna and ../sharp-runtime relative to this
+      # checkout, so those two still need to exist as sibling directories even though only
+      # their include/ trees are used, not their CMake build.
       - name: Checkout cna-extended
         uses: actions/checkout@v4
         with:
+          path: cna-extended
           submodules: true # vendor/googletest
 
+      - name: Checkout cna (headers only, not built)
+        uses: actions/checkout@v4
+        with:
+          repository: openeggbert/cna
+          path: cna
+
+      - name: Checkout sharp-runtime (headers only, not built)
+        uses: actions/checkout@v4
+        with:
+          repository: openeggbert/sharp-runtime
+          path: sharp-runtime
+
       - name: Configure (headers-only)
+        working-directory: cna-extended
         run: cmake -S . -B build-headers -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=OFF
 
       - name: Build
+        working-directory: cna-extended
         run: cmake --build build-headers -j"$(nproc)"
 
   linked:
