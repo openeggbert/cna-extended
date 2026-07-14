@@ -170,7 +170,7 @@ namespace CNA::Extended::World3DEXT
         TestTriangleModel triangle(graphicsDevice);
 
         WorldBuilder builder;
-        builder.AddSystem(std::make_unique<RenderSystem3DEXT>(camera));
+        builder.AddSystem(std::make_unique<RenderSystem3DEXT>(graphicsDevice, camera));
         const std::unique_ptr<World> world = builder.Build();
         world->Initialize();
 
@@ -198,7 +198,7 @@ namespace CNA::Extended::World3DEXT
         TestTriangleModel triangle(graphicsDevice);
 
         WorldBuilder builder;
-        builder.AddSystem(std::make_unique<RenderSystem3DEXT>(camera));
+        builder.AddSystem(std::make_unique<RenderSystem3DEXT>(graphicsDevice, camera));
         const std::unique_ptr<World> world = builder.Build();
         world->Initialize();
 

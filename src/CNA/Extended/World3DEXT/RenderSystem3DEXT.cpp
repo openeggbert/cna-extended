@@ -5,9 +5,15 @@
 #include "CNA/Extended/ECS/Entity.hpp"
 #include "CNA/Extended/World3DEXT/Camera3DEXT.hpp"
 #include "CNA/Extended/World3DEXT/ModelComponentEXT.hpp"
+#include "CNA/Extended/World3DEXT/SkinnedModelComponentEXT.hpp"
 #include "CNA/Extended/World3DEXT/Transform3ComponentEXT.hpp"
 #include "Microsoft/Xna/Framework/BoundingFrustum.hpp"
+#include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
 #include "Microsoft/Xna/Framework/Graphics/Model.hpp"
+#include "Microsoft/Xna/Framework/Graphics/ModelMeshPart.hpp"
+#include "Microsoft/Xna/Framework/Graphics/PrimitiveType.hpp"
+#include "Microsoft/Xna/Framework/Graphics/SkinnedEffect.hpp"
+#include "Microsoft/Xna/Framework/Graphics/SkinnedModelEXT.hpp"
 
 #include <typeindex>
 
@@ -20,9 +26,13 @@ namespace CNA::Extended::World3DEXT
     using Microsoft::Xna::Framework::BoundingSphere;
     using Microsoft::Xna::Framework::GameTime;
     using Microsoft::Xna::Framework::Matrix;
+    using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
+    using Microsoft::Xna::Framework::Graphics::PrimitiveType;
 
-    RenderSystem3DEXT::RenderSystem3DEXT(Camera3DEXT& camera)
-        : EntityDrawSystem(AspectBuilder().All({std::type_index(typeid(ModelComponentEXT))})), camera_(&camera)
+    RenderSystem3DEXT::RenderSystem3DEXT(GraphicsDevice& graphicsDevice, Camera3DEXT& camera)
+        : EntityDrawSystem(AspectBuilder().One(
+              {std::type_index(typeid(ModelComponentEXT)), std::type_index(typeid(SkinnedModelComponentEXT))})),
+          graphicsDevice_(&graphicsDevice), camera_(&camera)
     {
     }
 
@@ -47,25 +57,57 @@ namespace CNA::Extended::World3DEXT
                 continue;
             }
 
-            ModelComponentEXT* modelComponent = entity->Get<ModelComponentEXT>();
-            if (modelComponent == nullptr || modelComponent->ModelEXT == nullptr)
-            {
-                continue;
-            }
-
             Matrix world = Matrix::getIdentityProperty();
             if (Transform3ComponentEXT* transformComponent = entity->Get<Transform3ComponentEXT>())
             {
                 world = transformComponent->TransformEXT.getWorldMatrixProperty();
             }
 
-            const BoundingSphere worldBounds = modelComponent->BoundsEXT.Transform(world);
-            if (!frustum.Intersects(worldBounds))
+            if (ModelComponentEXT* modelComponent = entity->Get<ModelComponentEXT>())
             {
-                continue;
+                if (modelComponent->ModelEXT != nullptr)
+                {
+                    const BoundingSphere worldBounds = modelComponent->BoundsEXT.Transform(world);
+                    if (frustum.Intersects(worldBounds))
+                    {
+                        modelComponent->ModelEXT->Draw(world, view, projection);
+                    }
+                }
             }
 
-            modelComponent->ModelEXT->Draw(world, view, projection);
+            if (SkinnedModelComponentEXT* skinnedComponent = entity->Get<SkinnedModelComponentEXT>())
+            {
+                if (skinnedComponent->ModelEXT != nullptr && skinnedComponent->EffectEXT != nullptr)
+                {
+                    const BoundingSphere worldBounds = skinnedComponent->BoundsEXT.Transform(world);
+                    if (frustum.Intersects(worldBounds))
+                    {
+                        // Matches AvatarRenderer::DrawRealEXT's real, already-working usage
+                        // exactly: one shared SkinnedEffect set once, then Apply() + draw per
+                        // part -- see SkinnedModelComponentEXT.hpp's header comment.
+                        skinnedComponent->EffectEXT->setWorldProperty(world);
+                        skinnedComponent->EffectEXT->setViewProperty(view);
+                        skinnedComponent->EffectEXT->setProjectionProperty(projection);
+                        skinnedComponent->EffectEXT->SetBoneTransforms(skinnedComponent->BoneTransformsEXT);
+
+                        for (const auto& part : skinnedComponent->ModelEXT->Parts)
+                        {
+                            skinnedComponent->EffectEXT->setTextureProperty(part.Texture);
+                            skinnedComponent->EffectEXT->Apply();
+
+                            graphicsDevice_->SetVertexBuffer(part.Part->getVertexBufferProperty());
+                            graphicsDevice_->SetIndexBuffer(part.Part->getIndexBufferProperty());
+                            graphicsDevice_->DrawIndexedPrimitives(
+                                PrimitiveType::TriangleList,
+                                part.Part->getVertexOffsetProperty(),
+                                0,
+                                part.Part->getNumVerticesProperty(),
+                                part.Part->getStartIndexProperty(),
+                                part.Part->getPrimitiveCountProperty());
+                        }
+                    }
+                }
+            }
         }
     }
 }

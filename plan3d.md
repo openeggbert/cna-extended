@@ -164,17 +164,53 @@ enough to warrant one by the time Phase 1 starts — decide then, not now).
       Both build configs clean (genuine `rm -rf` + fresh configure + build), full suite
       **2089/2091 passing** (was 2087/2089; 2 pre-existing skips unrelated to this phase).
 
-### Phase 4 — Skinned animation
+### Phase 4 — Skinned animation — **COMPLETE (2026-07-14)**
 
-- [ ] `SkinnedModelComponentEXT` (`Model*` + `SkinnedEffect*` + bone transform array —
-      resolve the ownership question noted in `3d.md` §9.1 before landing this).
-- [ ] `AnimationSystem3DEXT` (advances bone transforms per frame; decide during this
-      phase whether to reuse `Animations::AnimationController`'s timing logic or need a
-      new one — `3d.md` §9.3).
-- [ ] `RenderSystem3DEXT` extended to forward `SkinnedModelComponentEXT`'s bone array to
-      `SkinnedEffect` alongside the existing `ModelComponentEXT` path.
-- [ ] Real headless render test proving a skinned model's pose changes between two
-      different animation times produce different pixel output.
+- [x] `SkinnedModelComponentEXT` (`SkinnedModelEXT*` + `SkinnedEffect*` + clip
+      name/position/loop + bone transform array + `BoundsEXT`) —
+      `include/CNA/Extended/World3DEXT/SkinnedModelComponentEXT.hpp`. **Reuses `cna`'s own
+      `Microsoft::Xna::Framework::Graphics::SkinnedModelEXT` directly rather than building
+      a new skinned-model type** — discovered during this phase that `cna` already has a
+      real, tested bone-hierarchy + keyframe-interpolation sampler
+      (`SkinnedModelEXT::ComputeBoneTransformsEXT`), originally built for
+      `AvatarRenderer::EnableRealRenderingEXT` but avatar-agnostic in its actual logic (see
+      `SkinnedModelEXT.hpp`'s own header comment). **Resolves `3d.md` §9.1's ownership
+      question**: `EffectEXT` is a non-owning `SkinnedEffect*`, one instance per animated
+      entity (bone transforms differ per entity, so it can't be shared the way a stateless
+      effect could be) — matches every other component in this ECS being purely
+      non-owning, and mirrors `AvatarRenderer::DrawRealEXT`'s real, already-working usage:
+      a *single* `SkinnedEffect` shared across a model's `Parts` (not a per-`ModelMeshPart`
+      effect the way `ModelComponentEXT`'s plain `Model` uses).
+- [x] `AnimationSystem3DEXT` (`ECS::Systems::EntityUpdateSystem`): advances
+      `PositionEXT` by the frame's elapsed time and recomputes `BoneTransformsEXT` via
+      `SkinnedModelEXT::ComputeBoneTransformsEXT`. **Resolves `3d.md` §9.3**: a dedicated
+      system, not a reuse of `Animations::AnimationController` — that class's discrete
+      fixed-duration-per-frame sprite-sheet timing model doesn't fit continuous keyframe
+      interpolation across arbitrarily-spaced `TimeSpan`-keyed keyframes, which
+      `ComputeBoneTransformsEXT` already implements correctly; this system is a thin
+      per-entity driver over it, not a new timing engine.
+      `include/CNA/Extended/World3DEXT/AnimationSystem3DEXT.hpp` + `src/.../AnimationSystem3DEXT.cpp`.
+- [x] `RenderSystem3DEXT` extended: constructor's `Aspect` changed from `All({ModelComponentEXT})`
+      to `One({ModelComponentEXT, SkinnedModelComponentEXT})`; `Draw()` now handles each
+      component independently per entity. The skinned path needs a `GraphicsDevice&`
+      reference (re-added to the constructor) since, unlike `Model::Draw()`,
+      `SkinnedModelEXT` has no built-in draw method — the skinned path hand-draws each
+      part following `AvatarRenderer::DrawRealEXT`'s exact sequence (set
+      World/View/Projection/BoneTransforms once, then per part: texture + `Apply()` +
+      `SetVertexBuffer`/`SetIndexBuffer`/`DrawIndexedPrimitives`).
+- [x] Real headless render test proving a skinned model's pose changes between two
+      different animation times produce different pixel output: a 2-bone rig (root +
+      moving child bone, translating 0→5 units over a 1-second clip) with a triangle
+      100%-weighted to the moving bone; sampling the screen center at clip position 0s
+      (triangle visible, non-black red pixel) vs. position 1s (triangle translated away,
+      different pixel) confirms the pose change is visible. A second, non-rendering test
+      confirms `AnimationSystem3DEXT::Update()` alone advances `PositionEXT` and produces
+      the expected bone-1 world translation. Lighting/rasterizer setup (ambient white +
+      one enabled directional light + `RasterizerState::CullNone`) copied from `cna`'s own
+      proven-working recipe (`cna/examples/avatar_tint_routing_integration_test.cpp`),
+      not re-derived. `tests/CNA/Extended/World3DEXT/AnimationSystem3DEXTTests.cpp`, 2 tests.
+      Both build configs clean (genuine `rm -rf` + fresh configure + build), full suite
+      **2091/2093 passing** (was 2089/2091; 2 pre-existing skips unrelated to this phase).
 
 ### Phase 5 — `Collisions3DEXT` (3D counterpart of `Collisions2D`)
 
