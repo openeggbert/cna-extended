@@ -30,7 +30,13 @@
 
 namespace CNA::Extended::ECS
 {
-    /** @brief The central ECS container: owns EntityManager/ComponentManager, registers and runs Systems each Update/Draw. */
+    /**
+     * @brief The central ECS container: owns EntityManager/ComponentManager, registers and runs
+     * Systems each Update/Draw.
+     * @see WorldBuilder, the normal way to construct a World with its systems already registered
+     * (prefer it over this class's own constructor -- see WorldBuilder's own doc comment).
+     * @see Entity, created via CreateEntity() and used to attach/query components.
+     */
     class World : public SimpleDrawableGameComponent
     {
     public:

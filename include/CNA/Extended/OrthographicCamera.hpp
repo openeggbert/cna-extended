@@ -52,7 +52,35 @@ namespace CNA::Extended
     using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
     using Microsoft::Xna::Framework::Point;
 
-    /** @brief An orthographic (2D) camera providing view and projection transformations for rendering within a 2D world. */
+    /**
+     * @brief An orthographic (2D) camera providing view and projection transformations for
+     * rendering within a 2D world. This is the standard way to turn a moving/zooming/rotating
+     * viewpoint into the View/Projection matrices SpriteBatch and the Tilemaps::Rendering::*
+     * renderers need -- construct one per logical "camera" in your game (e.g. one for the main
+     * gameplay view, optionally another for a minimap), update its Position/Zoom/Rotation each
+     * frame in response to input or gameplay logic, and pass it to Draw().
+     *
+     * @see ViewportAdapters::ViewportAdapter, ViewportAdapters::DefaultViewportAdapter for how
+     * screen/viewport size and scaling feed into this camera's view/projection matrices.
+     * @see Tilemaps::Rendering::TilemapSpriteBatchRenderer, Tilemaps::Rendering::TilemapRenderer,
+     * and their World-* counterparts, all of which take an OrthographicCamera& to know what
+     * region of the map to draw.
+     * @code
+     * using CNA::Extended::OrthographicCamera;
+     * using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
+     * using Microsoft::Xna::Framework::Vector2;
+     *
+     * void UpdateCamera(GraphicsDevice& graphicsDevice)
+     * {
+     *     // Uses a self-owned DefaultViewportAdapter sized to graphicsDevice's viewport.
+     *     OrthographicCamera camera(graphicsDevice);
+     *     camera.setPositionProperty(Vector2(100.0f, 50.0f));
+     *     camera.ZoomIn(0.5f);
+     *
+     *     const auto view = camera.GetViewMatrix(); // feed into SpriteBatch::Begin/an effect
+     * }
+     * @endcode
+     */
     class OrthographicCamera final : public Camera<Vector2>, public IMovable, public IRotatable
     {
     public:

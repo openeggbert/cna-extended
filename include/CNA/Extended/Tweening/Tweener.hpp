@@ -67,7 +67,30 @@
 
 namespace CNA::Extended::Tweening
 {
-    /** @brief Manages a collection of active tween animations and drives their updates each frame. */
+    /**
+     * @brief Manages a collection of active tween animations and drives their updates each frame.
+     * Create animations with TweenTo() (pointer-to-member syntax, not a lambda selector -- see
+     * this header's own top comment for why), then call Update() once per frame from your game's
+     * own Update() loop.
+     * @see EasingFunctions for the built-in easing curves passed to TypedTween::Easing().
+     * @code
+     * #include <CNA/Extended/Tweening/EasingFunctions.hpp>
+     * #include <CNA/Extended/Tweening/Tweener.hpp>
+     * #include <Microsoft/Xna/Framework/Vector2.hpp>
+     *
+     * using CNA::Extended::Tweening::EasingFunctions;
+     * using CNA::Extended::Tweening::Tweener;
+     * using Microsoft::Xna::Framework::Vector2;
+     *
+     * struct Player { Vector2 Position{0.0f, 0.0f}; };
+     *
+     * void StartMoveAnimation(Tweener& tweener, Player& player)
+     * {
+     *     tweener.TweenTo(&player, &Player::Position, Vector2(100.0f, 0.0f), 0.5f)
+     *         ->Easing(EasingFunctions::QuadraticOut);
+     * }
+     * @endcode
+     */
     class Tweener
     {
     public:

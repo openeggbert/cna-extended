@@ -23,7 +23,17 @@ namespace CNA::Extended::Graphics
     class Sprite;
     class SpriteSheetAnimationBuilder;
 
-    /** @brief A texture atlas plus a set of named frame-index animation definitions built over it. */
+    /**
+     * @brief A texture atlas plus a set of named frame-index animation definitions built over it
+     * -- the usual way to describe a character/effect's frame-by-frame animations (e.g. "walk",
+     * "idle", "attack") once and then play any of them back through an AnimatedSprite. A
+     * SpriteSheet does not own its Texture2DAtlas; the atlas must outlive it.
+     *
+     * @see Texture2DAtlas, the region source this sheet's animations are defined against.
+     * @see SpriteSheetAnimationBuilder, the fluent builder passed to DefineAnimation's callback
+     * for specifying frame order/duration/looping/ping-pong.
+     * @see AnimatedSprite, which plays back a named animation defined here.
+     */
     class SpriteSheet
     {
     public:

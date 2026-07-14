@@ -20,7 +20,40 @@ namespace CNA::Extended::ECS
 {
     class World;
 
-    /** @brief Accumulates ISystems, then builds a World that owns and initializes all of them. */
+    /**
+     * @brief Accumulates ISystems, then builds a World that owns and initializes all of them.
+     * This is the normal way to construct a World -- prefer it over calling World's own
+     * constructor directly, since a World with no registered systems can create/destroy entities
+     * and attach components but never actually processes them.
+     *
+     * @see World, the container this builds; @see Entity, Systems::ISystem for what gets created
+     * and registered, respectively.
+     * @code
+     * #include <CNA/Extended/ECS/Entity.hpp>
+     * #include <CNA/Extended/ECS/World.hpp>
+     * #include <CNA/Extended/ECS/WorldBuilder.hpp>
+     * #include <Microsoft/Xna/Framework/GameTime.hpp>
+     *
+     * using CNA::Extended::ECS::Entity;
+     * using CNA::Extended::ECS::World;
+     * using CNA::Extended::ECS::WorldBuilder;
+     * using Microsoft::Xna::Framework::GameTime;
+     *
+     * struct Position { float X = 0.0f; float Y = 0.0f; };
+     *
+     * void RunOneFrame()
+     * {
+     *     std::unique_ptr<World> world = WorldBuilder().Build();
+     *
+     *     Entity& entity = world->CreateEntity();
+     *     Position position;
+     *     entity.Attach(&position); // caller keeps position alive for the entity's lifetime
+     *
+     *     GameTime gameTime;
+     *     world->Update(gameTime); // processes any registered IUpdateSystems
+     * }
+     * @endcode
+     */
     class WorldBuilder
     {
     public:

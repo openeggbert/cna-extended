@@ -53,6 +53,11 @@ namespace CNA::Extended::Screens
      * @remark Screens are managed using a stack-based approach where the topmost screen is
      * considered the active screen, while underlying screens can continue to update and draw in
      * the background based on their UpdateWhenInactive/DrawWhenInactive settings.
+     * @see Screen, the base type managed by this stack. ScreenManager never owns the Screens
+     * passed to ShowScreen/ReplaceScreen -- see this header's own top comment for why (ownership
+     * remains with the caller, only Transitions::Transition ownership transfers).
+     * @see Transitions::Transition, Transitions::FadeTransition, Transitions::ExpandTransition,
+     * the optional transition effects accepted by ShowScreen/CloseScreen/ReplaceScreen.
      */
     class ScreenManager : public SimpleDrawableGameComponent
     {

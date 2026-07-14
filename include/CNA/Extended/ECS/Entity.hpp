@@ -17,7 +17,14 @@ namespace CNA::Extended::ECS
 {
     class EntityManager;
 
-    /** @brief A lightweight handle to a set of components tracked under a single stable integer ID. */
+    /**
+     * @brief A lightweight handle to a set of components tracked under a single stable integer
+     * ID. Entities are cheap to copy (just an ID plus two back-pointers) and carry no component
+     * data themselves -- Attach/Get/Has/Detach all forward to per-component-type storage owned by
+     * the World's ComponentManager, keyed by this entity's ID.
+     * @see World::CreateEntity, the only way to obtain a valid Entity.
+     * @see ComponentMapperOf, the per-component-type storage Attach/Get/Has/Detach forward to.
+     */
     class Entity
     {
     public:

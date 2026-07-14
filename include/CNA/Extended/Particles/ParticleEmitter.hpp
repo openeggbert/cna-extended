@@ -49,7 +49,18 @@ namespace CNA::Extended::Particles
 {
     using Microsoft::Xna::Framework::Vector2;
 
-    /** @brief Creates, updates, and manages the particles emitted by one emission source within a particle effect. */
+    /**
+     * @brief Creates, updates, and manages the particles emitted by one emission source within a
+     * particle effect. An emitter's Profile controls where new particles start (point, line,
+     * circle, box, ...), Parameters controls their initial values (velocity, color, scale,
+     * lifetime, ...), and Modifiers apply per-frame forces/interpolation (gravity, drag, color-
+     * over-time, ...) to particles already in flight.
+     *
+     * @see ParticleEffect, which owns and drives one or more emitters as a single logical effect.
+     * @see Profiles::Profile for the available emission-shape factories (Profile::Point,
+     * Profile::Line, Profile::Circle, ...).
+     * @see Modifiers::Modifier, the base type for entries in getModifiersProperty()'s list.
+     */
     class ParticleEmitter : public System::IDisposable
     {
     public:

@@ -33,7 +33,48 @@ namespace CNA::Extended::Graphics
     using Microsoft::Xna::Framework::GameTime;
     using System::TimeSpan;
 
-    /** @brief A Sprite that plays a named SpriteSheet animation, advancing its TextureRegion frame-by-frame over time. */
+    /**
+     * @brief A Sprite that plays a named SpriteSheet animation, advancing its TextureRegion
+     * frame-by-frame over time. This is the usual way to animate a character/effect: define the
+     * animation once on a shared SpriteSheet (SpriteSheet::DefineAnimation), then create one
+     * AnimatedSprite per on-screen instance and call Update() each frame.
+     *
+     * @see SpriteSheet, the source of the named animation(s) this sprite plays.
+     * @see Animations::AnimationController, returned by getControllerProperty(), for pausing,
+     * resuming, or otherwise driving playback beyond simple per-frame Update() advancement.
+     * @code
+     * #include <CNA/Extended/Graphics/AnimatedSprite.hpp>
+     * #include <CNA/Extended/Graphics/SpriteSheetAnimationBuilder.hpp>
+     * #include <CNA/Extended/Graphics/Texture2DAtlas.hpp>
+     * #include <Microsoft/Xna/Framework/GameTime.hpp>
+     * #include <System/TimeSpan.hpp>
+     *
+     * using CNA::Extended::Graphics::AnimatedSprite;
+     * using CNA::Extended::Graphics::SpriteSheet;
+     * using CNA::Extended::Graphics::SpriteSheetAnimationBuilder;
+     * using CNA::Extended::Graphics::Texture2DAtlas;
+     * using Microsoft::Xna::Framework::GameTime;
+     * using Microsoft::Xna::Framework::Graphics::Texture2D;
+     * using System::TimeSpan;
+     *
+     * void BuildWalkCycle(Texture2D& walkSheetTexture, const GameTime& gameTime)
+     * {
+     *     Texture2DAtlas atlas("player-atlas", &walkSheetTexture);
+     *     atlas.CreateRegion(0, 0, 32, 32, "walk0");
+     *     atlas.CreateRegion(32, 0, 32, 32, "walk1");
+     *
+     *     SpriteSheet sheet("player-sheet", atlas);
+     *     sheet.DefineAnimation("walk", [](SpriteSheetAnimationBuilder& builder) {
+     *         builder.AddFrame("walk0", TimeSpan::FromSeconds(0.15))
+     *             .AddFrame("walk1", TimeSpan::FromSeconds(0.15))
+     *             .IsLooping(true);
+     *     });
+     *
+     *     AnimatedSprite player(sheet, "walk");
+     *     player.Update(gameTime); // call once per frame to advance the animation
+     * }
+     * @endcode
+     */
     class AnimatedSprite final : public Sprite
     {
     public:

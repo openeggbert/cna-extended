@@ -28,6 +28,10 @@ namespace CNA::Extended::Screens
      * @brief Abstract base for game screens that can be managed by a ScreenManager.
      * @remark When used with a ScreenManager, multiple screens can be active simultaneously in
      * the manager's screen stack based on their UpdateWhenInactive/DrawWhenInactive properties.
+     * @see ScreenManager, which owns the stack a Screen subclass is pushed onto/popped from via
+     * ShowScreen/CloseScreen, and calls this class's Initialize/LoadContent/Update/Draw hooks.
+     * @see Transitions::Transition, Transitions::FadeTransition, Transitions::ExpandTransition
+     * for animating a screen's entrance/exit rather than switching instantly.
      */
     class Screen : public System::IDisposable
     {

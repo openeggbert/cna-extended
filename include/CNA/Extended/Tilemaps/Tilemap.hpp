@@ -50,7 +50,25 @@ namespace CNA::Extended::Tilemaps
     using Microsoft::Xna::Framework::Vector2;
     using Microsoft::Xna::Framework::Graphics::Texture2D;
 
-    /** @brief A tilemap loaded from any supported format (Tiled, LDtk, Ogmo). */
+    /**
+     * @brief The runtime tile/layer/tileset data model for a loaded map, independent of which
+     * source format it came from (Tiled TMX/JSON, LDtk JSON, or Ogmo JSON). Every format-specific
+     * parser converges on this same representation, so rendering, coordinate conversion, and
+     * gameplay code written against Tilemap never needs to know or care which format a given map
+     * was authored in.
+     *
+     * A Tilemap is data only -- it owns its layers, tilesets, and any textures it loaded, but has
+     * no drawing logic of its own. Load one with a format parser (e.g.
+     * Tiled::TiledTmxParser::ParseFromFile) or by hand-assembling layers/tilesets, then hand it to
+     * one of the Rendering::* renderers to draw it.
+     *
+     * @see CNA::Extended::Tilemaps::Build (TilemapFactory.hpp) for the lower-level entry point
+     * format parsers use internally to turn a parsed TilemapData into a Tilemap.
+     * @see Tiled::TiledTmxParser, LDtk::LDtkWorld, Ogmo::OgmoProject for the format-specific
+     * parsers that produce a Tilemap directly.
+     * @see Rendering::TilemapSpriteBatchRenderer, Rendering::TilemapRenderer, and their World-*
+     * counterparts for drawing a loaded Tilemap.
+     */
     class Tilemap
     {
     public:

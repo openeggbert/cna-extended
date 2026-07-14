@@ -54,7 +54,33 @@ namespace CNA::Extended::BitmapFonts
     using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
     using Microsoft::Xna::Framework::Graphics::Texture2D;
 
-    /** @brief A bitmap (BMFont) font: a texture-backed character set with kerning and glyph-layout support. */
+    /**
+     * @brief A bitmap (BMFont) font: a texture-backed character set with kerning and glyph-layout
+     * support, loaded from an AngelCode BMFont `.fnt` file (plus its page texture image(s)) via
+     * FromFile/FromStream. Use MeasureString/GetStringRectangle for layout, or draw text directly
+     * with BitmapFontExtensions::DrawString.
+     *
+     * @see BitmapFontExtensions::DrawString for drawing text with this font through a SpriteBatch.
+     * @see GetGlyphs for lower-level, allocation-free access to each laid-out glyph's position and
+     * BitmapFontCharacter, e.g. for custom per-glyph effects.
+     * @code
+     * #include <CNA/Extended/BitmapFonts/BitmapFont.hpp>
+     * #include <CNA/Extended/BitmapFonts/BitmapFontExtensions.hpp>
+     *
+     * using CNA::Extended::BitmapFonts::BitmapFont;
+     * using CNA::Extended::BitmapFonts::DrawString;
+     * using Microsoft::Xna::Framework::Color;
+     * using Microsoft::Xna::Framework::Vector2;
+     * using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
+     * using Microsoft::Xna::Framework::Graphics::SpriteBatch;
+     *
+     * void DrawHud(GraphicsDevice& graphicsDevice, SpriteBatch& spriteBatch)
+     * {
+     *     const BitmapFont font = BitmapFont::FromFile(graphicsDevice, "Content/font.fnt");
+     *     DrawString(spriteBatch, font, "Hello, world!", Vector2(10.0f, 10.0f), Color::White);
+     * }
+     * @endcode
+     */
     class BitmapFont
     {
     public:

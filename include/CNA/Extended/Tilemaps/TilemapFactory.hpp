@@ -31,14 +31,24 @@ namespace CNA::Extended::Tilemaps
     using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
 
     /**
-     * @brief Builds a Tilemap from @p data, resolving relative texture paths against @p baseDirectory via
+     * @brief Turns a format-agnostic, already-parsed TilemapData into a real Tilemap, loading
+     * every tileset/image-layer texture it references via GraphicsDevice along the way. This is
+     * the shared final step every format parser (Tiled::TiledTmxParser, LDtk::LDtkWorld,
+     * Ogmo::OgmoProject) funnels through after parsing its own source format -- most callers reach
+     * it indirectly through one of those parsers rather than calling Build directly.
+     * Relative texture paths in @p data are resolved against @p baseDirectory via
      * CNA::Extended::Content::OpenFile.
      * @throws Parsers::TilemapParseException a texture cannot be loaded.
+     * @see Tiled::TiledTmxParser::ParseFromFile, LDtk::LDtkWorld, Ogmo::OgmoProject for the
+     * higher-level, format-specific entry points that call this internally.
      */
     [[nodiscard]] Tilemap Build(TilemapData& data, GraphicsDevice& graphicsDevice, const std::string& baseDirectory);
 
     /**
-     * @brief Builds a Tilemap from @p data, resolving relative texture paths against @p baseDirectory via @p resourceResolver.
+     * @brief Same as the 3-argument overload, but resolves relative texture paths through
+     * @p resourceResolver instead of the filesystem directly -- use this overload when textures
+     * need to come from somewhere other than a plain file path (e.g. an embedded/packed asset
+     * store).
      * @throws Parsers::TilemapParseException a texture cannot be loaded.
      */
     [[nodiscard]] Tilemap Build(TilemapData& data, GraphicsDevice& graphicsDevice, const std::string& baseDirectory,

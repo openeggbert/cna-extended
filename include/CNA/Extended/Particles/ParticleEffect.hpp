@@ -25,7 +25,38 @@ namespace CNA::Extended::Particles
     using Microsoft::Xna::Framework::GameTime;
     using Microsoft::Xna::Framework::Vector2;
 
-    /** @brief A complete particle effect: a positioned/rotated/scaled container of one or more ParticleEmitters. */
+    /**
+     * @brief A complete particle effect: a positioned/rotated/scaled container of one or more
+     * ParticleEmitters (e.g. an "explosion" effect might combine a fireball emitter, a smoke
+     * emitter, and a spark emitter). Move/rotate/scale the whole effect via Position/Rotation/
+     * Scale, Trigger() it to release particles, and call Update() once per frame to advance every
+     * emitter's simulation.
+     *
+     * @see ParticleEmitter, the individual emission source this effect owns one or more of via
+     * getEmittersProperty().
+     * @see Particles::ParticleEffectSerializer::Deserialize for loading a ParticleEffect from an
+     * XML particle-effect definition file instead of constructing one by hand.
+     * @code
+     * #include <CNA/Extended/Particles/ParticleEffect.hpp>
+     * #include <CNA/Extended/Particles/ParticleEmitter.hpp>
+     * #include <memory>
+     *
+     * using CNA::Extended::Particles::ParticleEffect;
+     * using CNA::Extended::Particles::ParticleEmitter;
+     * using Microsoft::Xna::Framework::Vector2;
+     *
+     * void SpawnExplosion(ParticleEffect& reusableEffect)
+     * {
+     *     if (reusableEffect.getEmittersProperty().empty())
+     *     {
+     *         reusableEffect.getEmittersProperty().push_back(std::make_unique<ParticleEmitter>(200));
+     *     }
+     *
+     *     reusableEffect.Trigger(Vector2(100.0f, 100.0f));
+     *     reusableEffect.Update(1.0f / 60.0f); // call once per frame from your game's Update()
+     * }
+     * @endcode
+     */
     class ParticleEffect : public System::IDisposable
     {
     public:

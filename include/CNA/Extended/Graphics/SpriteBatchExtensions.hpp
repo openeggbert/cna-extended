@@ -34,20 +34,36 @@ namespace CNA::Extended::Graphics
     using Microsoft::Xna::Framework::Graphics::SpriteEffects;
     using Microsoft::Xna::Framework::Graphics::Texture2D;
 
-    /** @brief Draws a nine-patch region, stretching its edge/center patches to fill @p destinationRectangle. */
+    /**
+     * @brief Draws a nine-patch region, stretching its edge/center patches to fill @p destinationRectangle.
+     * @see Graphics::NinePatch, whose corner/edge/center-patch layout this scales into @p destinationRectangle.
+     */
     void Draw(SpriteBatch& spriteBatch, const NinePatch& ninePatchRegion, const Rectangle& destinationRectangle,
         const Color& color, const std::optional<Rectangle>& clippingRectangle = std::nullopt);
 
-    /** @brief Draws a sprite to the sprite batch. */
+    /**
+     * @brief Draws a sprite with explicit position, rotation, and scale (Sprite-first parameter
+     * order, matching upstream's `sprite.Draw(spriteBatch, ...)` extension-method call site --
+     * functionally identical to the SpriteBatch-first overload with the same three parameters below).
+     */
     void Draw(const Sprite& sprite, SpriteBatch& spriteBatch, const Vector2& position, float rotation, const Vector2& scale);
 
-    /** @brief Draws a sprite to the sprite batch with a transform. */
+    /** @brief Draws a sprite using position/rotation/scale packed into a single Transform2. */
     void Draw(SpriteBatch& spriteBatch, const Sprite& sprite, const Transform2& transform);
 
-    /** @brief Draws a sprite to the sprite batch. */
+    /**
+     * @brief Draws a sprite at @p position with an optional rotation, using the sprite's own
+     * Scale/Origin/Color/Effects/LayerDepth (see Sprite's properties).
+     * @see Graphics::AnimatedSprite, whose frame-advancing TextureRegion this overload (and its
+     * siblings above/below) draws just like any other Sprite.
+     */
     void Draw(SpriteBatch& spriteBatch, const Sprite& sprite, const Vector2& position, float rotation = 0.0f);
 
-    /** @brief Draws a sprite to the sprite batch. */
+    /**
+     * @brief Draws a sprite with explicit position, rotation, and scale (SpriteBatch-first
+     * parameter order; see the Sprite-first overload above for the equivalent call written the
+     * other way).
+     */
     void Draw(SpriteBatch& spriteBatch, const Sprite& sprite, const Vector2& position, float rotation, const Vector2& scale);
 
     /** @brief Draws a region of a texture into a destination rectangle with a tint color and optional clipping. */

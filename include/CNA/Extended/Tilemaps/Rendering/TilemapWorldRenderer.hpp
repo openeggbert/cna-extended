@@ -76,6 +76,11 @@ namespace CNA::Extended::Tilemaps::Rendering
      *
      * See TilemapRenderer.hpp's own top comment for the DefaultEffect -> BasicEffect substitution
      * this port makes and why (applies identically here).
+     *
+     * @see TilemapRenderer, the single-tilemap counterpart this shares its BasicEffect/vertex-
+     * buffer drawing approach with.
+     * @see TilemapWorldSpriteBatchRenderer for a SpriteBatch-based alternative that also supports
+     * animated tiles in world mode, unlike this renderer (see above).
      */
     class TilemapWorldRenderer final : public System::IDisposable
     {

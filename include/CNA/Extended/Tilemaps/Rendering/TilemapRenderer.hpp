@@ -200,6 +200,26 @@ namespace CNA::Extended::Tilemaps::Rendering
      *
      * See this header's own top comment for the DefaultEffect -> BasicEffect substitution this
      * port makes and why.
+     *
+     * @see TilemapSpriteBatchRenderer for a simpler, SpriteBatch-based alternative -- prefer it
+     * when this renderer's higher performance (merged draw calls via vertex/index buffers,
+     * layer-group merging) isn't needed and easier integration with existing SpriteBatch-based
+     * drawing code matters more.
+     * @see TilemapWorldRenderer, the GraphicsDevice-based counterpart of this class for drawing
+     * multiple tilemaps pre-baked into one seamless world.
+     * @code
+     * using CNA::Extended::OrthographicCamera;
+     * using CNA::Extended::Tilemaps::Tilemap;
+     * using CNA::Extended::Tilemaps::Rendering::TilemapRenderer;
+     * using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
+     *
+     * void DrawFrame(GraphicsDevice& graphicsDevice, Tilemap& tilemap, OrthographicCamera& camera)
+     * {
+     *     TilemapRenderer renderer(graphicsDevice);
+     *     renderer.LoadTilemap(&tilemap);
+     *     renderer.Draw(camera); // draws every visible layer, grouped or not
+     * }
+     * @endcode
      */
     class TilemapRenderer final : public System::IDisposable
     {

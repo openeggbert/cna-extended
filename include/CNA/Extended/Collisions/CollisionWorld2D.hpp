@@ -72,6 +72,39 @@ namespace CNA::Extended::Collisions
      * @remark Low-level collision math remains in Collision2D and the bounding volume types.
      * Layer filtering is explicit: collisions are considered only for layer pairs that have been
      * enabled.
+     * @see ICollisionActor, the interface your own game-object types implement to participate in
+     * a CollisionWorld2D.
+     * @see Collision2D for the low-level shape-vs-shape intersection/containment tests this class
+     * builds broadphase/narrowphase queries on top of.
+     * @code
+     * #include <CNA/Extended/Collisions/CollisionWorld2D.hpp>
+     * #include <CNA/Extended/Collisions/ICollisionActor.hpp>
+     *
+     * using CNA::Extended::BoundingBox2D;
+     * using CNA::Extended::CollisionShape2D;
+     * using CNA::Extended::Collisions::CollisionWorld2D;
+     * using CNA::Extended::Collisions::ICollisionActor;
+     * using Microsoft::Xna::Framework::Vector2;
+     *
+     * class BoxActor final : public ICollisionActor
+     * {
+     * public:
+     *     BoxActor(int id, const BoundingBox2D& box) : id_(id), box_(box) {}
+     *     [[nodiscard]] int getIdProperty() const override { return id_; }
+     *     [[nodiscard]] CollisionShape2D getShapeProperty() const override { return CollisionShape2D(box_); }
+     * private:
+     *     int id_;
+     *     BoundingBox2D box_;
+     * };
+     *
+     * void FindNearbyActors(CollisionWorld2D& world)
+     * {
+     *     BoxActor player(1, BoundingBox2D(Vector2(0.0f, 0.0f), Vector2(32.0f, 32.0f)));
+     *     world.Insert(&player); // default layer
+     *
+     *     const auto nearby = world.QueryCandidates(BoundingBox2D(Vector2(-16.0f, -16.0f), Vector2(48.0f, 48.0f)));
+     * }
+     * @endcode
      */
     class CollisionWorld2D
     {

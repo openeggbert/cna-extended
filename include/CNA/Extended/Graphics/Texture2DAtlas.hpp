@@ -42,7 +42,36 @@ namespace CNA::Extended::Graphics
 
     class Sprite;
 
-    /** @brief Represents a 2D texture atlas: a large image containing a collection of named/indexed sub-image regions. */
+    /**
+     * @brief A large source texture (a "sprite sheet") divided into named and/or indexed
+     * sub-image regions, so a single loaded Texture2D can back many distinct sprites without a
+     * separate texture (and separate SpriteBatch draw-call state changes) per sprite. Build one
+     * either by hand-carving individual regions (CreateRegion) or, for a uniform grid of
+     * same-sized frames (e.g. a walk-cycle sprite sheet), via the static Create() factory.
+     *
+     * @see Texture2DRegion, the individual sub-image handle every region/sprite created from this
+     * atlas is backed by.
+     * @see SpriteSheet, which layers named frame-index animations on top of a Texture2DAtlas.
+     * @see CreateSprite for turning a region directly into a drawable Sprite.
+     * @code
+     * #include <CNA/Extended/Graphics/Sprite.hpp>
+     * #include <CNA/Extended/Graphics/Texture2DAtlas.hpp>
+     *
+     * using CNA::Extended::Graphics::Sprite;
+     * using CNA::Extended::Graphics::Texture2DAtlas;
+     * using Microsoft::Xna::Framework::Graphics::Texture2D;
+     *
+     * void BuildAtlas(Texture2D& spriteSheetTexture)
+     * {
+     *     Texture2DAtlas atlas("player-atlas", &spriteSheetTexture);
+     *     atlas.CreateRegion(0, 0, 32, 32, "walk0");
+     *     atlas.CreateRegion(32, 0, 32, 32, "walk1");
+     *
+     *     const Sprite sprite = atlas.CreateSprite("walk0");
+     *     (void)sprite;
+     * }
+     * @endcode
+     */
     class Texture2DAtlas
     {
     public:

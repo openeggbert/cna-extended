@@ -70,6 +70,11 @@ namespace CNA::Extended::Tilemaps::Rendering
      * each batch.
      *
      * Animated tiles are supported. Call Update() each frame to advance animation state.
+     *
+     * @see TilemapWorldRenderer for a higher-performance GraphicsDevice-based alternative --
+     * note it does not support animated tiles in world mode, unlike this renderer.
+     * @see TilemapSpriteBatchRenderer, the single-tilemap counterpart this shares its
+     * SpriteBatch-based drawing approach with.
      */
     class TilemapWorldSpriteBatchRenderer final
     {

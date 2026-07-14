@@ -65,6 +65,28 @@ namespace CNA::Extended::Tilemaps::Rendering
      * Consecutive visible tile layers that share the same parallax factor are batched into a
      * single SpriteBatch.Begin/End pair to minimize state-change overhead. Layers with different
      * parallax factors each require a separate Begin/End pair.
+     *
+     * @see TilemapRenderer for a higher-performance GraphicsDevice/vertex-buffer-based alternative
+     * with layer-group merging -- prefer it for large maps where SpriteBatch's one-draw-call-per-
+     * tile cost becomes the bottleneck.
+     * @see TilemapWorldSpriteBatchRenderer for drawing a seamless multi-tilemap world instead of a
+     * single Tilemap.
+     * @code
+     * using CNA::Extended::OrthographicCamera;
+     * using CNA::Extended::Tilemaps::Tilemap;
+     * using CNA::Extended::Tilemaps::Rendering::TilemapSpriteBatchRenderer;
+     * using Microsoft::Xna::Framework::Graphics::SpriteBatch;
+     *
+     * void DrawFrame(SpriteBatch& spriteBatch, Tilemap& tilemap, OrthographicCamera& camera)
+     * {
+     *     TilemapSpriteBatchRenderer renderer;
+     *     renderer.LoadTilemap(&tilemap);
+     *
+     *     // Draw() issues its own SpriteBatch.Begin/End pair(s) internally -- do not wrap this
+     *     // call in a Begin/End pair of your own.
+     *     renderer.Draw(spriteBatch, camera);
+     * }
+     * @endcode
      */
     class TilemapSpriteBatchRenderer final
     {
