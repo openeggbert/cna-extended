@@ -20,11 +20,11 @@ library to [`easy-3d`](../easy-3d), following the same conventions.
 simplification. Scope was explicitly negotiated with the project owner and is recorded in
 `plan.md` (`Status: APPROVED`, no longer draft).
 
-**Current phase**: Phases 0–6, 8, and 9 are complete. Phase 7 ("Tilemaps") is ~95% done:
-the core data model, `Tiled/*` (TMX/JSON — priority, given the user's existing
-`tiled-blupi` project), `LDtk/*`, `Ogmo/*`, and most of `Rendering/*` are done.
-**`TilemapRenderer`/`TilemapWorldRenderer` are `needs_human`-blocked** — see section 4.
-This is the sole remaining blocker in the entire porting plan outside Phase 10.
+**Current phase: DONE.** All 10 phases in `plan.md` are complete as of 2026-07-14 — the
+port itself is finished. There is no active blocker and no phase in progress. See section 4
+for how the two former blockers (the `TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect`
+mismatch, and its trailing pixel-verification test gap) were resolved, and section 8 for
+what a future session might reasonably still do (all optional/non-blocking).
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -55,12 +55,16 @@ This is the sole remaining blocker in the entire porting plan outside Phase 10.
 - **Tests**: **2042/2042 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
-  `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
-- **Phases 0–9 are ALL COMPLETE.** Phase 7's former architectural blocker is RESOLVED
-  (`TilemapRenderer`/`TilemapWorldRenderer` ported using `cna`'s real `BasicEffect`) and its
-  trailing test-coverage gap (`TilemapIntegrationTests.cs`'s 28 pixel-verification tests) is
-  also now ported — see section 4 for the full history. **Only Phase 10
-  (integration/polish/documentation) remains in the entire plan.**
+  `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
+  `CnaExtendedTests` GoogleTest binary, and (linked config only) generated Doxygen HTML
+  under `docs/generated/html` (gitignored, regenerate with `doxygen Doxyfile`).
+- **ALL 10 PHASES COMPLETE.** Phase 7's former architectural blocker is resolved
+  (`TilemapRenderer`/`TilemapWorldRenderer` ported using `cna`'s real `BasicEffect`), its
+  trailing pixel-verification test gap is closed
+  (`TilemapIntegrationTests.cs`, 28 tests → 56 executed cases), and Phase 10 (end-to-end
+  example under `examples/tiled_demo/`, a zero-warning Doxygen pass, `README.md`/
+  `NOTICE.md` refresh) landed too — see section 3 for the full history. **There is no
+  remaining phase.**
 - **CORRECTED earlier this session, was wrong in even-earlier entries of this same file**: a
   real headless `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple genuinely works end-to-end
   in this environment (real EasyGL-over-Mesa software rendering) — the "no headless
@@ -69,25 +73,50 @@ This is the sole remaining blocker in the entire porting plan outside Phase 10.
   `ShapeExtensions`, `FadeTransition`/`ExpandTransition::Draw` now all have real
   behavioral test coverage as a direct follow-up (47 new tests) — see section 3. This
   correction is now fully closed out, not just noted.
-- **Does not work / not done yet**: nothing outside Phase 10. Phase 10 itself (end-to-end
-  example, Doxygen pass, final warning sweep, `NOTICE.md` re-audit) has not been started —
-  see section 8.
+- **Does not work / not done yet**: nothing. See section 5 for known, non-blocking
+  bugs/limitations (mostly in sibling repos, worked around locally) and `MISSING.md` for
+  tracked CNA-vs-XNA API-shape gaps found during porting. See section 8 for optional
+  follow-up ideas — none of them block anything or are required.
 
 ---
 
 ## 3. Recent changes
 
-One long autonomous session (owner authorized, unavailable for hours). Order so far: Phases
-4-5, then Phase 6 (Serialization) + Phase 9 (ECS) in parallel, then Phase 7's Tilemaps core
-+ the bulk of Phase 8 (Particles) in parallel, then `Tilemaps/Tiled/*` +
-`ParticleEffectSerializer.cs` in parallel (Phase 8 completed in full), then
-`Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then `Tilemaps/Rendering/*` (the last item
-in Phase 7), then a follow-up test-coverage task closing out the discovery from the Rendering
-batch, then — after the owner's own question redirected the investigation — the
-`TilemapRenderer`/`TilemapWorldRenderer` blocker resolution (this batch) and its own
-follow-up pixel-verification test task (in progress). See `git log` for every batch's
-individual commits; this section covers the two most recent batches in detail, condensing
-earlier ones.
+One long autonomous session (owner authorized, unavailable for hours), which ended up
+completing the entire remaining plan. Order: Phases 4-5, then Phase 6 (Serialization) +
+Phase 9 (ECS) in parallel, then Phase 7's Tilemaps core + the bulk of Phase 8 (Particles) in
+parallel, then `Tilemaps/Tiled/*` + `ParticleEffectSerializer.cs` in parallel (Phase 8
+completed in full), then `Tilemaps/LDtk/*` + `Tilemaps/Ogmo/*` in parallel, then
+`Tilemaps/Rendering/*` (the last item in Phase 7 at the time), then a follow-up
+test-coverage task, then — after the owner's own question redirected the investigation —
+the `TilemapRenderer`/`TilemapWorldRenderer` blocker resolution, its own follow-up
+pixel-verification test task (closing Phase 7 100%), and finally Phase 10 (end-to-end
+example + Doxygen/README/NOTICE.md pass, in parallel) closing the whole plan. See `git log`
+for every batch's individual commits; this section covers the three most recent batches in
+detail, condensing earlier ones.
+
+- **Phase 10 landed, closing the entire plan (2026-07-14)**. Two forked sub-agents ran in
+  parallel on disjoint files: (a) `examples/tiled_demo/` — a real end-to-end example loading
+  a hand-authored Tiled TMX map (with a real external tileset/sprite BMP, not synthetic
+  in-code data), rendering it via `TilemapSpriteBatchRenderer`, animating a player sprite via
+  `AnimatedSprite`/`AnimationController` under scripted `KeyboardStateExtended` input, using
+  `OrthographicCamera`, and running headlessly via the same real-`GraphicsDevice`+
+  `RenderTarget2D`+`GetBackBufferData`-readback idiom `TilemapIntegrationTests.cpp`
+  established; (b) a Doxygen pass (fixed 52 warning lines down to **zero**, across 20 files —
+  mostly missing `@param` tags, plus 2 false-positive hex-color autolink warnings and 4
+  `README.md` cross-reference warnings), a `README.md` rewrite (accurate module list, a
+  compiled-and-verified `Tweener` usage snippet), and a `NOTICE.md` re-audit (found already
+  accurate, no changes needed). Independently re-verified by the orchestrating session, not
+  just trusted: clean `git status` (changes matched exactly what both forks claimed,
+  `plan.md`/`NEXT.md`/`NOTICE.md`/`MISSING.md` untouched by either), genuinely clean
+  `rm -rf build`+`rm -rf build-headers` rebuilds of both configs from scratch (zero
+  warnings), full `ctest` re-run (**2042/2042 passing**, unchanged from before Phase 10 —
+  expected, since this phase added an example and docs, not new library code), the example
+  binary actually re-run by the orchestrating session (not just trusted) and its saved PNG
+  frame visually inspected (confirmed: grass field, dirt road, player sprite, exactly as
+  claimed), and the Doxygen zero-warning claim independently reproduced
+  (`rm -rf docs/generated && doxygen Doxyfile` → exit 0, 0 warnings, 4882 HTML files
+  generated).
 
 - **`TilemapRenderer`/`TilemapWorldRenderer` blocker RESOLVED and ported (2026-07-14)**. The
   owner directly challenged the framing of the blocker (asking, in effect, whether
@@ -188,11 +217,20 @@ re-detailed here.
 
 ## 4. Current blocker / main problem
 
-**No blocker remains anywhere in the plan outside Phase 10, which hasn't been started.**
+**No blocker remains anywhere. The plan is complete — all 10 phases, including Phase 10.**
 `cmake --build build -j$(nproc)`, `cmake --build build-headers -j$(nproc)`, and
 `ctest --test-dir build` all currently succeed (**2042 tests run, 100% passing**, zero
-warnings in both configs). Phases 0-9 are all complete. The two historical blockers/gaps
-below are kept for context on how they were resolved, not because either is still open.
+warnings in both configs). The three historical blockers/gaps below are kept for context on
+how they were resolved, not because any is still open.
+
+### Resolved: Phase 10 (end-to-end example, Doxygen pass, README/NOTICE.md)
+
+- **Scope**: the plan's final phase — not a blocker in the usual sense, just the last
+  remaining work. See `plan.md`'s Phase 10 entry and section 3 above for full detail.
+- **Resolution**: `examples/tiled_demo/` (a real, running, visually-verified end-to-end
+  example), a Doxygen pass (52 warnings → 0), and a refreshed `README.md` (`NOTICE.md`
+  needed no changes, confirmed already accurate). All independently re-verified by the
+  orchestrating session.
 
 ### Resolved: `TilemapIntegrationTests.cs` pixel-verification test gap
 
@@ -394,25 +432,42 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-**Phase 7 is fully complete. The only remaining phase in the entire plan is Phase 10.**
+**The entire plan is complete — all 10 phases. There is no required next task.** Nothing
+below is blocking; treat this as an idea list for a future session, not a checklist to work
+through.
 
-1. **Phase 10 — Integration, polish, documentation.** Not yet started. Checklist (see
-   `plan.md`'s Phase 10 section for the authoritative list):
-   - End-to-end example combining several modules (e.g. a small Tiled map + sprite animation
-     + input demo) under `examples/`.
-   - Full Doxygen pass; generate `docs/generated/html` (git-ignored, matching
-     `sharp-runtime`).
-   - Zero-warning pass (`-Wall -Wextra -Werror`/`/W4 /WX`) — last verified clean as of this
-     writing (2042/2042 tests passing, both configs), but re-check after Phase 10's other
-     changes land, not just trust this snapshot.
-   - Update `README.md` with the final module list and a usage snippet (it already exists
-     and was refreshed once this session — re-check it reflects the now-complete Phase 7).
-   - Re-audit `NOTICE.md` against the final set of ported files.
-   - Command after each sub-item: `cmake --build build -j$(nproc) && ctest --test-dir build`
-     (linked config) plus `cmake --build build-headers -j$(nproc)` (headers-only) — both must
-     stay clean throughout.
+Genuinely optional follow-ups, roughly in order of likely value:
 
-Delegating Phase 10 sub-items to a sub-agent fork remains appropriate (user-approved this
+1. **Doxygen coverage nice-to-haves**: the Phase 10 pass got real Doxygen warnings to zero,
+   but that only catches *missing* `@param`/`@return` tags on already-EXTRACT_ALL-visible
+   members, not prose quality. A future pass could improve doc *quality* (better `@brief`
+   descriptions, more `@see`/`@code` cross-references) — no warnings to chase, so there's no
+   objective "done" signal; use judgment.
+2. **`GetBackBufferData`/`RenderTarget2D` sizing gotcha** (found while building
+   `examples/tiled_demo/`, documented in `plan.md`'s Phase 10 entry and this file's section
+   5): `GraphicsDevice::GetBackBufferData(Color*, int)` without an explicit `Rectangle*`
+   reads against the window's real backbuffer size, not the currently-bound
+   `RenderTarget2D`'s size. This is a `cna` (sibling repo) behavior, not fixable here — but
+   consider adding a `MISSING.md` entry (matching the existing `Texture2D::GetData` entry's
+   format) if this trips up a future task again.
+3. **`AnimationController::AdvanceFrame`'s `IsPingPong`-needs-`IsLooping` gotcha** (same
+   discovery) — faithful upstream MonoGame.Extended behavior, not a bug, but worth a doc
+   note on `SpriteSheetAnimationBuilder::IsPingPong`'s Doxygen comment if a future session
+   is already touching that file.
+4. **General maintenance**: keep the reference clone at
+   `/rv/data/library/github.com/craftworkgames/MonoGame.Extended` up to date
+   (`/rv/data/library/github.com/github.sh`) if upstream MonoGame.Extended ever needs
+   re-checking against a bugfix; keep `../cna`/`../sharp-runtime` in sync per their own
+   `CLAUDE.md`s if either changes in a way that could affect this project (e.g. a future
+   real `.mgfxo` bytecode loader landing in `cna`, which would make the
+   `DefaultEffect`/`ShaderEffect` re-authoring notes throughout this codebase worth
+   revisiting — not urgent, current behavior is correct and tested).
+
+If a future session picks up any of these, verify with:
+`cmake --build build -j$(nproc) && ctest --test-dir build` (linked config) plus
+`cmake --build build-headers -j$(nproc)` (headers-only) — both must stay clean.
+
+Delegating optional follow-ups to a sub-agent fork remains appropriate (user-approved this
 session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/`NOTICE.md`,
 orchestrator verifies then commits) — but see section 5's process-risk entry:
 independently check `git status`/`git diff` (not just `git log`) after every fork turn,
@@ -436,10 +491,11 @@ including resumed ones, and be prepared for a "completed" notification to actual
   verify which side is actually incorrect first (see section 5's HSL round-trip entry for
   exactly this situation this session).
 - No skipping the ordered dependency chain within `plan.md` — confirmed this session that
-  Phase 8 (Particles) has a real Serialization dependency (`ParticleEffectSerializer.cs`)
-  despite `plan.md`'s dependency line originally not listing it; that one file is
-  deliberately deferred until picked up as its own task (see section 8, task 4).
-- Long unattended autonomous session in progress (owner authorized, unavailable for
+  Phase 8 (Particles) had a real Serialization dependency (`ParticleEffectSerializer.cs`)
+  despite `plan.md`'s dependency line originally not listing it; that file (and everything
+  else in the plan) is now ported and complete — kept here as a precedent for how to handle
+  a similar dependency-ordering surprise if `plan.md` is ever extended with new scope.
+- Historical note, no longer active (kept for context): during the long unattended session
   hours): keep pushing verified work directly to `develop` after each task (owner's
   explicit choice), keep using sub-agent forks for large modules under the verify-then-
   commit-myself safeguard (also the owner's explicit choice) — do not re-ask either
@@ -452,6 +508,24 @@ including resumed ones, and be prepared for a "completed" notification to actual
 ---
 
 ## 10. Resume prompt
+
+The porting plan is complete (all 10 phases). There is no required task to resume — if you
+were pointed here expecting unfinished work, re-check `plan.md`'s top `Status:` line and
+this file's section 2 first; something may have changed since this was written, but as of
+2026-07-14 there is nothing outstanding.
+
+If the project owner has a new, specific ask (a real request, not "continue the plan"), just
+do that directly rather than inventing work from section 8's optional idea list. If asked to
+"keep going" with no specific target, section 8 lists genuinely optional, non-blocking
+follow-ups — pick at most one, verify it the same way every prior task in this file was
+verified (independent `git status`/diff review of any fork's output before trusting it,
+genuinely clean rebuilds of both CMake configs from scratch, full `ctest`, and — for
+anything touching rendering/pixels — actually running the affected binary and inspecting
+real output, not just trusting a report), and update this file and `plan.md` afterward.
+
+The historical prompt this section used to contain (below, for reference only — do not
+follow it literally, it refers to a "task 1" numbering scheme from an earlier, now-obsolete
+state of section 8):
 
 ```
 Read NEXT.md first, in full, before doing anything else.

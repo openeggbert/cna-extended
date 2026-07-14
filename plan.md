@@ -1,14 +1,13 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-9 ALL COMPLETE (2026-07-14).**
-Phase 7's former architectural blocker (`TilemapRenderer`/`TilemapWorldRenderer`,
-`VertexPositionColorTexture` vs `DefaultEffect` vertex-layout mismatch) is resolved — ported
-using `cna`'s real `BasicEffect` instead — and its trailing test-coverage gap
-(`TilemapIntegrationTests.cs`'s 28 pixel-verification tests) is also now ported (see that
-phase's entry for the full history). **Only Phase 10 (integration/polish/documentation)
-remains in the entire plan.**
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — ALL 10 PHASES COMPLETE (2026-07-14). The
+port is done.** Phase 7's former architectural blocker (`TilemapRenderer`/
+`TilemapWorldRenderer`, `VertexPositionColorTexture` vs `DefaultEffect` vertex-layout
+mismatch) was resolved using `cna`'s real `BasicEffect`; Phase 10 (end-to-end example,
+Doxygen pass, README/NOTICE.md refresh) closed out the plan. See each phase's entry for
+full history.
 Fidelity requirement: port 1:1 wherever C#/C++ differences allow — no simplification. See
-`NEXT.md` for current state.**
+`NEXT.md` for current state and remaining follow-up items (none blocking).**
 
 ## 1. What this project is
 
@@ -1383,15 +1382,70 @@ to `System.Text.Json`/`MonoGame.Extended.Serialization` anywhere).
       The ported `ComponentManagerTests`' indexer test adapted for the reflection-gap
       difference noted above (calls `GetMapper<T>()` first).
 
-### Phase 10 — Integration, polish, documentation
+### Phase 10 — Integration, polish, documentation — **COMPLETE (2026-07-14)**
 
-- [ ] End-to-end example combining several modules (e.g. a small Tiled map + sprite
-      animation + input demo) under `examples/`
-- [ ] Full Doxygen pass; generate `docs/generated/html` (git-ignored, matching
-      `sharp-runtime`)
-- [ ] Zero-warning pass (`-Wall -Wextra -Werror` / `/W4 /WX`, matching house convention)
-- [ ] Update `README.md` with final module list and usage snippet
-- [ ] Re-audit `NOTICE.md` against the final set of ported files
+- [x] **End-to-end example** (`examples/tiled_demo/`, ported via a forked sub-agent):
+      loads a real hand-authored Tiled TMX map (`assets/map.tmx` + a real external
+      tileset/player-sprite BMP, resolved through the default local-filesystem
+      `ExternalResourceResolver` — not a synthetic in-code `Tilemap`), renders it via
+      `TilemapSpriteBatchRenderer`, drives a 3-frame walk-cycle `AnimatedSprite` (via
+      `Texture2DAtlas`/`SpriteSheet`/`SpriteSheetAnimationBuilder`/`AnimationController`)
+      along scripted `KeyboardStateExtended` input (plus a separately-wired
+      `InputListeners::KeyboardListener` demonstrating the event-driven API), and an
+      `OrthographicCamera` for the view/projection transform. Runs headlessly using this
+      project's own established test idiom (real `GraphicsDevice` + off-screen
+      `RenderTarget2D` + `GraphicsDevice::GetBackBufferData` readback — see `MISSING.md`
+      for why `Texture2D::GetData` alone doesn't work here), sampling real rendered pixels
+      each frame and saving the final frame as a PNG. Independently re-run and visually
+      confirmed by the orchestrating session (not just trusted): the saved PNG shows
+      exactly the intended grass field, dirt road, and player sprite.
+      **Two real, non-blocking rough edges found and documented (not fixed)**: (1)
+      `GraphicsDevice::GetBackBufferData(Color*, int)` (no explicit `Rectangle*`) reads
+      against the window's real backbuffer size, not the currently-bound `RenderTarget2D`'s
+      size — worked around with the explicit-`Rectangle` overload; worth a doc note nearer
+      `GetBackBufferData` itself. (2) `AnimationController::AdvanceFrame` only honors
+      `IsPingPong` when `IsLooping` is also set (faithful upstream behavior, a non-obvious
+      API-combination gotcha, not a port defect).
+- [x] **Full Doxygen pass** (via a forked sub-agent, in parallel with the example task):
+      `doxygen Doxyfile` initially failed outright (`docs/` didn't exist — Doxygen only
+      creates one path level under `OUTPUT_DIRECTORY`); fixed by creating the already-
+      gitignored `docs/` directory. Found 52 warning lines (45 unique locations) across 20
+      files: ~37 genuine missing-`@param` gaps, 2 files with false-positive `#RRGGBB`-style
+      hex-code autolink warnings (wrapped in backtick code-spans to suppress), and 4
+      `README.md` `\ref`-resolution warnings for cross-references to files outside
+      Doxygen's `INPUT` set (converted to plain inline-code mentions). All fixed by hand,
+      matching the established `@brief`/`@param`/`@return` comment style. **Independently
+      re-verified by the orchestrating session, not just trusted**: `rm -rf docs/generated
+      && doxygen Doxyfile` → exit 0, **zero warnings**, real HTML output confirmed (4882
+      files in `docs/generated/html`).
+- [x] **Zero-warning pass**: confirmed clean by the orchestrating session via genuinely
+      clean `rm -rf build`/`rm -rf build-headers` rebuilds of both configs after all of
+      Phase 10's changes landed (not just the individual forks' own claims) —
+      `-Wall -Wextra -Werror` holds in both, full suite **2042/2042 passing**.
+- [x] **`README.md` updated** (same Doxygen-pass fork): dropped the stale "~95%/blocked"
+      framing, listed all 9 completed module phases by name with their key types, and added
+      a real usage snippet (`Tweener`/`EasingFunctions` animating a `Vector2` member) —
+      verified by the fork by actually compiling the snippet standalone against the real
+      headers (caught and fixed one real bug in its own first draft:
+      `TweenTo` returns a pointer, needs `->Easing(...)` not `.Easing(...)`). Also refreshed
+      the "Building" section's CMake option list against the real current `CMakeLists.txt`.
+- [x] **`NOTICE.md` re-audited**, found already accurate — **no changes made**. Cross-
+      checked every `plan.md` mention of licensing/attribution (SlimMath/`Angle.hpp`,
+      nickgravelyn's Triangulator/`Triangulation/*.hpp`, GAMADU.COM/artemis_CSharp's
+      BSD-licensed `Bag<T>`, the Mercury Particle Engine "Upstream lineage" courtesy
+      section, `CircleF`/`Segment2`'s academic-only Real-Time-Collision-Detection
+      citation) against the actual current file locations and confirmed each is complete
+      and correctly cited; confirmed the new `BasicEffect`-substitution work in
+      `TilemapRenderer.hpp`/`TilemapWorldRenderer.hpp` carries only the standard
+      MonoGame.Extended MIT header, nothing licensing-relevant was missed.
+      Both forked sub-agents independently re-verified by the orchestrating session before
+      commit per the standing protocol: clean `git status` (changes matched exactly what
+      each fork claimed, `plan.md`/`NEXT.md`/`NOTICE.md` untouched by either), genuinely
+      clean rebuilds of both configs from scratch, full `ctest` re-run, the example
+      actually re-run and its output/PNG independently inspected, and the Doxygen
+      zero-warning claim independently reproduced.
+
+**Phase 10 is complete. All 10 phases of this plan are now complete — the port is done.**
 
 ## 6. Decisions log
 
