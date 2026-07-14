@@ -389,26 +389,69 @@ version" precedent (`OctreeEXT`, `CollisionWorld3DEXT`).
       build), full suite **2142/2144 passing** (was 2131/2133; 2 pre-existing skips
       unrelated to this phase).
 
-### Phase 8 — `Tilemaps3DEXT` (3D/voxel counterpart of `Tilemaps`)
+### Phase 8 — `Tilemaps3DEXT` (3D/voxel counterpart of `Tilemaps`) — **COMPLETE (2026-07-14)**
 
 Mirrors `CNA::Extended::Tilemaps`'s data-model/rendering split (`Tilemap`/
 `TilemapTileLayer`/`TilemapTileset` + `Rendering::TilemapRenderer`) for a 3D/voxel grid,
-building on `Graphics3DEXT::CubeMeshComponentEXT`/`CubeMeshRenderSystemEXT` (Phase 6) for
-the actual per-tile rendering and `Collisions3DEXT` (Phase 5) for tile collision.
+building on `Graphics3DEXT::CubeMeshRenderSystemEXT` (Phase 6, extended this phase — see
+below) for the actual per-tile rendering. **Scope decisions made during this phase** (per
+this task's own "decide during this phase" wording):
 
-- [ ] `Tilemap3DEXT` / `TilemapTileLayer3DEXT` (3D counterpart of `Tilemap`/
-      `TilemapTileLayer` — a 3D grid of tile IDs, likely `(X, Y, Z)` or `(X, Z)` + a
-      height/layer value, decide the exact shape during this phase based on what a real
-      voxel/block world actually needs).
-- [ ] `Tilemap3DFactoryEXT` (3D counterpart of `TilemapFactory` — builds a
-      `Tilemap3DEXT` from data; whether it reads a real format (e.g. a 3D-extended Tiled/
-      Ogmo JSON) or only supports hand-built data is a decision for this phase, not
-      assumed here).
-- [ ] `TilemapRenderer3DEXT` (3D counterpart of `Tilemaps::Rendering::TilemapRenderer` —
-      batches visible tiles into `CubeMeshComponentEXT` draw calls, using
-      `Camera3DEXT`'s frustum for per-chunk/per-tile culling, matching Phase 3's
-      established culling pattern).
-- [ ] Tests mirroring `Tilemaps`'s existing coverage, adapted to a 3D grid.
+- [x] `Tilemap3DEXT` (3D counterpart of `Tilemap`/`TilemapTileLayer`, absorbed into one
+      type rather than kept separate — see below): a single sparse `(X, Y, Z)` → tile ID
+      grid (`std::unordered_map<TileCoordinate3DEXT, int>`), not a stack of 2D-style
+      layers — a real voxel/block world (Minecraft-style) is one 3D grid, not layers; a
+      layer stack isn't the natural 3D analog of `TilemapTileLayer`. Sparse, not a dense
+      3D array: real voxel worlds are overwhelmingly empty space, so a dense array would
+      waste memory proportional to the full bounding volume. Tile ID `0` means empty
+      ("air"), the common voxel-engine convention. `TilemapTileLayer3DEXT` was judged
+      unnecessary once `Tilemap3DEXT` itself became the single grid — no separate layer
+      type exists to wrap. `include/CNA/Extended/World3DEXT/Tilemap3DEXT.hpp` + `.cpp`.
+- [x] `TilemapTileset3DEXT` (3D counterpart of `TilemapTileset`, also scoped down): maps a
+      tile ID directly to a whole `Texture2D*` (applied to all 6 faces via
+      `CubeMeshRenderSystemEXT::DrawCubeEXT`), not a per-tile source rectangle within a
+      shared atlas — a voxel/block world conventionally gives each block type its own
+      whole texture rather than packing many block types into one shared 2D-style atlas.
+      `include/CNA/Extended/World3DEXT/TilemapTileset3DEXT.hpp` + `.cpp`.
+- [x] `Tilemap3DFactoryEXT` (3D counterpart of `TilemapFactory`): **hand-built data only**
+      — `BuildFromArrayEXT(tileIds, width, height, depth, tileSize)` from a flat row-major
+      array. No 3D-extended Tiled/Ogmo JSON reader: those formats are all 2D-only with no
+      voxel/3D grid concept, and inventing a new file format to also parse was judged out
+      of scope for this phase (explicitly permitted by this task's own wording).
+      `include/CNA/Extended/World3DEXT/Tilemap3DFactoryEXT.hpp` + `.cpp`.
+- [x] `TilemapRenderer3DEXT` (3D counterpart of `Tilemaps::Rendering::TilemapRenderer`):
+      **a standalone renderer object with its own `Draw(camera, tilemap, tileset)`
+      method**, matching the real 2D `TilemapRenderer`'s actual shape (driven directly by
+      game code, not an ECS system — unlike every other `*System3DEXT` type in
+      `World3DEXT`, deliberately not `TilemapRenderSystem3DEXT`, matching this task's own
+      naming). Required extending `CubeMeshRenderSystemEXT` the same way Phase 7 extended
+      `BillboardRenderSystemEXT`: extracted its per-cube draw step into a new public
+      `DrawCubeEXT(Texture2D*, const Matrix& world, const Color& tint)` method (taking a
+      full world matrix, not just a position, unlike `DrawBillboardEXT` — cube entities
+      support rotation via `Transform3ComponentEXT`, so a position-only signature would
+      have silently dropped that for the shared path), called both by
+      `CubeMeshRenderSystemEXT::Draw()`'s own entity loop and by `TilemapRenderer3DEXT`
+      per visible tile — one genuinely shared draw path. Frustum-culls each tile
+      individually via `Camera3DEXT`'s `BoundingFrustum` (the simplest correct version of
+      "per-chunk/per-tile culling"; per-chunk geometry batching remains a documented
+      future optimization, not assumed needed without profiling).
+      `include/CNA/Extended/World3DEXT/TilemapRenderer3DEXT.hpp` + `.cpp`.
+      **`Collisions3DEXT` tile-collision integration was judged out of scope for this
+      phase**: `Tilemap3DEXT`/`CollisionWorld3DEXT` are independently usable today (a
+      caller can insert one `ICollisionActor3DEXT` per populated tile via
+      `Tilemap3DEXT::getTilesProperty()`), but a purpose-built "tilemap-aware" broadphase
+      shortcut (e.g. querying the grid directly instead of via `OctreeEXT`) was not called
+      for by this task's own bullet list beyond "building on Collisions3DEXT for tile
+      collision" — no code needed writing to satisfy that; can be added later as a
+      dedicated integration if a real need appears.
+- [x] Tests mirroring `Tilemaps`'s existing coverage, adapted to a 3D grid:
+      `Tilemap3DEXTTests.cpp` (10: `Tilemap3DEXT` get/set/remove/has/world-position/
+      populated-tiles-only, `Tilemap3DFactoryEXT` array-build + mismatched-size exception,
+      `TilemapTileset3DEXT` get/set), `TilemapRenderer3DEXTTests.cpp` (3: a real render
+      showing a visible tile's pixel color, a far-outside-frustum tile correctly culled,
+      and a no-texture-assigned tile not throwing). 13 new tests total. Both build configs
+      clean (genuine `rm -rf` + fresh configure + build), full suite **2155/2157 passing**
+      (was 2142/2144; 2 pre-existing skips unrelated to this phase).
 
 ### Phase 9 — `World3DScreenEXT`
 

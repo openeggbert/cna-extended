@@ -45,8 +45,12 @@ line-batch drawing, all with real pixel-verified render tests; `Particles3DEXT` 
 deliberately scoped-down emitter (cone emission + gravity/expiry/color-opacity-interpolation
 baked in, not the full 2D module's Profile/Modifier/Interpolator plugin architecture),
 drawing through a small `BillboardRenderSystemEXT::DrawBillboardEXT` extraction so particle
-rendering genuinely reuses the billboard draw path); Phase 8 (`Tilemaps3DEXT`) is next —
-see `plan3d.md` §4.
+rendering genuinely reuses the billboard draw path; `Tilemaps3DEXT` — a sparse
+`Tilemap3DEXT` voxel grid (tile ID 0 = empty), `TilemapTileset3DEXT` (tile ID → whole
+texture, no atlas), `Tilemap3DFactoryEXT` (hand-built array data only, no 3D file format),
+and a standalone `TilemapRenderer3DEXT` reusing a new `CubeMeshRenderSystemEXT::
+DrawCubeEXT` extraction per visible, frustum-culled tile); Phase 9
+(`World3DScreenEXT` + an end-to-end example) is next — see `plan3d.md` §4.
 
 **Important architectural decisions**:
 - Namespace `CNA::Extended::<Module>`, sub-namespaced per module (e.g.
@@ -606,11 +610,12 @@ including resumed ones, and be prepared for a "completed" notification to actual
 
 The original porting plan (`plan.md`) is complete (all 10 phases) — nothing outstanding
 there. **The active work is `plan3d.md`** (the `World3DEXT` 3D scene extension, owner-approved
-2026-07-14): Phases 1-7 are done (camera; transform hierarchy bridge; model
+2026-07-14): Phases 1-8 are done (camera; transform hierarchy bridge; model
 rendering/frustum culling; skinned animation; `Collisions3DEXT`; `Graphics3DEXT`;
-`Particles3DEXT`); resume at Phase 8 (`Tilemaps3DEXT`) — read `3d.md` and `plan3d.md` §4
-first. Re-check `plan3d.md`'s checkboxes and this file's section 1 before assuming this is
-still current; something may have changed since this was written.
+`Particles3DEXT`; `Tilemaps3DEXT`); resume at Phase 9 (`World3DScreenEXT` + an end-to-end
+example, the last phase) — read `3d.md` and `plan3d.md` §4 first. Re-check `plan3d.md`'s
+checkboxes and this file's section 1 before assuming this is still current; something may
+have changed since this was written.
 
 If the project owner has a new, specific ask (a real request, not "continue the plan"), just
 do that directly rather than inventing work from section 8's optional idea list. If asked to

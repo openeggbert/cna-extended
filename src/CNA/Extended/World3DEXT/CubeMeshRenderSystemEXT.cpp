@@ -102,12 +102,7 @@ namespace CNA::Extended::World3DEXT
     {
         (void)gameTime;
 
-        const Matrix view = camera_->GetViewMatrixEXT();
-        const Matrix projection = camera_->GetProjectionMatrixEXT();
         const BoundingFrustum frustum = camera_->GetBoundingFrustumEXT();
-
-        effect_.View = view;
-        effect_.Projection = projection;
 
         for (const int entityId : getActiveEntitiesProperty())
         {
@@ -138,15 +133,23 @@ namespace CNA::Extended::World3DEXT
                 continue;
             }
 
-            effect_.World = world;
-            effect_.setTextureProperty(cubeComponent->TextureEXT);
-            effect_.setDiffuseColorProperty(cubeComponent->TintEXT.ToVector3());
-            effect_.setAlphaProperty(static_cast<float>(cubeComponent->TintEXT.getAProperty()) / 255.0f);
-            effect_.Apply();
-
-            graphicsDevice_->SetVertexBuffer(&cubeVertexBuffer_);
-            graphicsDevice_->SetIndexBuffer(&cubeIndexBuffer_);
-            graphicsDevice_->DrawIndexedPrimitives(PrimitiveType::TriangleList, 0, 0, cubeVertexBuffer_.getVertexCountProperty(), 0, 12);
+            DrawCubeEXT(cubeComponent->TextureEXT, world, cubeComponent->TintEXT);
         }
+    }
+
+    void CubeMeshRenderSystemEXT::DrawCubeEXT(Microsoft::Xna::Framework::Graphics::Texture2D* texture, const Matrix& world,
+                                               const Microsoft::Xna::Framework::Color& tint)
+    {
+        effect_.View = camera_->GetViewMatrixEXT();
+        effect_.Projection = camera_->GetProjectionMatrixEXT();
+        effect_.World = world;
+        effect_.setTextureProperty(texture);
+        effect_.setDiffuseColorProperty(tint.ToVector3());
+        effect_.setAlphaProperty(static_cast<float>(tint.getAProperty()) / 255.0f);
+        effect_.Apply();
+
+        graphicsDevice_->SetVertexBuffer(&cubeVertexBuffer_);
+        graphicsDevice_->SetIndexBuffer(&cubeIndexBuffer_);
+        graphicsDevice_->DrawIndexedPrimitives(PrimitiveType::TriangleList, 0, 0, cubeVertexBuffer_.getVertexCountProperty(), 0, 12);
     }
 }
