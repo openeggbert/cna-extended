@@ -52,16 +52,15 @@ This is the sole remaining blocker in the entire porting plan outside Phase 10.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **1986/1986 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2042/2042 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
-  A pixel-verification test suite (28 more tests, `TilemapIntegrationTests.cpp`) is being
-  ported by a forked sub-agent as of this writing — see section 4.
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` example executable, `CnaExtendedTests` GoogleTest binary.
-- **Phases 0–6, 8, and 9 are complete. Phase 7's former architectural blocker is now
-  RESOLVED** (`TilemapRenderer`/`TilemapWorldRenderer` ported using `cna`'s real
-  `BasicEffect` — see section 4 for the full resolution). `Tiled/*`, `LDtk/*`, `Ogmo/*`,
-  and all of `Rendering/*` are landed — see section 3.
+- **Phases 0–9 are ALL COMPLETE.** Phase 7's former architectural blocker is RESOLVED
+  (`TilemapRenderer`/`TilemapWorldRenderer` ported using `cna`'s real `BasicEffect`) and its
+  trailing test-coverage gap (`TilemapIntegrationTests.cs`'s 28 pixel-verification tests) is
+  also now ported — see section 4 for the full history. **Only Phase 10
+  (integration/polish/documentation) remains in the entire plan.**
 - **CORRECTED earlier this session, was wrong in even-earlier entries of this same file**: a
   real headless `GraphicsDevice`/`SpriteBatch`/`Texture2D` triple genuinely works end-to-end
   in this environment (real EasyGL-over-Mesa software rendering) — the "no headless
@@ -70,10 +69,9 @@ This is the sole remaining blocker in the entire porting plan outside Phase 10.
   `ShapeExtensions`, `FadeTransition`/`ExpandTransition::Draw` now all have real
   behavioral test coverage as a direct follow-up (47 new tests) — see section 3. This
   correction is now fully closed out, not just noted.
-- **Does not work / not done yet**:
-  - `TilemapIntegrationTests.cs`'s 28 pixel-verification tests — not yet ported (in
-    progress, forked sub-agent running as of this writing). See section 4. **This is the
-    only thing left undone anywhere in `plan.md` outside Phase 10.**
+- **Does not work / not done yet**: nothing outside Phase 10. Phase 10 itself (end-to-end
+  example, Doxygen pass, final warning sweep, `NOTICE.md` re-audit) has not been started —
+  see section 8.
 
 ---
 
@@ -109,8 +107,30 @@ earlier ones.
   comparison of several core methods (`Update`, `BuildLayerModels`) against the actual
   upstream `.cs` source confirming exact logical fidelity including preserved comments (e.g.
   the "Tiled bottom-aligns all tiles" comment). Full technical writeup in `plan.md`'s Phase 7
-  entry. See section 4 for what's still open (a follow-up pixel-verification test gap this
-  review uncovered, not part of the original blocker).
+  entry. Committed as `abfbb41`, pushed to `develop`.
+
+- **Follow-up: `TilemapIntegrationTests.cs` pixel-verification suite ported (2026-07-14)**,
+  closing Phase 7 out completely. Discovered during the above verification pass that neither
+  the new tests nor the pre-existing `TilemapSpriteBatchRendererTests.cpp` covered upstream's
+  dedicated pixel-verification file (28 tests asserting on actual rendered pixel colors, not
+  just "doesn't throw") — `plan.md` already had this flagged as remaining Phase 7 work.
+  Ported via a second forked sub-agent (28 upstream tests → 56 executed GoogleTest cases via
+  `TEST_P`/`INSTANTIATE_TEST_SUITE_P` for the 4 flip-flag `[Theory]` methods). **Real
+  CNA-vs-XNA API-shape gap found and worked around (not a production bug)**: a literal
+  translation of upstream's `renderTarget.GetData(pixels)` failed every test — this port's
+  `Texture2D::GetData` only returns a CPU-side mirror populated by `SetData` uploads, never
+  touched by GPU rendering into a `RenderTarget2D`. Fixed using `cna`'s own established idiom,
+  `GraphicsDevice::GetBackBufferData(...)` called *before* unbinding the render target —
+  confirmed directly against `cna/examples/easygl_rt_roundtrip_test.cpp`'s own "Read RT1 pixel
+  while FBO is still bound" comment, not just trusted. Once fixed, every pixel assertion
+  passed with no loosened tolerances — confirms no rendering bug in `TilemapRenderer`/
+  `TilemapSpriteBatchRenderer`/`BasicEffect` itself. Independently re-verified by the
+  orchestrating session: clean `git status` (only the one new test file), genuinely clean
+  `rm -rf build`+`build-headers` rebuilds (zero warnings), full `ctest` re-run
+  (**2042/2042 passing**, up from 1986), the `GetBackBufferData` claim confirmed directly
+  against `cna`'s own example source, and several ported test bodies spot-checked line-by-line
+  against the upstream `.cs`. **This closes Phase 7 100% — only Phase 10 remains in the whole
+  plan.**
 
 - **`Tilemaps/Rendering/*`**: `RenderMode`, `TilemapRendererShared`,
   `TilemapSpriteBatchRenderer`, `TilemapWorldSpriteBatchRenderer` all landed.
@@ -168,25 +188,25 @@ re-detailed here.
 
 ## 4. Current blocker / main problem
 
-**No architectural blocker remains.** The former `TilemapRenderer`/`TilemapWorldRenderer`
-blocker (below, kept for history) is resolved. One test-coverage task is in progress; no
-build-breaking or test-failing issue exists — `cmake --build build -j$(nproc)`,
-`cmake --build build-headers -j$(nproc)`, and `ctest --test-dir build` all currently succeed
-(1986 tests run, 100% passing, zero warnings in both configs).
+**No blocker remains anywhere in the plan outside Phase 10, which hasn't been started.**
+`cmake --build build -j$(nproc)`, `cmake --build build-headers -j$(nproc)`, and
+`ctest --test-dir build` all currently succeed (**2042 tests run, 100% passing**, zero
+warnings in both configs). Phases 0-9 are all complete. The two historical blockers/gaps
+below are kept for context on how they were resolved, not because either is still open.
 
-**In progress**: a forked sub-agent is porting
-`tests/MonoGame.Extended.Tests/Tilemaps/Rendering/TilemapIntegrationTests.cs` (28 tests) —
-discovered during independent verification of the `TilemapRenderer`/`TilemapWorldRenderer`
-port that this dedicated **pixel-verification** suite (asserts on actual rendered pixel
-colors via headless `Texture2D::GetData` readback, covering both `TilemapRenderer` and
-`TilemapSpriteBatchRenderer`) was never ported — the existing test coverage for all 4
-renderer classes is unit/validation-style ("does it throw"/"does it not throw") only. This
-project had no pixel-readback test harness yet; the fork is building one, modeled on `cna`'s
-own established pattern (`cna/docs/basiceffect-support.md`'s Task 364-370 pixel-verified
-`BasicEffect` tests). Check `git status`/`git log` for whether this has landed since this
-was written; if the fork's task notification hasn't arrived yet, it's still running.
+### Resolved: `TilemapIntegrationTests.cs` pixel-verification test gap
 
-### Resolved: `TilemapRenderer`/`TilemapWorldRenderer` DefaultEffect blocker (kept for history)
+- **Symptom (as of 2026-07-14, found during verification of the `DefaultEffect` blocker fix
+  below)**: upstream's dedicated pixel-verification suite for `TilemapRenderer`/
+  `TilemapSpriteBatchRenderer` (28 tests asserting on actual rendered pixel colors) was never
+  ported — existing coverage for all 4 renderer classes was unit/validation-style only.
+- **Resolution**: ported via a forked sub-agent, building a new headless render-target
+  readback test harness modeled on `cna`'s own established idiom
+  (`GraphicsDevice::GetBackBufferData` read before unbinding the render target — `cna`'s
+  `Texture2D::GetData` alone doesn't see GPU-rendered content, only `SetData` uploads). Full
+  detail in section 3 above and `plan.md`'s Phase 7 entry.
+
+### Resolved: `TilemapRenderer`/`TilemapWorldRenderer` DefaultEffect blocker
 
 - **Symptom (as of 2026-07-13)**: `Tilemaps/Rendering/TilemapRenderer.cs`/
   `TilemapWorldRenderer.cs` (the `VertexBuffer`/`IndexBuffer`-based tilemap renderers) were
@@ -374,25 +394,27 @@ present) — rely on the `-Wall -Wextra -Werror` compiler gate instead.
 
 ## 8. Next smallest tasks
 
-1. **`TilemapIntegrationTests.cpp` (28 pixel-verification tests) — in progress**, forked
-   sub-agent running as of this writing (section 4). If it has already completed by the time
-   you read this (check `git status`/`git log`), independently verify its output the same
-   way the `TilemapRenderer`/`TilemapWorldRenderer` port was verified (clean `git status`,
-   clean rebuild of both configs, full `ctest`, spot-check a few tests' pixel-math against
-   upstream's own header-comment reasoning), then commit. **This is now the only remaining
-   item in the entire porting plan outside Phase 10.**
-   - Command: `ctest --test-dir build -R TilemapIntegration` — expect 100% passing; both
-     CMake configs stay clean.
+**Phase 7 is fully complete. The only remaining phase in the entire plan is Phase 10.**
 
-2. **Phase 10 — Integration, polish, documentation**, once item 1 lands. Scope depends on
-   what's actually left to polish at that point — not detailed here yet. Likely candidates
-   worth considering when scoping it: a real end-to-end example under `examples/`, a full
-   Doxygen pass, and a final pass over every `NOTICE.md`-flagged licensing note for
-   completeness. `README.md` already exists and was refreshed earlier this session.
+1. **Phase 10 — Integration, polish, documentation.** Not yet started. Checklist (see
+   `plan.md`'s Phase 10 section for the authoritative list):
+   - End-to-end example combining several modules (e.g. a small Tiled map + sprite animation
+     + input demo) under `examples/`.
+   - Full Doxygen pass; generate `docs/generated/html` (git-ignored, matching
+     `sharp-runtime`).
+   - Zero-warning pass (`-Wall -Wextra -Werror`/`/W4 /WX`) — last verified clean as of this
+     writing (2042/2042 tests passing, both configs), but re-check after Phase 10's other
+     changes land, not just trust this snapshot.
+   - Update `README.md` with the final module list and a usage snippet (it already exists
+     and was refreshed once this session — re-check it reflects the now-complete Phase 7).
+   - Re-audit `NOTICE.md` against the final set of ported files.
+   - Command after each sub-item: `cmake --build build -j$(nproc) && ctest --test-dir build`
+     (linked config) plus `cmake --build build-headers -j$(nproc)` (headers-only) — both must
+     stay clean throughout.
 
-Delegating to a sub-agent fork remains appropriate once item 1 has a decision (user-approved
-this session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/
-`NOTICE.md`, orchestrator verifies then commits) — but see section 5's process-risk entry:
+Delegating Phase 10 sub-items to a sub-agent fork remains appropriate (user-approved this
+session, standing safeguard: forks never commit/push/edit `plan.md`/`NEXT.md`/`NOTICE.md`,
+orchestrator verifies then commits) — but see section 5's process-risk entry:
 independently check `git status`/`git diff` (not just `git log`) after every fork turn,
 including resumed ones, and be prepared for a "completed" notification to actually mean
 "stopped partway through" rather than genuinely done.

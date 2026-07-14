@@ -1,13 +1,12 @@
 # cna-extended — Porting Plan
 
-Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-9 all complete (2026-07-14).**
+Status: **APPROVED (2026-07-12 by Robert Vokáč) — Phases 0-9 ALL COMPLETE (2026-07-14).**
 Phase 7's former architectural blocker (`TilemapRenderer`/`TilemapWorldRenderer`,
 `VertexPositionColorTexture` vs `DefaultEffect` vertex-layout mismatch) is resolved — ported
-using `cna`'s real `BasicEffect` instead (see that phase's entry for the full resolution).
-One known, already-tracked test-coverage gap remains within Phase 7 (upstream's dedicated
-pixel-verification `TilemapIntegrationTests.cs`, 28 tests, not yet ported — see that phase's
-checklist), in progress; everything else is done. Otherwise only Phase 10
-(integration/polish/documentation) remains.
+using `cna`'s real `BasicEffect` instead — and its trailing test-coverage gap
+(`TilemapIntegrationTests.cs`'s 28 pixel-verification tests) is also now ported (see that
+phase's entry for the full history). **Only Phase 10 (integration/polish/documentation)
+remains in the entire plan.**
 Fidelity requirement: port 1:1 wherever C#/C++ differences allow — no simplification. See
 `NEXT.md` for current state.**
 
@@ -1126,9 +1125,9 @@ all now complete.
       `Dictionary`/`HashSet` → `std::unordered_map`/`std::unordered_set` for move-only
       mapped types, matching `TilemapTileset.hpp`'s precedent, etc.), and verification
       commands are in `NEXT.md`. **This was the sole remaining architectural blocker in
-      the entire porting plan outside of Phase 10.** One test-coverage item remains open
-      within Phase 7 (see the `TilemapIntegrationTests.cs` entry immediately below, in
-      progress) — once that lands, Phase 7 is fully complete and only Phase 10 remains.
+      the entire porting plan outside of Phase 10.** The trailing test-coverage item (see
+      the `TilemapIntegrationTests.cs` entry immediately below) has since also landed —
+      **Phase 7 is fully complete and only Phase 10 remains in the whole plan.**
       **Real gap-fill needed and delivered as a prerequisite**: `OrthographicCamera` (see
       its own corrected Phase 1 entry above) had been deferred since Phase 3 and never
       actually landed — ported here since every `Rendering/*` class needs it.
@@ -1234,22 +1233,38 @@ all now complete.
       resolver to exercise tileset dimension reading without a real texture (matching this
       project's standing no-live-GraphicsDevice-test-infra boundary).
 - [ ] Explicitly **skip**: `Tilemaps/Content/*Reader` (xnb-based, see §2 exclusions)
-- [ ] **IN PROGRESS (2026-07-14, forked sub-agent running)**: port
+- [x] **COMPLETE (2026-07-14)**: ported
       `tests/MonoGame.Extended.Tests/Tilemaps/Rendering/TilemapIntegrationTests.cs` (28
-      tests) — the one remaining upstream test file for this phase. Unlike the
-      unit/validation-style tests already ported for all 4 renderer classes ("does it
-      throw", "does it not throw"), this is a dedicated **pixel-verification** suite:
-      renders to a headless render target and asserts on actual pixel colors read back via
-      `Texture2D::GetData`, covering both `TilemapRenderer` (`GdRenderer_*`) and
+      tests, expanded to 56 executed GoogleTest cases via `TEST_P`/
+      `INSTANTIATE_TEST_SUITE_P` for the 4 upstream `[Theory]` methods over
+      `TilemapTileFlipFlags` combinations) — the last upstream test file for this phase.
+      Unlike the unit/validation-style tests already ported for all 4 renderer classes
+      ("does it throw"/"does it not throw"), this is a dedicated **pixel-verification**
+      suite: renders to a headless render target and asserts on actual rendered pixel
+      colors, covering both `TilemapRenderer` (`GdRenderer_*`) and
       `TilemapSpriteBatchRenderer` (`SbRenderer_*`) — tile placement, hidden/zero-opacity
       layers, tint/partial-opacity, camera position/zoom, animation frame advancement, all
-      `TilemapTileFlipFlags` combinations, layer groups/merged mode. Real regression
-      coverage smoke tests can't provide (e.g. would catch a `BasicEffect` diffuse/vertex-
-      color multiply bug or wrong UV-flip math). `cna` already supports headless
-      render-target readback (`Texture2D::GetData`, used by `cna`'s own pixel-verified
-      `BasicEffect` tests per `cna/docs/basiceffect-support.md`) — this project had no
-      existing pixel-readback test harness yet, the fork is building one now, modeled on
-      `cna`'s own established pattern.
+      `TilemapTileFlipFlags` combinations, layer groups/merged mode, parallax, reload
+      cycles, interleaving with plain `SpriteBatch` draws. All 28 ported faithfully, none
+      found unportable.
+      **Real CNA-vs-XNA API-shape gap found and worked around (not a production bug)**: a
+      literal translation of upstream's `renderTarget.GetData(pixels)` failed every test —
+      this port's `Texture2D::GetData` only returns a CPU-side mirror populated by
+      `SetData` uploads, never touched by GPU rendering into a `RenderTarget2D`. The
+      correct, already-established idiom in `cna` for reading back real rasterized GPU
+      content is `GraphicsDevice::GetBackBufferData(...)` (a real `glReadPixels`-backed
+      readback of whichever framebuffer is currently bound), called *before*
+      unbinding the render target — confirmed directly against `cna`'s own
+      `examples/easygl_rt_roundtrip_test.cpp` ("Read RT1 pixel while FBO is still bound").
+      Once fixed, every pixel assertion (exact-equality white/black/red-tint/quadrant-
+      orientation checks) passed against the real renderer output with no loosened
+      tolerances — confirms no rendering bug in `TilemapRenderer`/
+      `TilemapSpriteBatchRenderer`/`BasicEffect` itself. Independently re-verified by the
+      orchestrating session (not just trusted): clean `git status` (only the one new test
+      file), genuinely clean `rm -rf build`+`build-headers` rebuilds of both configs (zero
+      warnings), full `ctest` re-run (**2042/2042 passing**, up from 1986), and the
+      `GetBackBufferData`-before-`GetData` claim confirmed directly against `cna`'s own
+      example source rather than trusted as reported. **Phase 7 is now 100% complete.**
 
 ### Phase 8 — Particles — **COMPLETE (2026-07-13)**
 
