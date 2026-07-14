@@ -7,7 +7,6 @@
 #include "CNA/Extended/World3DEXT/BillboardRenderSystemEXT.hpp"
 #include "CNA/Extended/World3DEXT/ParticleEffect3DEXT.hpp"
 #include "CNA/Extended/World3DEXT/ParticleEffectComponentEXT.hpp"
-#include "Microsoft/Xna/Framework/Vector2.hpp"
 #include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
 #include "Microsoft/Xna/Framework/Graphics/VertexBuffer.hpp"
 
@@ -21,7 +20,6 @@ namespace CNA::Extended::World3DEXT
     using ECS::Entity;
     using Microsoft::Xna::Framework::Color;
     using Microsoft::Xna::Framework::GameTime;
-    using Microsoft::Xna::Framework::Vector2;
     using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
 
     ParticleRenderSystem3DEXT::ParticleRenderSystem3DEXT(GraphicsDevice& graphicsDevice, BillboardRenderSystemEXT& billboardRenderSystem)
@@ -61,7 +59,7 @@ namespace CNA::Extended::World3DEXT
                 for (const Particle3DEXT& particle : emitter->ParticlesEXT)
                 {
                     billboardRenderSystem_->DrawBillboardEXT(*particleQuadEXT_, particleComponent->TextureEXT, particle.PositionEXT,
-                                                              Vector2(particle.ScaleEXT, particle.ScaleEXT),
+                                                              particle.ScaleEXT,
                                                               Color(particle.ColorEXT.getRProperty(), particle.ColorEXT.getGProperty(),
                                                                     particle.ColorEXT.getBProperty(),
                                                                     static_cast<std::uint8_t>(particle.OpacityEXT * 255.0f)));

@@ -38,6 +38,7 @@
 #include <CNA/Extended/World3DEXT/ParticleEmitter3DEXT.hpp>
 #include <CNA/Extended/World3DEXT/ParticleRenderSystem3DEXT.hpp>
 #include <CNA/Extended/World3DEXT/ParticleUpdateSystem3DEXT.hpp>
+#include <CNA/Extended/World3DEXT/Profile3DEXT.hpp>
 #include <CNA/Extended/World3DEXT/RenderSystem3DEXT.hpp>
 #include <CNA/Extended/World3DEXT/SkinnedModelComponentEXT.hpp>
 #include <CNA/Extended/World3DEXT/Tilemap3DEXT.hpp>
@@ -276,8 +277,7 @@ namespace
             emitter.MaxLifetimeEXT = 1.2f;
             emitter.MinSpeedEXT = 1.0f;
             emitter.MaxSpeedEXT = 2.5f;
-            emitter.ConeDirectionEXT = Vector3::Up;
-            emitter.ConeHalfAngleEXT = MathHelper::PiOver4;
+            emitter.setProfileEXTProperty(Profile3DEXT::Cone(Vector3::Up, MathHelper::PiOver4));
             emitter.MinScaleEXT = 0.3f;
             emitter.MaxScaleEXT = 0.6f;
             emitter.StartColorEXT = Color(255, 220, 80, 255);

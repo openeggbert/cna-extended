@@ -2,50 +2,83 @@
 // Copyright (c) Robert Vokac and contributors
 #include "CNA/Extended/World3DEXT/ParticleEmitter3DEXT.hpp"
 
+#include "CNA/Extended/World3DEXT/AgeModifier3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/ColorInterpolator3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/LinearGravityModifier3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/ModifierExecutionStrategy3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/OpacityInterpolator3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/Profile3DEXT.hpp"
+
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 
 namespace CNA::Extended::World3DEXT
 {
-    using Microsoft::Xna::Framework::Color;
+    using Microsoft::Xna::Framework::Vector2;
     using Microsoft::Xna::Framework::Vector3;
 
-    namespace
+    ParticleEmitter3DEXT::ParticleEmitter3DEXT()
+        : profileEXT_(Profile3DEXT::Cone(Vector3::Up, 3.14159265358979323846f)),
+          modifierExecutionStrategyEXT_(&ModifierExecutionStrategy3DEXT::getSerialProperty())
     {
-        constexpr float kTwoPi = 6.28318530717958647692f;
+        // Default pipeline: matches the exact behavior ParticleEmitter3DEXT had before this
+        // architecture existed (cone/full-sphere emission, linear gravity, color+opacity
+        // interpolation over the particle's lifetime) -- see this file's header comment for
+        // why StartColorEXT/EndColorEXT/StartOpacityEXT/EndOpacityEXT/GravityEXT stayed on
+        // this class instead of moving onto these owned objects.
+        //
+        // kUnthrottledFrequencyEXT (Modifier3DEXT.hpp's header comment has the full
+        // rationale): these two built-in modifiers deliberately override Frequency to an
+        // effectively-unthrottled value so every particle is touched every UpdateEXT call,
+        // regardless of deltaSeconds -- preserving this emitter's pre-existing "every
+        // particle, every call, real elapsed time" behavior exactly, rather than 2D's own
+        // default 60Hz pacing (which would silently apply a stale, much smaller time delta
+        // to a large single UpdateEXT(dt) call).
+        constexpr float kUnthrottledFrequencyEXT = 1.0e6f;
 
-        Color LerpColor(const Color& start, const Color& end, float t)
+        auto ageModifier = std::make_unique<AgeModifier3DEXT>();
+        defaultAgeModifierEXT_ = ageModifier.get();
+        ageModifier->setFrequencyProperty(kUnthrottledFrequencyEXT);
+        ageModifier->getInterpolatorsProperty().push_back(std::make_unique<ColorInterpolator3DEXT>());
+        ageModifier->getInterpolatorsProperty().push_back(std::make_unique<OpacityInterpolator3DEXT>());
+
+        auto gravityModifier = std::make_unique<LinearGravityModifier3DEXT>();
+        defaultGravityModifierEXT_ = gravityModifier.get();
+        gravityModifier->setFrequencyProperty(kUnthrottledFrequencyEXT);
+
+        modifiersEXT_.push_back(std::move(ageModifier));
+        modifiersEXT_.push_back(std::move(gravityModifier));
+    }
+
+    ParticleEmitter3DEXT::~ParticleEmitter3DEXT() = default;
+    ParticleEmitter3DEXT::ParticleEmitter3DEXT(ParticleEmitter3DEXT&&) noexcept = default;
+    ParticleEmitter3DEXT& ParticleEmitter3DEXT::operator=(ParticleEmitter3DEXT&&) noexcept = default;
+
+    void ParticleEmitter3DEXT::setProfileEXTProperty(std::unique_ptr<Profile3DEXT> profile)
+    {
+        if (profile)
         {
-            const auto lerpChannel = [&](std::uint8_t a, std::uint8_t b) {
-                return static_cast<std::uint8_t>(static_cast<float>(a) + (static_cast<float>(b) - static_cast<float>(a)) * t);
-            };
-            return Color(lerpChannel(start.getRProperty(), end.getRProperty()), lerpChannel(start.getGProperty(), end.getGProperty()),
-                         lerpChannel(start.getBProperty(), end.getBProperty()), static_cast<std::uint8_t>(255));
+            profileEXT_ = std::move(profile);
         }
     }
 
-    Vector3 ParticleEmitter3DEXT::SampleConeDirectionEXT()
+    void ParticleEmitter3DEXT::SyncBuiltInModifiersEXT()
     {
-        const float halfAngle = std::clamp(ConeHalfAngleEXT, 0.0f, 3.14159265358979323846f);
-        const float minCosTheta = std::cos(halfAngle);
-        const float cosTheta = minCosTheta + randomEXT_.NextSingle() * (1.0f - minCosTheta);
-        const float sinTheta = std::sqrt(std::max(0.0f, 1.0f - cosTheta * cosTheta));
-        const float phi = randomEXT_.NextSingle() * kTwoPi;
+        for (const std::unique_ptr<Interpolator3DEXT>& interpolator : defaultAgeModifierEXT_->getInterpolatorsProperty())
+        {
+            if (auto* colorInterpolator = dynamic_cast<ColorInterpolator3DEXT*>(interpolator.get()))
+            {
+                colorInterpolator->StartValue = StartColorEXT;
+                colorInterpolator->EndValue = EndColorEXT;
+            }
+            else if (auto* opacityInterpolator = dynamic_cast<OpacityInterpolator3DEXT*>(interpolator.get()))
+            {
+                opacityInterpolator->StartValue = StartOpacityEXT;
+                opacityInterpolator->EndValue = EndOpacityEXT;
+            }
+        }
 
-        const Vector3 localDirection(sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta);
-
-        // Audit finding A-06 (audit.md), independently re-verified: Vector3::Normalize of a
-        // zero (or near-zero) vector is undefined/NaN, and ConeDirectionEXT is a public,
-        // caller-settable field with no constructor-level guarantee it stays nonzero. Fall
-        // back to the field's own documented default (Vector3::Up) rather than propagate NaN
-        // into every sampled particle direction.
-        const Vector3 forward = ConeDirectionEXT.LengthSquared() > 1e-12f ? Vector3::Normalize(ConeDirectionEXT) : Vector3::Up;
-        const Vector3 arbitrary = std::abs(forward.Y) < 0.99f ? Vector3::Up : Vector3::Right;
-        const Vector3 right = Vector3::Normalize(Vector3::Cross(arbitrary, forward));
-        const Vector3 up = Vector3::Cross(forward, right);
-
-        return right * localDirection.X + up * localDirection.Y + forward * localDirection.Z;
+        defaultGravityModifierEXT_->GravityEXT = GravityEXT;
     }
 
     void ParticleEmitter3DEXT::EmitEXT(int count, const Vector3& origin)
@@ -62,7 +95,13 @@ namespace CNA::Extended::World3DEXT
             // below by falling back to the "already expired" value (0) for the actually-broken
             // (non-finite) case only, not by forcing Min <= Max.
             Particle3DEXT particle;
-            particle.PositionEXT = origin;
+
+            Vector3 offset;
+            Vector3 heading;
+            profileEXT_->GetOffsetAndHeading(&offset, &heading, randomEXT_);
+            particle.PositionEXT = origin + offset;
+            particle.TriggeredPositionEXT = origin;
+
             particle.LifetimeEXT = MinLifetimeEXT + randomEXT_.NextSingle() * (MaxLifetimeEXT - MinLifetimeEXT);
             if (!std::isfinite(particle.LifetimeEXT))
             {
@@ -73,12 +112,15 @@ namespace CNA::Extended::World3DEXT
             {
                 speed = 0.0f;
             }
-            particle.VelocityEXT = SampleConeDirectionEXT() * speed;
-            particle.ScaleEXT = MinScaleEXT + randomEXT_.NextSingle() * (MaxScaleEXT - MinScaleEXT);
-            if (!std::isfinite(particle.ScaleEXT))
+            particle.VelocityEXT = heading * speed;
+
+            float scale = MinScaleEXT + randomEXT_.NextSingle() * (MaxScaleEXT - MinScaleEXT);
+            if (!std::isfinite(scale))
             {
-                particle.ScaleEXT = 0.0f;
+                scale = 0.0f;
             }
+            particle.ScaleEXT = Vector2(scale, scale);
+
             particle.ColorEXT = StartColorEXT;
             // A-06: clamp here too, not just in UpdateEXT's per-frame recompute below --
             // EmitEXT runs at the end of this same UpdateEXT call, so a newly-emitted
@@ -90,19 +132,23 @@ namespace CNA::Extended::World3DEXT
 
     void ParticleEmitter3DEXT::UpdateEXT(float deltaSeconds, const Vector3& origin)
     {
+        // Baked directly, matching 2D's own ParticleEmitter::Update precedent (see
+        // AgeModifier3DEXT.hpp) -- not modifier-driven.
         for (Particle3DEXT& particle : ParticlesEXT)
         {
             particle.AgeEXT += deltaSeconds;
-            particle.VelocityEXT = particle.VelocityEXT + GravityEXT * deltaSeconds;
             particle.PositionEXT = particle.PositionEXT + particle.VelocityEXT * deltaSeconds;
-
-            const float ageRatio = particle.GetAgeRatioEXT();
-            particle.ColorEXT = LerpColor(StartColorEXT, EndColorEXT, ageRatio);
-            // A-06 (audit.md): out-of-[0,1] opacity is real UB at the render call site's
-            // `static_cast<std::uint8_t>(opacity * 255.0f)` (ParticleRenderSystem3DEXT.cpp),
-            // not just an implausible value -- clamp where opacity is actually computed.
-            particle.OpacityEXT = std::clamp(StartOpacityEXT + (EndOpacityEXT - StartOpacityEXT) * ageRatio, 0.0f, 1.0f);
         }
+
+        SyncBuiltInModifiersEXT();
+
+        std::vector<Modifier3DEXT*> modifierPointers;
+        modifierPointers.reserve(modifiersEXT_.size());
+        for (const std::unique_ptr<Modifier3DEXT>& modifier : modifiersEXT_)
+        {
+            modifierPointers.push_back(modifier.get());
+        }
+        modifierExecutionStrategyEXT_->ExecuteModifiers(modifierPointers, deltaSeconds, ParticlesEXT);
 
         ParticlesEXT.erase(std::remove_if(ParticlesEXT.begin(), ParticlesEXT.end(),
                                            [](const Particle3DEXT& particle) { return particle.IsExpiredEXT(); }),

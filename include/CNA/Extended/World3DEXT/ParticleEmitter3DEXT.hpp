@@ -4,30 +4,46 @@
 // CNA::Extended::World3DEXT::ParticleEmitter3DEXT -- new, non-upstream addition. See
 // 3d.md/plan3d.md at the repository root for the design.
 //
-// 3D counterpart of CNA::Extended::Particles::ParticleEmitter, deliberately scoped down
-// (matching this whole plan's repeated "start with the simplest correct version"
-// precedent -- see SpatialHash3DEXT.hpp/CollisionWorld3DEXT.hpp for the same principle applied
-// elsewhere): rather than porting the full Profiles/Modifiers/Interpolators plugin
-// architecture (5 emission-shape Profile subclasses, ~13 Modifier subclasses, 6
-// Interpolator subclasses in the 2D module), this emitter has ONE built-in emission shape
-// (a cone -- ConeHalfAngleEXT == MathHelper::Pi degenerates to full-sphere emission, the
-// common "explosion"/"ambient" case) and THREE built-in per-frame behaviors baked directly
-// into UpdateEXT: linear gravity, age-based expiry, and start/end color+opacity
-// interpolation over each particle's lifetime -- covering AgeModifier's/
-// LinearGravityModifier's/ColorInterpolator's/OpacityInterpolator's conceptual roles
-// without their extensibility framework. A real, working particle system, just not a
-// plugin architecture; the full Profile/Modifier/Interpolator port can be added later if a
-// real need appears.
+// 3D counterpart of CNA::Extended::Particles::ParticleEmitter. Originally deliberately
+// scoped down (one built-in cone emission shape, three behaviors baked directly into
+// UpdateEXT); brought to parity with 2D's full Profiles/Modifiers/Interpolators plugin
+// architecture (2026-07-14, user-requested) via Profile3DEXT/Modifier3DEXT/
+// Interpolator3DEXT (see those files' own header comments for the full design, including
+// Modifier3DEXT's documented deviation in how Frequency-throttling interacts with elapsed
+// time).
+//
+// Design note on which fields moved and which didn't (deliberately minimal blast radius on
+// this class's own public surface, not a blanket "everything moves to a plugin object"
+// rule): ConeDirectionEXT/ConeHalfAngleEXT moved to ConeProfile3DEXT (getProfileEXTProperty())
+// -- a user-confirmed decision specifically about these two fields, since 2D's own analogous
+// per-shape configuration (e.g. SprayProfile::Direction/Spread) genuinely lives on the
+// Profile object, not the emitter. StartColorEXT/EndColorEXT/StartOpacityEXT/EndOpacityEXT/
+// GravityEXT stay exactly where they were (unscoped, zero pre-existing test changes needed)
+// -- UpdateEXT syncs them into the default AgeModifier3DEXT's owned ColorInterpolator3DEXT/
+// OpacityInterpolator3DEXT and the default LinearGravityModifier3DEXT each call, so the
+// public configuration surface for these is unchanged while the new architecture still
+// genuinely drives the default per-frame pipeline end-to-end (not bypassed).
+//
+// AgeEXT/PositionEXT integration stays baked directly in UpdateEXT's own loop, matching 2D's
+// own ParticleEmitter::Update, which likewise bakes basic age/position integration in
+// directly rather than driving it through a Modifier -- see AgeModifier3DEXT.hpp.
 #pragma once
 
 #include "CNA/Extended/World3DEXT/Particle3DEXT.hpp"
 #include "Microsoft/Xna/Framework/Vector3.hpp"
 #include "System/Random.hpp"
 
+#include <memory>
 #include <vector>
 
 namespace CNA::Extended::World3DEXT
 {
+    class AgeModifier3DEXT;
+    class LinearGravityModifier3DEXT;
+    class Modifier3DEXT;
+    class ModifierExecutionStrategy3DEXT;
+    class Profile3DEXT;
+
     /**
      * @brief Creates, updates, and manages the particles emitted by one emission source.
      * @see ParticleEffect3DEXT, which owns and drives one or more emitters as a single effect.
@@ -36,7 +52,12 @@ namespace CNA::Extended::World3DEXT
     class ParticleEmitter3DEXT
     {
     public:
-        ParticleEmitter3DEXT() = default;
+        ParticleEmitter3DEXT();
+        ~ParticleEmitter3DEXT();
+        ParticleEmitter3DEXT(ParticleEmitter3DEXT&&) noexcept;
+        ParticleEmitter3DEXT& operator=(ParticleEmitter3DEXT&&) noexcept;
+        ParticleEmitter3DEXT(const ParticleEmitter3DEXT&) = delete;
+        ParticleEmitter3DEXT& operator=(const ParticleEmitter3DEXT&) = delete;
 
         /** @brief Average number of particles emitted per second while IsEmittingEXT is true. */
         float EmissionRateEXT = 20.0f;
@@ -49,29 +70,23 @@ namespace CNA::Extended::World3DEXT
         float MinSpeedEXT = 1.0f;
         float MaxSpeedEXT = 1.0f;
 
-        /** @brief Direction the emission cone points, in world space. Normalized internally. */
-        Microsoft::Xna::Framework::Vector3 ConeDirectionEXT = Microsoft::Xna::Framework::Vector3::Up;
-
-        /** @brief Half-angle (radians) of the emission cone around ConeDirectionEXT. MathHelper::Pi (the default) emits uniformly over the full sphere. */
-        float ConeHalfAngleEXT = 3.14159265358979323846f;
-
         /** @brief Minimum/maximum initial billboard scale assigned to a newly-emitted particle. */
         float MinScaleEXT = 1.0f;
         float MaxScaleEXT = 1.0f;
 
-        /** @brief Color a particle starts at (age ratio 0). */
+        /** @brief Color a particle starts at (age ratio 0). Synced into the default AgeModifier3DEXT's ColorInterpolator3DEXT each UpdateEXT call. */
         Microsoft::Xna::Framework::Color StartColorEXT = Microsoft::Xna::Framework::Color::White;
 
         /** @brief Color a particle ends at (age ratio 1); linearly interpolated by GetAgeRatioEXT(). */
         Microsoft::Xna::Framework::Color EndColorEXT = Microsoft::Xna::Framework::Color::White;
 
-        /** @brief Opacity a particle starts at (age ratio 0). */
+        /** @brief Opacity a particle starts at (age ratio 0). Synced into the default AgeModifier3DEXT's OpacityInterpolator3DEXT each UpdateEXT call. */
         float StartOpacityEXT = 1.0f;
 
         /** @brief Opacity a particle ends at (age ratio 1); linearly interpolated by GetAgeRatioEXT(). */
         float EndOpacityEXT = 0.0f;
 
-        /** @brief Constant acceleration (units/second^2) applied to every active particle each frame. */
+        /** @brief Constant acceleration (units/second^2) applied to every active particle each frame. Synced into the default LinearGravityModifier3DEXT each UpdateEXT call. */
         Microsoft::Xna::Framework::Vector3 GravityEXT = Microsoft::Xna::Framework::Vector3::Zero;
 
         /** @brief Maximum number of particles this emitter holds at once; new emissions are dropped once reached. */
@@ -83,10 +98,18 @@ namespace CNA::Extended::World3DEXT
         /** @brief The particles this emitter currently owns. */
         std::vector<Particle3DEXT> ParticlesEXT;
 
+        /** @brief Gets the emission profile computing each new particle's initial offset/heading. Defaults to a ConeProfile3DEXT. */
+        [[nodiscard]] Profile3DEXT& getProfileEXTProperty() { return *profileEXT_; }
+        /** @brief Replaces the emission profile. Must not be null. */
+        void setProfileEXTProperty(std::unique_ptr<Profile3DEXT> profile);
+
+        /** @brief Gets the mutable list of modifiers applied to particles each UpdateEXT call, in order. Defaults to [AgeModifier3DEXT, LinearGravityModifier3DEXT]. */
+        [[nodiscard]] std::vector<std::unique_ptr<Modifier3DEXT>>& getModifiersEXTProperty() { return modifiersEXT_; }
+
         /**
-         * @brief Advances every active particle (age, gravity/velocity integration, color/opacity
-         * interpolation, expiry) and emits new particles (accumulated at EmissionRateEXT per
-         * second) from @p origin, up to MaxParticlesEXT.
+         * @brief Advances every active particle (age/position integration, modifier pipeline,
+         * expiry) and emits new particles (accumulated at EmissionRateEXT per second) from
+         * @p origin, up to MaxParticlesEXT.
          * @param deltaSeconds Elapsed time since the last UpdateEXT call, in seconds.
          * @param origin World-space position new particles are emitted from.
          */
@@ -96,8 +119,13 @@ namespace CNA::Extended::World3DEXT
         void EmitEXT(int count, const Microsoft::Xna::Framework::Vector3& origin);
 
     private:
-        [[nodiscard]] Microsoft::Xna::Framework::Vector3 SampleConeDirectionEXT();
+        void SyncBuiltInModifiersEXT();
 
+        std::unique_ptr<Profile3DEXT> profileEXT_;
+        std::vector<std::unique_ptr<Modifier3DEXT>> modifiersEXT_;
+        ModifierExecutionStrategy3DEXT* modifierExecutionStrategyEXT_ = nullptr;
+        AgeModifier3DEXT* defaultAgeModifierEXT_ = nullptr;
+        LinearGravityModifier3DEXT* defaultGravityModifierEXT_ = nullptr;
         System::Random randomEXT_;
         float emitAccumulatorEXT_ = 0.0f;
     };

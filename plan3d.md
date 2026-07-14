@@ -745,13 +745,54 @@ port tests alongside → verify both CMake configs via genuine `rm -rf` clean re
       3D per `SpatialHash3DEXTTests.cpp`'s own established pattern — sphere bounds in place
       of 2D's circle/oriented-rectangle cases, `CollisionShape3DEXT` has no oriented-box
       shape). 35 new tests total. Both configs verified; full suite green (2240/2240).
-- [ ] **Phase C-1 — Particles core architecture + proving slice** — `Profile3DEXT`/
+- [x] **Phase C-1 — Particles core architecture + proving slice** — `Profile3DEXT`/
       `Modifier3DEXT`/`ModifierExecutionStrategy3DEXT` (Serial only)/`Interpolator3DEXT`/
       `InterpolatorOfT3DEXT<T>` base types; `Particle3DEXT` gains `RotationEXT`/`MassEXT`/
       `TriggeredPositionEXT`, `ScaleEXT` changes `float`→`Vector2` (user-confirmed); a
-      representative slice (point + cone Profile, Age + LinearGravity Modifiers, Color +
-      Opacity Interpolators) proves the new architecture reproduces today's exact baked-in
+      representative slice (`PointProfile3DEXT` + `ConeProfile3DEXT`, `AgeModifier3DEXT` +
+      `LinearGravityModifier3DEXT`, `ColorInterpolator3DEXT` + `OpacityInterpolator3DEXT`)
+      proves the new architecture reproduces today's exact baked-in
       `ParticleEmitter3DEXT::UpdateEXT` behavior before expanding further.
+      `ConeDirectionEXT`/`ConeHalfAngleEXT` moved off `ParticleEmitter3DEXT` onto
+      `ConeProfile3DEXT` (user-confirmed decision — a real, intentional field-ownership move,
+      not a pure refactor; existing tests updated to configure the profile via
+      `getProfileEXTProperty()`/`Profile3DEXT::Cone()` instead). `StartColorEXT`/
+      `EndColorEXT`/`StartOpacityEXT`/`EndOpacityEXT`/`GravityEXT` deliberately stayed on
+      `ParticleEmitter3DEXT` itself (zero pre-existing test changes needed for these) —
+      `UpdateEXT` syncs them into the default `AgeModifier3DEXT`'s owned interpolators and the
+      default `LinearGravityModifier3DEXT` every call via a private `SyncBuiltInModifiersEXT()`
+      helper, so the new architecture genuinely drives the default per-frame pipeline
+      end-to-end rather than being bypassed. `Modifier3DEXT::InternalUpdate` has one
+      deliberate behavioral deviation from 2D's own `Modifier::InternalUpdate` (found and
+      resolved during implementation, documented in full in `Modifier3DEXT.hpp`'s header
+      comment): it passes the real `elapsedSeconds` to `Update()`, not a fixed `cycleTime_`,
+      so a single large-timestep `UpdateEXT(dt, ...)` call still applies the full `dt`
+      wherever it touches particles — 2D's own fixed-`cycleTime_` behavior would have silently
+      broken `ParticleEmitter3DEXTTests.cpp`'s existing single-large-step test convention.
+      `ParticleEmitter3DEXT`'s own built-in default modifiers additionally override
+      `Frequency` to an effectively-unthrottled value (`1.0e6f`) so every particle is still
+      touched every call, preserving the emitter's pre-existing behavior exactly.
+      `InterpolatorOfT3DEXT<T>`'s protected constructor takes explicit `startValue`/
+      `endValue` arguments (rather than 2D's in-class `T StartValue{};` default-member
+      initializer) because `Microsoft::Xna::Framework::Color` (used by
+      `ColorInterpolator3DEXT`) has no zero-argument constructor.
+      `ColorInterpolator3DEXT` is not an HSL port — `Particle3DEXT::ColorEXT` is a plain RGB
+      `Color`, and the pre-refactor baked logic already did a direct per-channel RGB lerp
+      (alpha hardcoded to 255), reproduced exactly rather than introducing HSL interpolation.
+      Regression check: pre-existing `ParticleEmitter3DEXTTests.cpp`/
+      `ParticleRenderSystem3DEXTTests.cpp` (19 tests) kept passing with only the two
+      `ConeDirectionEXT`/`ConeHalfAngleEXT`→profile call sites and one `ScaleEXT`
+      `float`→`Vector2` assertion updated — proof the refactor is behavior-preserving.
+      New tests: `Profile3DEXTTests.cpp` (12: `PointProfile3DEXT`, `ConeProfile3DEXT`
+      including the A-06 zero-direction NaN-guard regression and a half-angle-containment
+      check, `Profile3DEXT::Point()`/`Cone()` factories), `Modifier3DEXTTests.cpp` (16: base
+      `Modifier3DEXT` frequency/name/enabled semantics and `InternalUpdate` pacing via a
+      `RecordingModifier3DEXT` test double, `ModifierExecutionStrategy3DEXT` Serial strategy,
+      `AgeModifier3DEXT`, `LinearGravityModifier3DEXT`), `Interpolator3DEXTTests.cpp` (11:
+      base `Interpolator3DEXT` name/enabled semantics, `ColorInterpolator3DEXT`,
+      `OpacityInterpolator3DEXT` including its A-06 clamp regression). 35 new tests total.
+      Both configs verified via genuine `rm -rf` clean rebuild; full suite green
+      (2275/2275).
 - [ ] **Phase C-2 — Remaining Profiles (6)**: Line/Ring/Box/BoxFill/BoxUniform/Circle.
 - [ ] **Phase C-3 — Remaining Modifiers (8)**: Drag/OpacityFastFade/Rotation/VelocityColor/
       Velocity/Vortex + Sphere/Box/BoxLoop Container modifiers (3D analogs of 2D's

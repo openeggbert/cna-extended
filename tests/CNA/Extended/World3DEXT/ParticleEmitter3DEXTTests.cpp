@@ -6,6 +6,7 @@
 #include "CNA/Extended/World3DEXT/ParticleEmitter3DEXT.hpp"
 
 #include "CNA/Extended/World3DEXT/ParticleEffect3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/Profile3DEXT.hpp"
 
 #include <cmath>
 #include <gtest/gtest.h>
@@ -125,7 +126,7 @@ namespace CNA::Extended::World3DEXT
     TEST(ParticleEmitter3DEXTTests, EmitEXT_ZeroConeDirection_ProducesFiniteVelocity)
     {
         ParticleEmitter3DEXT emitter;
-        emitter.ConeDirectionEXT = Vector3::Zero;
+        emitter.setProfileEXTProperty(Profile3DEXT::Cone(Vector3::Zero, 3.14159265358979323846f));
         emitter.MinSpeedEXT = 1.0f;
         emitter.MaxSpeedEXT = 1.0f;
         emitter.EmitEXT(20, Vector3::Zero);
@@ -252,7 +253,8 @@ namespace CNA::Extended::World3DEXT
         emitter.EmitEXT(1, Vector3::Zero);
 
         ASSERT_EQ(emitter.ParticlesEXT.size(), 1u);
-        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].ScaleEXT));
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].ScaleEXT.X));
+        EXPECT_TRUE(std::isfinite(emitter.ParticlesEXT[0].ScaleEXT.Y));
     }
 
     TEST(ParticleEffect3DEXTTests, AddEmitterEXT_UpdateEXT_ForwardsToEveryOwnedEmitter)
