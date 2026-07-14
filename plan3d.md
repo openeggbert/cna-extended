@@ -268,29 +268,67 @@ of the imagined design):
       Both build configs clean (genuine `rm -rf` + fresh configure + build), full suite
       **2119/2121 passing** (was 2091/2093; 2 pre-existing skips unrelated to this phase).
 
-### Phase 6 — `Graphics3DEXT` (3D counterpart of `Graphics`)
+### Phase 6 — `Graphics3DEXT` (3D counterpart of `Graphics`) — **COMPLETE (2026-07-14)**
 
 Absorbs and renames the original Phase 5 draft ("cube/billboard/debug-draw helpers") —
 this is now the single phase covering every `Graphics3DEXT` rendering helper, mirroring
 `CNA::Extended::Graphics`'s `Sprite`/`AnimatedSprite`/`SpriteBatchExtensions` shape in 3D.
+**Resolves `3d.md` §9.2's deferred `NOTICE.md` question**: no entry needed — `cna-scene`
+and `cna-extended` share the same copyright holder (Robert Vokáč), unlike the genuinely
+third-party MIT code this project's `NOTICE.md` documents (SlimMath, nickgravelyn's
+Triangulator, artemis_CSharp); each file below documents its `cna-scene` inspiration in
+its own header comment instead, and none of them are literal copies (see each file's own
+note on how its design actually differs from `cna-scene`'s immediate-mode API).
 
-- [ ] `CubeMeshComponentEXT` / `CubeMeshRenderSystemEXT` (adapted from
-      `cna-scene::CubeMesh`/`CubeMeshRenderer`, re-authored as this project's own code —
-      resolve the `NOTICE.md` attribution question, `3d.md` §9.2, before landing).
-- [ ] `BillboardComponentEXT` / `BillboardRenderSystemEXT` (adapted from
-      `cna-scene::BillboardMesh`/`BillboardMeshRenderer`, always-face-camera behavior
-      driven by `Camera3DEXT` — this is the 3D counterpart of `Graphics::Sprite`).
-- [ ] `AnimatedBillboardComponentEXT` (3D counterpart of `Graphics::AnimatedSprite`,
-      reusing `Animations::AnimationController`'s frame-timing logic against a billboard's
-      texture region instead of a 2D sprite's).
-- [ ] `Text3DEXT` / `TextBillboardRenderSystemEXT` (3D counterpart of `BitmapFonts`
-      rendering — floating/world-space text labels, rendered as camera-facing billboards
-      using the already-ported `BitmapFont` glyph layout logic against a billboard quad
-      instead of a 2D `SpriteBatch.DrawString` call).
-- [ ] `DebugDrawComponentEXT` / `DebugDrawSystemEXT` (adapted from `cna-scene::DebugDraw`
-      — lines/boxes for development visualization, including drawing `Collisions3DEXT`
-      bounds and `Camera3DEXT` frustums for debugging).
-- [ ] Tests for each, matching the real-render-test bar established in Phase 3.
+- [x] `CubeMeshComponentEXT` / `CubeMeshRenderSystemEXT` — one shared unit-cube mesh (24
+      vertices, 4 per face for independent UVs) + one shared `BasicEffect` owned by the
+      system (texture/tint swapped per draw call, matching `TilemapRenderer`'s/
+      `AvatarRenderer`'s established pattern); the component only carries per-instance
+      `TextureEXT`/`SizeEXT`/`TintEXT`.
+- [x] `BillboardComponentEXT` / `BillboardRenderSystemEXT` — `Matrix::CreateBillboard`
+      (real CNA/XNA math) recomputes orientation every frame from the current camera
+      position; each entity owns a small 4-vertex `VertexBufferEXT` (its own baked-in UV
+      rect, via `BillboardMeshEXT.hpp`'s `BuildBillboardQuadVertexBufferEXT`/
+      `ConvertPixelRectToUvRectEXT` helpers), the system owns one shared `IndexBuffer` +
+      `BasicEffect`.
+- [x] `AnimatedBillboardComponentEXT` / `AnimatedBillboardSystemEXT` — reuses
+      `Graphics::SpriteSheet`/`Texture2DAtlas`/`Animations::AnimationController` exactly
+      as `AnimatedSprite::Update()` does (not reinvented); on each detected frame change,
+      re-derives the sibling `BillboardComponentEXT`'s UV from the new frame's
+      `Texture2DRegion` and re-uploads its `VertexBufferEXT`. **Bug caught and fixed
+      before landing**: syncing only on frame *change* left a newly-attached entity with
+      no initial texture/UV until the animation's first frame boundary elapsed; fixed by
+      also syncing in `OnEntityAdded` (matching `AnimatedSprite::SetAnimation`'s own
+      immediate-assignment behavior) — caught by the render test itself, not by
+      inspection.
+- [x] `Text3DEXT` / `TextBillboardRenderSystemEXT` / `BuildText3DMeshEXT` — reuses
+      `BitmapFont::GetGlyphs` (real kerning/line-layout, not reimplemented) to build one
+      combined multi-glyph quad mesh per string (Y-flipped from BMFont's Y-down layout
+      into this project's Y-up local space), billboarded as a whole via the same
+      `CreateBillboard` math. **Known simplifications, documented in the header
+      comments**: assumes a single-page font (glyphs from a second page are skipped); no
+      frustum culling (`Text3DEXT` has no cached bounds, and text labels are rarely
+      numerous enough for it to matter) — both can be added later if a real need appears.
+- [x] `DebugDrawComponentEXT` / `DebugDrawSystemEXT` — a per-entity world-space line list,
+      batched into one shared, growth-only `VertexBuffer` + `PrimitiveType::LineList` draw
+      call per frame. `AddDebugBoxLinesEXT`/`AddDebugFrustumLinesEXT` cover exactly what
+      this task calls for (`Collisions3DEXT` bounds via `CollisionShape3DEXT::
+      getBoundingBoxProperty()`, `Camera3DEXT` frustums) via one shared
+      corners-to-12-edges helper, since `BoundingBox::GetCorners()`/`BoundingFrustum::
+      GetCorners()` share the same real CNA 8-corner ordering. Sphere wireframes are not
+      included in this first pass (box wireframes already cover every collision shape
+      kind Phase 5 supports) — documented as a deferred, not forgotten, scope decision.
+- [x] Tests for each, matching the real-render-test bar established in Phase 3:
+      `CubeMeshRenderSystemEXTTests.cpp` (2), `BillboardRenderSystemEXTTests.cpp` (2,
+      including a camera-orbits-the-billboard test proving `CreateBillboard` really keeps
+      it face-on), `AnimatedBillboardSystemEXTTests.cpp` (1, real two-frame render showing
+      different colors at different animation times), `Text3DEXTTests.cpp` (3: mesh
+      vertex/index-count checks + a real render showing both glyph colors),
+      `DebugDrawSystemEXTTests.cpp` (4: edge-count checks + real box-wireframe render).
+      12 new tests total, all passing on first real run except the AnimatedBillboard
+      initial-sync bug caught above. Both build configs clean (genuine `rm -rf` + fresh
+      configure + build), full suite **2131/2133 passing** (was 2119/2121; 2 pre-existing
+      skips unrelated to this phase).
 
 ### Phase 7 — `Particles3DEXT` (3D counterpart of `Particles`)
 
