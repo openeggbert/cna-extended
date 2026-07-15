@@ -15,6 +15,7 @@
 #include "Microsoft/Xna/Framework/Graphics/VertexPositionTexture.hpp"
 
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace CNA::Extended::World3DEXT
@@ -30,11 +31,22 @@ namespace CNA::Extended::World3DEXT
     using Microsoft::Xna::Framework::Graphics::VertexBuffer;
     using Microsoft::Xna::Framework::Graphics::VertexPositionTexture;
 
+    namespace
+    {
+        struct PageBucketEXT
+        {
+            std::vector<VertexPositionTexture> Vertices;
+            std::vector<std::uint16_t> Indices;
+        };
+    }
+
     Text3DMeshEXT BuildText3DMeshEXT(GraphicsDevice& graphicsDevice, const BitmapFont& font, const std::string& text)
     {
-        std::vector<VertexPositionTexture> vertices;
-        std::vector<std::uint16_t> indices;
-        Texture2D* pageTexture = nullptr;
+        // Glyphs are grouped by page texture (preserving first-seen page order via
+        // pageOrder) rather than the older single-page-only design -- see this file's
+        // header comment.
+        std::vector<Texture2D*> pageOrder;
+        std::unordered_map<Texture2D*, PageBucketEXT> pageBuckets;
 
         for (const BitmapFont::BitmapFontGlyph& glyph : font.GetGlyphs(text))
         {
@@ -50,22 +62,19 @@ namespace CNA::Extended::World3DEXT
             }
 
             Texture2D* texture = region->getTextureProperty();
-            if (pageTexture == nullptr)
-            {
-                pageTexture = texture;
-            }
-            else if (texture != pageTexture)
-            {
-                // Known simplification: skip glyphs from a different font page than the
-                // first glyph's -- see this file's header comment.
-                continue;
-            }
 
             const Rectangle bounds = region->getBoundsProperty();
             if (bounds.Width <= 0 || bounds.Height <= 0)
             {
                 continue; // whitespace-only glyphs have no visible quad
             }
+
+            auto [bucketIt, inserted] = pageBuckets.try_emplace(texture);
+            if (inserted)
+            {
+                pageOrder.push_back(texture);
+            }
+            PageBucketEXT& bucket = bucketIt->second;
 
             // BitmapFont::GetGlyphs lays glyphs out in Y-down pixel space; this mesh is
             // Y-up local space, so Y is negated here.
@@ -80,34 +89,39 @@ namespace CNA::Extended::World3DEXT
             const float u1 = uvRect.X + uvRect.Width;
             const float v1 = uvRect.Y + uvRect.Height;
 
-            const auto base = static_cast<std::uint16_t>(vertices.size());
-            vertices.emplace_back(Vector3(left, top, 0.0f), Vector2(u0, v0));
-            vertices.emplace_back(Vector3(right, top, 0.0f), Vector2(u1, v0));
-            vertices.emplace_back(Vector3(right, bottom, 0.0f), Vector2(u1, v1));
-            vertices.emplace_back(Vector3(left, bottom, 0.0f), Vector2(u0, v1));
+            const auto base = static_cast<std::uint16_t>(bucket.Vertices.size());
+            bucket.Vertices.emplace_back(Vector3(left, top, 0.0f), Vector2(u0, v0));
+            bucket.Vertices.emplace_back(Vector3(right, top, 0.0f), Vector2(u1, v0));
+            bucket.Vertices.emplace_back(Vector3(right, bottom, 0.0f), Vector2(u1, v1));
+            bucket.Vertices.emplace_back(Vector3(left, bottom, 0.0f), Vector2(u0, v1));
 
-            indices.push_back(base + 0);
-            indices.push_back(base + 1);
-            indices.push_back(base + 2);
-            indices.push_back(base + 0);
-            indices.push_back(base + 2);
-            indices.push_back(base + 3);
+            bucket.Indices.push_back(base + 0);
+            bucket.Indices.push_back(base + 1);
+            bucket.Indices.push_back(base + 2);
+            bucket.Indices.push_back(base + 0);
+            bucket.Indices.push_back(base + 2);
+            bucket.Indices.push_back(base + 3);
         }
 
         Text3DMeshEXT mesh;
-        mesh.Texture = pageTexture;
-        mesh.PrimitiveCount = static_cast<int>(indices.size() / 3);
+        mesh.Parts.reserve(pageOrder.size());
 
-        if (vertices.empty())
+        for (Texture2D* texture : pageOrder)
         {
-            return mesh;
+            const PageBucketEXT& bucket = pageBuckets.at(texture);
+
+            Text3DMeshPartEXT part;
+            part.Texture = texture;
+            part.PrimitiveCount = static_cast<int>(bucket.Indices.size() / 3);
+
+            part.VertexBuffer = std::make_unique<VertexBuffer>(graphicsDevice, static_cast<int>(bucket.Vertices.size()));
+            part.VertexBuffer->SetData(bucket.Vertices.data(), static_cast<int>(bucket.Vertices.size()));
+
+            part.IndexBuffer = std::make_unique<IndexBuffer>(graphicsDevice, static_cast<int>(bucket.Indices.size()));
+            part.IndexBuffer->SetData(bucket.Indices.data(), static_cast<int>(bucket.Indices.size()));
+
+            mesh.Parts.push_back(std::move(part));
         }
-
-        mesh.VertexBuffer = std::make_unique<VertexBuffer>(graphicsDevice, static_cast<int>(vertices.size()));
-        mesh.VertexBuffer->SetData(vertices.data(), static_cast<int>(vertices.size()));
-
-        mesh.IndexBuffer = std::make_unique<IndexBuffer>(graphicsDevice, static_cast<int>(indices.size()));
-        mesh.IndexBuffer->SetData(indices.data(), static_cast<int>(indices.size()));
 
         return mesh;
     }

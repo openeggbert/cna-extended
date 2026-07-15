@@ -58,8 +58,7 @@ namespace CNA::Extended::World3DEXT
             }
 
             Text3DEXT* textComponent = entity->Get<Text3DEXT>();
-            if (textComponent == nullptr || textComponent->VertexBufferEXT == nullptr || textComponent->IndexBufferEXT == nullptr
-                || textComponent->PrimitiveCountEXT <= 0)
+            if (textComponent == nullptr || textComponent->PartsEXT.empty())
             {
                 continue;
             }
@@ -74,15 +73,25 @@ namespace CNA::Extended::World3DEXT
                 * Matrix::CreateBillboard(objectPosition, cameraPosition, cameraUp, std::nullopt);
 
             effect_.World = world;
-            effect_.setTextureProperty(textComponent->TextureEXT);
             effect_.setDiffuseColorProperty(textComponent->TintEXT.ToVector3());
             effect_.setAlphaProperty(static_cast<float>(textComponent->TintEXT.getAProperty()) / 255.0f);
-            effect_.Apply();
 
-            graphicsDevice_->SetVertexBuffer(textComponent->VertexBufferEXT);
-            graphicsDevice_->SetIndexBuffer(textComponent->IndexBufferEXT);
-            graphicsDevice_->DrawIndexedPrimitives(PrimitiveType::TriangleList, 0, 0, textComponent->VertexBufferEXT->getVertexCountProperty(), 0,
-                                                    textComponent->PrimitiveCountEXT);
+            // One draw call per font page part -- see Text3DEXT.hpp's header comment.
+            for (const Text3DPartEXT& part : textComponent->PartsEXT)
+            {
+                if (part.VertexBufferEXT == nullptr || part.IndexBufferEXT == nullptr || part.PrimitiveCountEXT <= 0)
+                {
+                    continue;
+                }
+
+                effect_.setTextureProperty(part.TextureEXT);
+                effect_.Apply();
+
+                graphicsDevice_->SetVertexBuffer(part.VertexBufferEXT);
+                graphicsDevice_->SetIndexBuffer(part.IndexBufferEXT);
+                graphicsDevice_->DrawIndexedPrimitives(PrimitiveType::TriangleList, 0, 0, part.VertexBufferEXT->getVertexCountProperty(), 0,
+                                                        part.PrimitiveCountEXT);
+            }
         }
     }
 }

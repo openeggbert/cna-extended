@@ -877,6 +877,79 @@ port tests alongside → verify both CMake configs via genuine `rm -rf` clean re
       architecture) is now COMPLETE** — see this file's Phase 11 A/B/C-1/C-2/C-3/C-4 entries
       above for the full record.
 
+### Phase 12 — remaining "extend later if wanted" items (2026-07-15)
+
+User-requested follow-up ("vše z těchto implementuj prosím" — implement all of these,
+please), picking up every remaining item from `NEXT.md`'s post-Phase-11 "extend later if
+wanted" list. Phased smallest/most-mechanical first, same discipline as every prior phase:
+implement → port/write tests alongside → verify both CMake configs via genuine `rm -rf`
+clean rebuild → commit → push → update this file/`NEXT.md` → next phase.
+
+- [x] **Phase A — DebugDrawComponentEXT sphere wireframes**: `AddDebugSphereLinesEXT`
+      (3 orthogonal great circles through `Center`, each approximated by
+      `segmentsPerCircle` line segments, default 24, clamped to a minimum of 3 rather than
+      throwing since this is a debug-only visualization helper) — no sphere-wireframe
+      helper existed anywhere in `cna`/`easy-3d` to reuse, so this is new math, following
+      `AppendCornersWireframeEXT`'s existing shared-helper pattern used by
+      `AddDebugBoxLinesEXT`/`AddDebugFrustumLinesEXT`. Tests: 5 new (`AddDebugSphereLinesEXT`
+      segment-count/endpoints-on-surface/clamping unit tests, plus a real headless render
+      test proving a sphere-lined entity draws non-black pixels, matching the existing
+      box-wireframe render test's pattern). Both configs verified via genuine `rm -rf` clean
+      rebuild; full suite green (2340/2340).
+- [x] **Phase B — Collisions3DEXT ↔ Tilemaps3DEXT broadphase shortcut**: new
+      `TilemapCollisionActor3DEXT` (a lightweight `ICollisionActor3DEXT` wrapping one
+      populated `Tilemap3DEXT` cell's world-space AABB as a `CollisionShape3DEXT::Box`,
+      caching `TileXEXT`/`TileYEXT`/`TileZEXT`/`TileIdEXT` so a caller receiving one back
+      from a collision query can identify its source tile via
+      `dynamic_cast<TilemapCollisionActor3DEXT*>`) + a bridging free function
+      `RegisterTilemapCollisionActorsEXT(CollisionWorld3DEXT&, const Tilemap3DEXT&,
+      layerName = CollisionWorld3DEXT::DefaultLayerName)` that walks
+      `Tilemap3DEXT::getTilesProperty()` and bulk-registers one actor per populated tile —
+      closing the exact gap `NEXT.md` documented ("today: insert one ICollisionActor3DEXT
+      per populated tile manually"). A free function, not a method on either
+      `Tilemap3DEXT` or `CollisionWorld3DEXT` (neither type depends on the other; this is
+      the bridge — same shape as Phase 11 C-2's `NextUnitVector3EXT`). Caller owns the
+      returned actor vector's lifetime, matching every other `ICollisionActor3DEXT` usage in
+      this project (`CollisionWorld3DEXT` never takes ownership). Tests:
+      `TilemapCollisionRegistrarEXTTests.cpp` (6 — actor field exposure, bulk registration
+      count, empty-tilemap no-op, shape-matches-tile-bounds, named-layer registration, a
+      real broadphase query finding a registered tile actor). Both configs verified via
+      genuine `rm -rf` clean rebuild; full suite green (2346/2346).
+- [x] **Phase C — Tilemap3DFactoryEXT JSON file reader**: new `Tilemap3DFileContent` (+
+      nested `Tilemap3DFileTileSize`), a project-defined JSON schema following
+      `TexturePackerFileContent.hpp`'s established `from_json`-friend-function pattern —
+      dense flat row-major tile-ID array (user-confirmed 2026-07-15, chosen over a sparse
+      `{x,y,z,id}` tile-list schema for consistency with `BuildFromArrayEXT`'s existing
+      in-memory shape and lower risk), since no existing MonoGame.Extended map format
+      applies (Tiled/Ogmo/LDtk are all 2D-only, no voxel/3D-grid concept — confirmed by
+      re-reading `Tilemap3DFactoryEXT.hpp`'s own prior header comment). New
+      `Tilemap3DFactoryEXT::BuildFromJsonFileEXT(path)`/`BuildFromJsonStreamEXT(stream)`,
+      both parsing via `System::Text::Json::JsonSerializer::Deserialize<Tilemap3DFileContent>`
+      (stream variant via `System::IO::StreamReader::ReadToEnd()`) then delegating straight
+      to the existing `BuildFromArrayEXT` — zero duplicated validation/grid-construction
+      logic. Tests: `Tilemap3DFileContentTests.cpp` (1, direct JSON parsing),
+      `Tilemap3DFactoryEXTJsonTests.cpp` (4 — file/stream parsing, tile-size-from-document,
+      mismatched-tile-count-throws). Both configs verified via genuine `rm -rf` clean
+      rebuild; full suite green (2351/2351).
+- [x] **Phase D — Text3DEXT multi-page BitmapFont support**: `Text3DEXT`/`Text3DMeshEXT`
+      restructured from a single flat mesh (one `VertexBuffer`/`IndexBuffer`/
+      `PrimitiveCount`/`Texture`) to `std::vector<Text3DPartEXT>`/
+      `std::vector<Text3DMeshPartEXT>` — one part per distinct font page texture the
+      string's glyphs use. `BuildText3DMeshEXT` now groups glyphs into per-texture buckets
+      (preserving first-seen page order) instead of silently skipping glyphs from a second
+      page; `TextBillboardRenderSystemEXT::Draw` issues one draw call per part (texture
+      swap between parts — the exact same single-texture draw call the old flat-mesh design
+      always issued, just repeated per page, not a new drawing strategy). A real breaking
+      change to `Text3DEXT`'s public field shape (only `Text3DEXTTests.cpp` touched these
+      fields directly — `examples/world3d_demo/main.cpp` doesn't use `Text3DEXT` at all, so
+      needed no update). Tests: `Text3DEXTTests.cpp` extended with a two-page test font/two
+      solid-color textures fixture, 2 new tests (`BuildText3DMeshEXT` produces one part per
+      page; a real headless render proving both pages' glyph colors appear on screen — the
+      exact regression this phase closes, since the second page previously drew nothing at
+      all). Both configs verified via genuine `rm -rf` clean rebuild; full suite green
+      (2353/2353).
+- [ ] **Phase E — TilemapRenderer3DEXT per-chunk geometry batching**: not yet started.
+
 ## 5. After meaningful changes
 
 - Check off completed tasks above; add newly discovered tasks under the right phase.

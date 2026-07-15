@@ -90,9 +90,7 @@ namespace CNA::Extended::World3DEXT
 
         const Text3DMeshEXT mesh = BuildText3DMeshEXT(graphicsDevice, font, "");
 
-        EXPECT_EQ(mesh.PrimitiveCount, 0);
-        EXPECT_EQ(mesh.VertexBuffer, nullptr);
-        EXPECT_EQ(mesh.IndexBuffer, nullptr);
+        EXPECT_TRUE(mesh.Parts.empty());
     }
 
     TEST(Text3DEXTMeshTests, BuildText3DMeshEXT_TwoCharacterString_ProducesTwoGlyphQuads)
@@ -103,11 +101,54 @@ namespace CNA::Extended::World3DEXT
 
         const Text3DMeshEXT mesh = BuildText3DMeshEXT(graphicsDevice, font, "AB");
 
-        EXPECT_EQ(mesh.PrimitiveCount, 4); // 2 triangles per glyph x 2 glyphs
-        ASSERT_NE(mesh.VertexBuffer, nullptr);
-        ASSERT_NE(mesh.IndexBuffer, nullptr);
-        EXPECT_EQ(mesh.VertexBuffer->getVertexCountProperty(), 8); // 4 vertices per glyph x 2 glyphs
-        EXPECT_EQ(mesh.Texture, &texture);
+        ASSERT_EQ(mesh.Parts.size(), 1u); // both glyphs share the same single-page texture
+        EXPECT_EQ(mesh.Parts[0].PrimitiveCount, 4); // 2 triangles per glyph x 2 glyphs
+        ASSERT_NE(mesh.Parts[0].VertexBuffer, nullptr);
+        ASSERT_NE(mesh.Parts[0].IndexBuffer, nullptr);
+        EXPECT_EQ(mesh.Parts[0].VertexBuffer->getVertexCountProperty(), 8); // 4 vertices per glyph x 2 glyphs
+        EXPECT_EQ(mesh.Parts[0].Texture, &texture);
+    }
+
+    namespace
+    {
+        // A 2-character "AB" font where 'A' and 'B' come from two DIFFERENT page textures
+        // (regionA -> textureA, regionB -> textureB), proving multi-page grouping.
+        BitmapFont BuildTwoPageTestFont(Texture2D& textureA, Texture2D& textureB)
+        {
+            auto regionA = std::make_shared<Texture2DRegion>(&textureA, Rectangle(0, 0, 2, 2));
+            auto regionB = std::make_shared<Texture2DRegion>(&textureB, Rectangle(0, 0, 2, 2));
+
+            const std::vector<std::shared_ptr<BitmapFontCharacter>> characters = {
+                std::make_shared<BitmapFontCharacter>('A', regionA, 0, 0, 2),
+                std::make_shared<BitmapFontCharacter>('B', regionB, 0, 0, 2),
+            };
+
+            return BitmapFont("two-page-test-font", 2, 2, characters);
+        }
+
+        Texture2D BuildSolidColorTexture(GraphicsDevice& graphicsDevice, const Color& color)
+        {
+            Texture2D texture(graphicsDevice, 2, 2);
+            const std::vector<Color> pixels = {color, color, color, color};
+            texture.SetData(pixels.data(), static_cast<int>(pixels.size()));
+            return texture;
+        }
+    }
+
+    TEST(Text3DEXTMeshTests, BuildText3DMeshEXT_TwoPageString_ProducesOnePartPerPage)
+    {
+        GraphicsDevice graphicsDevice;
+        Texture2D textureA = BuildSolidColorTexture(graphicsDevice, Color::Red);
+        Texture2D textureB = BuildSolidColorTexture(graphicsDevice, Color::Green);
+        const BitmapFont font = BuildTwoPageTestFont(textureA, textureB);
+
+        const Text3DMeshEXT mesh = BuildText3DMeshEXT(graphicsDevice, font, "AB");
+
+        ASSERT_EQ(mesh.Parts.size(), 2u);
+        EXPECT_EQ(mesh.Parts[0].Texture, &textureA);
+        EXPECT_EQ(mesh.Parts[0].PrimitiveCount, 2); // one glyph quad
+        EXPECT_EQ(mesh.Parts[1].Texture, &textureB);
+        EXPECT_EQ(mesh.Parts[1].PrimitiveCount, 2);
     }
 
     namespace
@@ -156,6 +197,22 @@ namespace CNA::Extended::World3DEXT
         {
             return std::any_of(pixels.begin(), pixels.end(), [&](const Color& p) { return p == color; });
         }
+
+        std::vector<Text3DPartEXT> ToPartsEXT(const Text3DMeshEXT& mesh)
+        {
+            std::vector<Text3DPartEXT> parts;
+            parts.reserve(mesh.Parts.size());
+            for (const Text3DMeshPartEXT& meshPart : mesh.Parts)
+            {
+                Text3DPartEXT part;
+                part.VertexBufferEXT = meshPart.VertexBuffer.get();
+                part.IndexBufferEXT = meshPart.IndexBuffer.get();
+                part.PrimitiveCountEXT = meshPart.PrimitiveCount;
+                part.TextureEXT = meshPart.Texture;
+                parts.push_back(part);
+            }
+            return parts;
+        }
     }
 
     TEST_F(TextBillboardRenderSystemEXTTest, VisibleText_IsDrawnWithGlyphColors)
@@ -163,7 +220,7 @@ namespace CNA::Extended::World3DEXT
         Texture2D texture = BuildTwoGlyphTexture(graphicsDevice);
         const BitmapFont font = BuildTestFont(texture);
         Text3DMeshEXT mesh = BuildText3DMeshEXT(graphicsDevice, font, "AB");
-        ASSERT_NE(mesh.VertexBuffer, nullptr);
+        ASSERT_EQ(mesh.Parts.size(), 1u);
 
         WorldBuilder builder;
         builder.AddSystem(std::make_unique<TextBillboardRenderSystemEXT>(graphicsDevice, camera));
@@ -172,10 +229,7 @@ namespace CNA::Extended::World3DEXT
 
         ECS::Entity& entity = world->CreateEntity();
         Text3DEXT textComponent;
-        textComponent.VertexBufferEXT = mesh.VertexBuffer.get();
-        textComponent.IndexBufferEXT = mesh.IndexBuffer.get();
-        textComponent.PrimitiveCountEXT = mesh.PrimitiveCount;
-        textComponent.TextureEXT = mesh.Texture;
+        textComponent.PartsEXT = ToPartsEXT(mesh);
         textComponent.ScaleEXT = 2.0f;
         entity.Attach(&textComponent);
 
@@ -187,5 +241,36 @@ namespace CNA::Extended::World3DEXT
 
         EXPECT_TRUE(AnyPixelMatches(pixels, Color::Red));
         EXPECT_TRUE(AnyPixelMatches(pixels, Color::Green));
+    }
+
+    TEST_F(TextBillboardRenderSystemEXTTest, TwoPageText_BothPagesAreDrawn)
+    {
+        Texture2D textureA = BuildSolidColorTexture(graphicsDevice, Color::Red);
+        Texture2D textureB = BuildSolidColorTexture(graphicsDevice, Color::Blue);
+        const BitmapFont font = BuildTwoPageTestFont(textureA, textureB);
+        Text3DMeshEXT mesh = BuildText3DMeshEXT(graphicsDevice, font, "AB");
+        ASSERT_EQ(mesh.Parts.size(), 2u);
+
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<TextBillboardRenderSystemEXT>(graphicsDevice, camera));
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        ECS::Entity& entity = world->CreateEntity();
+        Text3DEXT textComponent;
+        textComponent.PartsEXT = ToPartsEXT(mesh);
+        textComponent.ScaleEXT = 2.0f;
+        entity.Attach(&textComponent);
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+        world->Update(gameTime);
+
+        const auto [pixels, width] = RenderToPixels(*world, gameTime);
+        (void)width;
+
+        // Both pages' glyphs must be visible -- proof the second page isn't silently skipped
+        // (the exact gap this phase closes).
+        EXPECT_TRUE(AnyPixelMatches(pixels, Color::Red));
+        EXPECT_TRUE(AnyPixelMatches(pixels, Color::Blue));
     }
 }

@@ -22,15 +22,16 @@ simplification. Scope was explicitly negotiated with the project owner and is re
 
 **Current phase: `plan.md` DONE (all 10 phases); `plan3d.md`'s original 9 phases DONE, its
 Phase 10 (audit follow-ups) DONE, its Phase 11 (2D/3D parity: collision layers, recursive
-octree, particles plugin architecture) DONE (A/B/C-1/C-2/C-3/C-4 all complete, 2026-07-14).
-There is no remaining phase in either plan.** An independent audit (Codex, `audit.md`,
-2026-07-14) reviewed the completed port and `World3DEXT`; `plan3d.md`'s Phase 10 tracks those
-findings (see that file for current per-finding status). Phase 11 was separate,
-user-requested parity work (not an audit finding) — see that file's own entry for the full
-scope/sequencing/rationale record. See section 4 for how `plan.md`'s two former blockers (the
-`TilemapRenderer`/`TilemapWorldRenderer` `DefaultEffect` mismatch, and its trailing
-pixel-verification test gap) were resolved, and section 8 for optional, non-blocking
-follow-up ideas for either plan.
+octree, particles plugin architecture) DONE (A/B/C-1/C-2/C-3/C-4 all complete, 2026-07-14),
+its Phase 12 (remaining "extend later if wanted" items) in progress (A/B/C/D done,
+2026-07-15; E — TilemapRenderer3DEXT per-chunk batching — not yet started).** An independent
+audit (Codex, `audit.md`, 2026-07-14) reviewed the completed port and `World3DEXT`;
+`plan3d.md`'s Phase 10 tracks those findings (see that file for current per-finding status).
+Phases 11 and 12 were both separate, user-requested follow-up work (not audit findings) —
+see that file's own entries for the full scope/sequencing/rationale record. See section 4
+for how `plan.md`'s two former blockers (the `TilemapRenderer`/`TilemapWorldRenderer`
+`DefaultEffect` mismatch, and its trailing pixel-verification test gap) were resolved, and
+section 8 for optional, non-blocking follow-up ideas for either plan.
 
 **`plan3d.md`** (read `3d.md` first for the design rationale behind every decision) added
 `CNA::Extended::World3DEXT` — a 3D scene layer (camera, ECS transform hierarchy, model
@@ -76,7 +77,7 @@ itself):
    transform hierarchy, a frustum-culled entity, a skinned character, particles, and a
    voxel floor) — screenshot inspected, not just pixel-sampled.
 
-Full test suite: **2336/2338 passing** (2 pre-existing skips predating `plan3d.md`,
+Full test suite: **2353/2355 passing** (2 pre-existing skips predating `plan3d.md`,
 unrelated to it — `OrthographicCameraTest`'s two `ContainsPoint`/`ContainsVector2` tests,
 see section 5). Both `plan.md` and `plan3d.md` checkboxes are fully checked off; there is
 no in-progress phase in either.
@@ -107,7 +108,7 @@ no in-progress phase in either.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2336/2336 tests run, 100% passing** (2 additional tests exist but are
+- **Tests**: **2353/2353 tests run, 100% passing** (2 additional tests exist but are
   deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
@@ -676,13 +677,18 @@ audit finding) closed all three of the concrete gaps that remained:
 - ~~`CollisionWorld3DEXT`: a named-`Layer`/`LayerPair` cross-layer-filtering system.~~ Done
   (Phase 11 A, `plan3d.md`, 2026-07-14).
 
-Remaining, smaller "extend later if wanted" candidates, should the owner ask for any of them:
-- `Collisions3DEXT` ↔ `Tilemaps3DEXT`: a purpose-built tilemap-aware collision broadphase
-  shortcut (today: insert one `ICollisionActor3DEXT` per populated tile manually).
-- `DebugDrawComponentEXT`: sphere wireframes (only box/frustum wireframes exist).
-- `Text3DEXT`: multi-page `BitmapFont` support (glyphs from a second page are skipped).
-- `TilemapRenderer3DEXT`: per-chunk geometry batching (currently one draw call per tile).
-- `Tilemap3DFactoryEXT`: a real file-format reader (currently hand-built arrays only).
+**Phase 12 (`plan3d.md`, 2026-07-15) picked up all 5 of the "smaller extend later"
+candidates that remained** — user-requested ("implement all of these"). A/B/C/D are done:
+- ~~`DebugDrawComponentEXT`: sphere wireframes.~~ Done (Phase 12 A) — `AddDebugSphereLinesEXT`.
+- ~~`Collisions3DEXT` ↔ `Tilemaps3DEXT`: a purpose-built tilemap-aware collision broadphase
+  shortcut.~~ Done (Phase 12 B) — `TilemapCollisionActor3DEXT` +
+  `RegisterTilemapCollisionActorsEXT`.
+- ~~`Tilemap3DFactoryEXT`: a real file-format reader.~~ Done (Phase 12 C) — a project-defined
+  JSON schema (`Tilemap3DFileContent`), `BuildFromJsonFileEXT`/`BuildFromJsonStreamEXT`.
+- ~~`Text3DEXT`: multi-page `BitmapFont` support.~~ Done (Phase 12 D) — `Text3DEXT`/
+  `Text3DMeshEXT` restructured to a `std::vector` of per-page parts.
+- `TilemapRenderer3DEXT`: per-chunk geometry batching (currently one draw call per tile) —
+  **in progress, Phase 12 E in `plan3d.md`**, not yet started.
 
 ---
 
