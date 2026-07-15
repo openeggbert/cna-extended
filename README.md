@@ -20,10 +20,10 @@ rendering, 3D collisions, billboards/text/debug-draw, particles, voxel tilemaps,
 end-to-end `world3d_demo` example — with all 9 of its own phases complete and an
 independent audit's follow-up fixes (`plan3d.md`'s Phase 10) done, 2D/3D parity work
 (`plan3d.md`'s Phase 11 — collision layers, a recursive octree broadphase, and a full
-particles plugin architecture) done, and most of Phase 12 (sphere-wireframe debug draw, a
+particles plugin architecture) done, and Phase 12 (sphere-wireframe debug draw, a
 tilemap-collision broadphase shortcut, a JSON tilemap file reader, multi-page bitmap-font
-text) done, with per-chunk tilemap render batching still pending. Current test count:
-2353/2353 passing (see `NEXT.md` for the most up-to-date figure, since this number moves as
+text, and per-chunk tilemap render batching) done. Current test count:
+2363/2363 passing (see `NEXT.md` for the most up-to-date figure, since this number moves as
 work continues).
 
 ## Modules

@@ -948,7 +948,41 @@ clean rebuild → commit → push → update this file/`NEXT.md` → next phase.
       exact regression this phase closes, since the second page previously drew nothing at
       all). Both configs verified via genuine `rm -rf` clean rebuild; full suite green
       (2353/2353).
-- [ ] **Phase E — TilemapRenderer3DEXT per-chunk geometry batching**: not yet started.
+- [x] **Phase E — TilemapRenderer3DEXT per-chunk geometry batching**: new
+      `TilemapChunkRenderer3DEXT`, an OPT-IN alternative to `TilemapRenderer3DEXT`'s
+      one-draw-call-per-tile design, not a replacement (matches the `Octree3DEXT`-alongside-
+      `SpatialHash3DEXT` "keep the simple version, add an alternative" precedent, Phase 11
+      B). `RebuildEXT(tilemap, tileset)` groups every visible tile *face* (naive
+      neighbor-based culling via `Tilemap3DEXT::HasTileEXT` — a face is only emitted if the
+      neighboring cell along its normal is empty) into one combined `VertexBuffer`/
+      `IndexBuffer` per `(chunk coordinate, texture)` pair — sub-grouping by texture within
+      each chunk mirrors 2D `TilemapRenderer.cpp`'s own per-texture `TileBatch` precedent,
+      since one draw call can only bind one texture. Reuses
+      `CubeMeshRenderSystemEXT::BuildUnitCubeMeshEXT`'s exact per-face corner/normal/UV
+      layout, baking each face's vertices directly into world space instead of drawing a
+      shared unit mesh per tile with a per-draw world matrix. Default chunk size 16 (the
+      standard voxel-engine default). `RebuildEXT` is a full rebuild, not incremental —
+      call again whenever the tilemap changes, matching `SpatialHash3DEXT`/`Octree3DEXT`/
+      `QuadTreeSpace`'s own established `Reset()`-is-full-rebuild precedent. Frustum culling
+      happens per `(chunk, texture)` batch (one `BoundingBox` via
+      `BoundingBox::CreateFromPoints`), not per tile — coarser than
+      `TilemapRenderer3DEXT`'s per-tile culling, but that coarseness is the point: far
+      fewer, larger draw calls. `ChunkBatchEXT` is a private forward-declared nested struct
+      (full definition in the `.cpp` only, since the chunk count is only known at
+      `RebuildEXT` time) requiring an explicit out-of-line destructor for the
+      incomplete-type-in-`vector<unique_ptr<T>>` requirement (matching
+      `ParticleEmitter3DEXT`'s Phase 11 C-1 precedent) — but, unlike that class, no move
+      operations, since `BasicEffect` (held by value, matching
+      `CubeMeshRenderSystemEXT`'s own precedent) has a private copy constructor and no move
+      operations of its own, making this type construct-once/never-relocate like every
+      other renderer-shaped type in `World3DEXT`.
+      Tests: `TilemapChunkRenderer3DEXTTests.cpp` (10 — visible-tile render, frustum
+      culling, no-texture-assigned no-throw, single/multi-chunk/multi-texture batch-count
+      cases, a direct triangle-count proof that adjacent tiles hide their shared internal
+      faces, rebuild-replaces-old-batches, and negative-tile-coordinate chunk-math
+      correctness). Both configs verified via genuine `rm -rf` clean rebuild; full suite
+      green (2363/2363).
+      **Phase 12 (all 5 "extend later if wanted" items from Phase 11) is now COMPLETE.**
 
 ## 5. After meaningful changes
 
