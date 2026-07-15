@@ -17,11 +17,16 @@
 // bullet explicitly calls for ("drawing Collisions3DEXT bounds and Camera3DEXT frustums
 // for debugging") -- BoundingBox::GetCorners()/BoundingFrustum::GetCorners() share the
 // same real CNA 8-corner ordering (near/front face 0-3, far/back face 4-7), so one shared
-// wireframe-from-corners helper covers both. Sphere wireframe drawing is not included in
-// this first pass (Collisions3DEXT's CollisionShape3DEXT already exposes a BoundingBox for
-// any shape via getBoundingBoxProperty(), so box wireframes alone already cover debugging
-// every collision shape kind this phase supports) -- can be added later if a real need
-// appears, matching this phase's "start with the simplest correct version" precedent.
+// wireframe-from-corners helper covers both.
+//
+// AddDebugSphereLinesEXT (Phase 12 A, 2026-07-15, user-requested "extend later" item) adds
+// sphere wireframes -- deferred in the first pass since CollisionShape3DEXT already exposes
+// a BoundingBox for any shape via getBoundingBoxProperty(), so box wireframes alone covered
+// every collision shape kind at the time; added now on request. No sphere-wireframe helper
+// exists anywhere in cna/easy-3d to reuse, so this draws 3 orthogonal great circles (XY/XZ/YZ
+// planes through Center, each approximated by segmentsPerCircle line segments) -- the
+// standard sphere-wireframe approximation, not a full lat/long grid (which would need far
+// more line segments for a debug-only visualization with no real added clarity).
 #pragma once
 
 #include "Microsoft/Xna/Framework/Color.hpp"
@@ -33,6 +38,7 @@ namespace Microsoft::Xna::Framework
 {
     struct BoundingBox;
     class BoundingFrustum;
+    struct BoundingSphere;
 }
 
 namespace CNA::Extended::World3DEXT
@@ -62,4 +68,8 @@ namespace CNA::Extended::World3DEXT
     /** @brief Appends the 12 wireframe edges of @p frustum, in @p color, to @p lines. */
     void AddDebugFrustumLinesEXT(std::vector<DebugLineEXT>& lines, const Microsoft::Xna::Framework::BoundingFrustum& frustum,
                                   const Microsoft::Xna::Framework::Color& color);
+
+    /** @brief Appends a 3-great-circle wireframe approximation of @p sphere, in @p color, to @p lines. */
+    void AddDebugSphereLinesEXT(std::vector<DebugLineEXT>& lines, const Microsoft::Xna::Framework::BoundingSphere& sphere,
+                                 const Microsoft::Xna::Framework::Color& color, int segmentsPerCircle = 24);
 }

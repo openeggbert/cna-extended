@@ -11,6 +11,7 @@
 #include "CNA/Extended/World3DEXT/DebugDrawComponentEXT.hpp"
 #include "Microsoft/Xna/Framework/BoundingBox.hpp"
 #include "Microsoft/Xna/Framework/BoundingFrustum.hpp"
+#include "Microsoft/Xna/Framework/BoundingSphere.hpp"
 #include "Microsoft/Xna/Framework/Color.hpp"
 #include "Microsoft/Xna/Framework/GameTime.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
@@ -30,6 +31,7 @@ namespace CNA::Extended::World3DEXT
 {
     using Microsoft::Xna::Framework::BoundingBox;
     using Microsoft::Xna::Framework::BoundingFrustum;
+    using Microsoft::Xna::Framework::BoundingSphere;
     using Microsoft::Xna::Framework::Color;
     using Microsoft::Xna::Framework::GameTime;
     using Microsoft::Xna::Framework::MathHelper;
@@ -67,6 +69,42 @@ namespace CNA::Extended::World3DEXT
         AddDebugFrustumLinesEXT(lines, frustum, Color::Yellow);
 
         EXPECT_EQ(lines.size(), 12u);
+    }
+
+    TEST(DebugDrawComponentEXTTests, AddDebugSphereLinesEXT_AppendsThreeSegmentsPerCircle)
+    {
+        std::vector<DebugLineEXT> lines;
+        const BoundingSphere sphere(Vector3::Zero, 2.0f);
+
+        AddDebugSphereLinesEXT(lines, sphere, Color::White, 16);
+
+        // 3 great circles (XY/XZ/YZ), 16 segments each.
+        EXPECT_EQ(lines.size(), 3u * 16u);
+    }
+
+    TEST(DebugDrawComponentEXTTests, AddDebugSphereLinesEXT_EndpointsLieOnSphereSurface)
+    {
+        std::vector<DebugLineEXT> lines;
+        const BoundingSphere sphere(Vector3(1.0f, 2.0f, 3.0f), 5.0f);
+
+        AddDebugSphereLinesEXT(lines, sphere, Color::White, 24);
+
+        for (const DebugLineEXT& line : lines)
+        {
+            EXPECT_NEAR((line.Start - sphere.Center).Length(), sphere.Radius, 1e-3f);
+            EXPECT_NEAR((line.End - sphere.Center).Length(), sphere.Radius, 1e-3f);
+        }
+    }
+
+    TEST(DebugDrawComponentEXTTests, AddDebugSphereLinesEXT_ClampsTooFewSegments)
+    {
+        std::vector<DebugLineEXT> lines;
+        const BoundingSphere sphere(Vector3::Zero, 1.0f);
+
+        AddDebugSphereLinesEXT(lines, sphere, Color::White, 1);
+
+        // Clamped to the minimum of 3 segments per circle, not 1.
+        EXPECT_EQ(lines.size(), 3u * 3u);
     }
 
     namespace
@@ -128,6 +166,27 @@ namespace CNA::Extended::World3DEXT
         ECS::Entity& entity = world->CreateEntity();
         DebugDrawComponentEXT debugComponent;
         AddDebugBoxLinesEXT(debugComponent.LinesEXT, BoundingBox(Vector3(-3.0f, -3.0f, -3.0f), Vector3(3.0f, 3.0f, 3.0f)), Color::White);
+        entity.Attach(&debugComponent);
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));
+        world->Update(gameTime);
+
+        const auto [pixels, width] = RenderToPixels(*world, gameTime);
+        (void)width;
+
+        EXPECT_TRUE(AnyPixelNotBlack(pixels));
+    }
+
+    TEST_F(DebugDrawSystemEXTTest, SphereLinesFromActiveEntity_AreDrawn)
+    {
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<DebugDrawSystemEXT>(graphicsDevice, camera));
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        ECS::Entity& entity = world->CreateEntity();
+        DebugDrawComponentEXT debugComponent;
+        AddDebugSphereLinesEXT(debugComponent.LinesEXT, BoundingSphere(Vector3::Zero, 3.0f), Color::White);
         entity.Attach(&debugComponent);
 
         GameTime gameTime(TimeSpan::Zero, TimeSpan::FromMilliseconds(16));

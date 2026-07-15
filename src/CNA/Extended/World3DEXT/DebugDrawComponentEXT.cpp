@@ -4,13 +4,17 @@
 
 #include "Microsoft/Xna/Framework/BoundingBox.hpp"
 #include "Microsoft/Xna/Framework/BoundingFrustum.hpp"
+#include "Microsoft/Xna/Framework/BoundingSphere.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace CNA::Extended::World3DEXT
 {
     using Microsoft::Xna::Framework::BoundingBox;
     using Microsoft::Xna::Framework::BoundingFrustum;
+    using Microsoft::Xna::Framework::BoundingSphere;
     using Microsoft::Xna::Framework::Color;
     using Microsoft::Xna::Framework::Vector3;
 
@@ -43,5 +47,31 @@ namespace CNA::Extended::World3DEXT
     void AddDebugFrustumLinesEXT(std::vector<DebugLineEXT>& lines, const BoundingFrustum& frustum, const Color& color)
     {
         AppendCornersWireframeEXT(lines, frustum.GetCorners(), color);
+    }
+
+    void AddDebugSphereLinesEXT(std::vector<DebugLineEXT>& lines, const BoundingSphere& sphere, const Color& color, int segmentsPerCircle)
+    {
+        // A closed circle needs at least 3 segments; clamp rather than throw since this is a
+        // debug-only visualization helper, not a correctness-critical path.
+        const int segments = std::max(segmentsPerCircle, 3);
+        const float step = 6.28318530717958647692f / static_cast<float>(segments); // 2*pi / segments
+
+        // Three orthogonal great circles through Center: XY plane, XZ plane, YZ plane.
+        for (int i = 0; i < segments; ++i)
+        {
+            const float angleA = step * static_cast<float>(i);
+            const float angleB = step * static_cast<float>(i + 1);
+            const float cosA = std::cos(angleA) * sphere.Radius;
+            const float sinA = std::sin(angleA) * sphere.Radius;
+            const float cosB = std::cos(angleB) * sphere.Radius;
+            const float sinB = std::sin(angleB) * sphere.Radius;
+
+            // XY plane
+            lines.push_back(DebugLineEXT{sphere.Center + Vector3(cosA, sinA, 0.0f), sphere.Center + Vector3(cosB, sinB, 0.0f), color});
+            // XZ plane
+            lines.push_back(DebugLineEXT{sphere.Center + Vector3(cosA, 0.0f, sinA), sphere.Center + Vector3(cosB, 0.0f, sinB), color});
+            // YZ plane
+            lines.push_back(DebugLineEXT{sphere.Center + Vector3(0.0f, cosA, sinA), sphere.Center + Vector3(0.0f, cosB, sinB), color});
+        }
     }
 }
