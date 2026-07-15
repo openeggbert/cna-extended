@@ -3,7 +3,12 @@
 #include "CNA/Extended/World3DEXT/Tilemap3DFactoryEXT.hpp"
 
 #include "CNA/Extended/World3DEXT/Tilemap3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/Tilemap3DFileContent.hpp"
 #include "System/ArgumentException.hpp"
+#include "System/IO/File.hpp"
+#include "System/IO/Stream.hpp"
+#include "System/IO/StreamReader.hpp"
+#include "System/Text/Json/JsonSerializer.hpp"
 
 namespace CNA::Extended::World3DEXT
 {
@@ -38,5 +43,25 @@ namespace CNA::Extended::World3DEXT
         }
 
         return tilemap;
+    }
+
+    Tilemap3DEXT Tilemap3DFactoryEXT::BuildFromJsonFileEXT(const std::string& path)
+    {
+        const std::string json = System::IO::File::ReadAllText(path);
+        const Tilemap3DFileContent content = System::Text::Json::JsonSerializer::Deserialize<Tilemap3DFileContent>(json);
+        return BuildFromArrayEXT(content.getTileIdsProperty(), content.getWidthProperty(), content.getHeightProperty(),
+                                  content.getDepthProperty(),
+                                  Vector3(content.getTileSizeProperty().getXProperty(), content.getTileSizeProperty().getYProperty(),
+                                          content.getTileSizeProperty().getZProperty()));
+    }
+
+    Tilemap3DEXT Tilemap3DFactoryEXT::BuildFromJsonStreamEXT(System::IO::Stream& stream)
+    {
+        const std::string json = System::IO::StreamReader(&stream, true).ReadToEnd();
+        const Tilemap3DFileContent content = System::Text::Json::JsonSerializer::Deserialize<Tilemap3DFileContent>(json);
+        return BuildFromArrayEXT(content.getTileIdsProperty(), content.getWidthProperty(), content.getHeightProperty(),
+                                  content.getDepthProperty(),
+                                  Vector3(content.getTileSizeProperty().getXProperty(), content.getTileSizeProperty().getYProperty(),
+                                          content.getTileSizeProperty().getZProperty()));
     }
 }
