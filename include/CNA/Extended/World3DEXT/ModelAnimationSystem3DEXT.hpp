@@ -7,10 +7,15 @@
 // The AnimationPlayer-driven counterpart to AnimationSystem3DEXT (which drives the separate,
 // Avatar-specific SkinnedModelComponentEXT/SkinnedModelEXT path instead -- see that system's own
 // header comment). Each frame: if ModelAnimationComponentEXT::ClipNameEXT names a clip other
-// than the one PlayerEXT is currently playing, starts it from the beginning (StartClip, a hard
-// cut -- see ModelAnimationComponentEXT's own header comment for why there is no blending yet);
-// otherwise just advances PlayerEXT by the frame's elapsed time. Does not touch any Effect/GPU
-// state itself -- that happens in RenderSystem3DEXT.Draw(), matching AnimationSystem3DEXT's own
+// than the one PlayerEXT is currently playing, snapshots the outgoing pose and starts the new
+// clip from the beginning (StartClip), then crossfades from that snapshot toward the new clip's
+// live pose over ClipNameEXT's own ModelAnimationComponentEXT::BlendDurationEXT seconds (a
+// per-bone Matrix::Lerp -- see ModelAnimationComponentEXT's own header comment for why that
+// simplification is adequate here); otherwise just advances PlayerEXT and keeps the crossfade (if
+// any) progressing. Writes the frame's actual output to
+// ModelAnimationComponentEXT::BlendedSkinTransformsEXT -- callers (RenderSystem3DEXT) must draw
+// from that, not PlayerEXT.GetSkinTransforms() directly. Does not touch any Effect/GPU state
+// itself -- that happens in RenderSystem3DEXT.Draw(), matching AnimationSystem3DEXT's own
 // division of responsibility.
 #pragma once
 
@@ -20,10 +25,11 @@ namespace CNA::Extended::World3DEXT
 {
     /**
      * @brief Advances every entity's ModelAnimationComponentEXT playback each Update(),
-     * switching clips (a hard cut, no blend) when ClipNameEXT names a different clip than the
-     * one currently playing.
+     * crossfading (see this file's own header comment) when ClipNameEXT names a different clip
+     * than the one currently playing.
      * @see ModelAnimationComponentEXT, the component this system animates.
-     * @see RenderSystem3DEXT, which draws using the bone transforms this system computes.
+     * @see RenderSystem3DEXT, which draws using BlendedSkinTransformsEXT, the bone transforms
+     * this system computes.
      */
     class ModelAnimationSystem3DEXT final : public ECS::Systems::EntityUpdateSystem
     {

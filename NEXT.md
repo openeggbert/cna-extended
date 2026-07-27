@@ -113,8 +113,10 @@ no in-progress phase in either.
   genuine `rm -rf build` + fresh configure + rebuild — exit 0, zero warnings.
 - **Build (headers-only/default config, `-DCNA_EXTENDED_LINK_CNA=OFF`)**: clean, also
   verified via a genuine `rm -rf build-headers` rebuild.
-- **Tests**: **2363/2363 tests run, 100% passing** (2 additional tests exist but are
-  deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry).
+- **Tests**: **2369/2369 tests run, 100% passing** (2 additional tests exist but are
+  deliberately `GTEST_SKIP()`-guarded — see section 5's `cna` `BoundingFrustum` bug entry; count
+  includes the `ModelAnimationComponentEXT`/`ModelAnimationSystem3DEXT` tests added 2026-07-27,
+  see section 3).
 - **Currently available build outputs**: `CNA_EXTENDED` static library target,
   `cna_extended_minimal` and `cna_extended_tiled_demo` example executables,
   `CnaExtendedTests` GoogleTest binary, and (linked config only) generated Doxygen HTML
@@ -142,6 +144,31 @@ no in-progress phase in either.
 ---
 
 ## 3. Recent changes
+
+- **`ModelAnimationComponentEXT`/`ModelAnimationSystem3DEXT` gained clip-blending (2026-07-27,
+  same day as the addition below)**, at the same consumer's request (`iron-shadows` gate M6,
+  the "blended locomotion" part of that gate's own wording, not satisfiable by a hard cut).
+  `ModelAnimationComponentEXT` gained `BlendDurationEXT` (seconds; 0 = hard cut, default 0.25),
+  `BlendElapsedEXT`, `BlendFromSkinTransformsEXT` (a frozen pose snapshot; empty means "not
+  blending"), and `BlendedSkinTransformsEXT` (the actual per-frame output -- callers must read
+  this, not `PlayerEXT.GetSkinTransforms()` directly, which has no blend applied).
+  `ModelAnimationSystem3DEXT::Update()` now snapshots the outgoing pose into
+  `BlendFromSkinTransformsEXT` the instant `ClipNameEXT` changes to a different clip (skipped
+  for the very first clip a component ever plays, and when `BlendDurationEXT` is 0), then each
+  frame writes a per-bone `Matrix::Lerp` between that snapshot and the new clip's live pose into
+  `BlendedSkinTransformsEXT`, clearing the snapshot once elapsed time reaches
+  `BlendDurationEXT`. `Matrix::Lerp` (matching real XNA's own `Matrix.Lerp`, a simple
+  per-component interpolation, not true rotation-aware blending) was judged adequate for a short
+  crossfade between similar poses rather than adding real quaternion-decomposed blending --
+  documented as a known simplification in `ModelAnimationComponentEXT.hpp`'s own header comment.
+  `RenderSystem3DEXT::Draw()` updated to read `BlendedSkinTransformsEXT` instead of
+  `PlayerEXT.GetSkinTransforms()` directly. Tests: 2 new cases in
+  `ModelAnimationSystem3DEXTTests.cpp` (a hand-verified two-named-clip glTF fixture, generated
+  and cross-checked against a real `AnimationPlayer` via a throwaway diagnostic before being
+  embedded) proving the blend math at t=0/halfway/finished, and that `BlendDurationEXT=0` still
+  pops instantly with no snapshot taken. Full suite re-run clean: 2369/2369 (up from 2367 -- the
+  2 new tests), including the previously-flaky `TexturePackerFileReaderTests` case, confirming
+  that earlier failure really was a parallel-run isolation flake, not a real regression.
 
 - **`ModelAnimationComponentEXT`/`ModelAnimationSystem3DEXT` added (2026-07-27)**, at the
   explicit request of an external consumer project (`iron-shadows`, gate M6: one skinned

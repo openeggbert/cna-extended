@@ -124,7 +124,7 @@ namespace CNA::Extended::World3DEXT
                     const BoundingSphere worldBounds = animComponent->BoundsEXT.Transform(world);
                     if (frustum.Intersects(worldBounds))
                     {
-                        const std::vector<Matrix>& skinTransforms = animComponent->PlayerEXT.GetSkinTransforms();
+                        const std::vector<Matrix>& skinTransforms = animComponent->BlendedSkinTransformsEXT;
                         for (ModelMesh* mesh : animComponent->ModelEXT->getMeshesProperty())
                         {
                             for (Effect* effect : mesh->getEffectsPropertyMutable())

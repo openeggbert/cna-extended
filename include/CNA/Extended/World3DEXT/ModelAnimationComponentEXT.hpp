@@ -28,14 +28,26 @@
 // importer already assigns a real SkinnedEffect (or SkinnedPbrEffect) to every skinned
 // ModelMeshPart at load time, the same way ModelComponentEXT's unskinned path reuses each
 // part's own Effect* instead of a separate field -- RenderSystem3DEXT only needs to push this
-// component's computed bone transforms onto each of ModelEXT's existing per-mesh Effects
-// before calling Model::Draw(), not construct or own a new Effect of its own.
+// component's blended output transforms (BlendedSkinTransformsEXT, see below) onto each of
+// ModelEXT's existing per-mesh Effects before calling Model::Draw(), not construct or own a
+// new Effect of its own.
+//
+// Blending: when ClipNameEXT changes to a different clip, ModelAnimationSystem3DEXT snapshots
+// PlayerEXT's current skin transforms into BlendFromSkinTransformsEXT *before* starting the new
+// clip, then each frame linearly interpolates (Matrix::Lerp, matching real XNA's own
+// Matrix.Lerp -- a simple per-component blend, not true rotation-aware blending, but adequate
+// for a short crossfade between similar poses) from that frozen snapshot toward the new clip's
+// live pose over BlendDurationEXT seconds, writing the result to BlendedSkinTransformsEXT.
+// Readers (RenderSystem3DEXT, or any other caller) should always draw from
+// BlendedSkinTransformsEXT, never PlayerEXT.GetSkinTransforms() directly -- the latter has no
+// blend applied and will pop instantly on a clip change if read directly.
 #pragma once
 
 #include "Microsoft/Xna/Framework/BoundingSphere.hpp"
 #include "Microsoft/Xna/Framework/Graphics/AnimationPlayer.hpp"
 
 #include <string>
+#include <vector>
 
 namespace Microsoft::Xna::Framework::Graphics
 {
@@ -60,6 +72,9 @@ namespace CNA::Extended::World3DEXT
         explicit ModelAnimationComponentEXT(const Microsoft::Xna::Framework::Graphics::SkinningData& skinningData)
             : SkinningDataEXT(&skinningData), PlayerEXT(skinningData)
         {
+            // So a caller drawing from BlendedSkinTransformsEXT before the first Update() sees the
+            // bind pose, not an empty vector.
+            BlendedSkinTransformsEXT = PlayerEXT.GetSkinTransforms();
         }
 
         /** @brief The model to animate/draw. Not owned by this component -- caller/asset system manages lifetime. */
@@ -75,13 +90,40 @@ namespace CNA::Extended::World3DEXT
          * @brief Name of the clip in SkinningDataEXT->AnimationClips that should be playing.
          * Empty means "hold bind pose" (StartClip is never called). Changing this to a
          * different known clip name makes ModelAnimationSystem3DEXT call PlayerEXT.StartClip()
-         * next Update() -- a hard cut, no blending between the old and new clip (see
-         * ModelAnimationSystem3DEXT's own header comment for why blending is out of scope here).
+         * next Update() and crossfade over BlendDurationEXT seconds (see this struct's own
+         * header comment) rather than popping instantly.
          */
         std::string ClipNameEXT;
 
         /** @brief Whether playback wraps around the clip's Duration instead of clamping to it. */
         bool LoopEXT = true;
+
+        /**
+         * @brief Crossfade duration, in seconds, applied whenever ClipNameEXT changes to a
+         * different clip. 0 means a hard cut (no blending) -- matching the first-pass behavior
+         * before blending was added.
+         */
+        float BlendDurationEXT = 0.25F;
+
+        /** @brief Seconds elapsed since the current blend started. Meaningless when BlendFromSkinTransformsEXT is empty. */
+        float BlendElapsedEXT = 0.0F;
+
+        /**
+         * @brief Frozen skin-transform snapshot of the clip being blended FROM, taken the instant
+         * ClipNameEXT changed. Empty means "not currently blending" -- either no clip change has
+         * happened yet, or the last blend already finished. Set/cleared by ModelAnimationSystem3DEXT;
+         * not meant to be written by other callers.
+         */
+        std::vector<Microsoft::Xna::Framework::Matrix> BlendFromSkinTransformsEXT;
+
+        /**
+         * @brief This frame's actual output transforms, recomputed each Update() by
+         * ModelAnimationSystem3DEXT: PlayerEXT's own skin transforms when not blending, otherwise
+         * a per-bone Matrix::Lerp between BlendFromSkinTransformsEXT and PlayerEXT's live pose.
+         * Draw from this, not PlayerEXT.GetSkinTransforms() directly (see this struct's own
+         * header comment).
+         */
+        std::vector<Microsoft::Xna::Framework::Matrix> BlendedSkinTransformsEXT;
 
         /**
          * @brief The model's bounds in its own local (untransformed, bind-pose) space, used for

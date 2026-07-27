@@ -30,10 +30,12 @@
 // GraphicsDevice reference, held here for exactly that path. ModelAnimationComponentEXT
 // draws through Model::Draw() too (its Model already carries a real SkinnedEffect/
 // SkinnedPbrEffect per skinned part, assigned at content-load time) -- this system only
-// needs to push PlayerEXT's freshly computed GetSkinTransforms() onto each of the model's
-// existing per-mesh Effects (via SetBoneTransforms(), a SkinnedEffect/SkinnedPbrEffect-only
-// method IEffectMatrices/Model::Draw don't know about) immediately before calling Draw(),
-// not build a whole new by-hand draw loop the way SkinnedModelComponentEXT needs.
+// needs to push ModelAnimationSystem3DEXT's freshly computed BlendedSkinTransformsEXT (the
+// crossfaded output, not PlayerEXT.GetSkinTransforms() directly -- see ModelAnimationComponentEXT's
+// own header comment) onto each of the model's existing per-mesh Effects (via SetBoneTransforms(),
+// a SkinnedEffect/SkinnedPbrEffect-only method IEffectMatrices/Model::Draw don't know about)
+// immediately before calling Draw(), not build a whole new by-hand draw loop the way
+// SkinnedModelComponentEXT needs.
 #pragma once
 
 #include "CNA/Extended/ECS/Systems/EntityDrawSystem.hpp"
