@@ -143,6 +143,49 @@ no in-progress phase in either.
 
 ## 3. Recent changes
 
+- **`ModelAnimationComponentEXT`/`ModelAnimationSystem3DEXT` added (2026-07-27)**, at the
+  explicit request of an external consumer project (`iron-shadows`, gate M6: one skinned
+  character). Context: `SkinnedModelComponentEXT`/`AnimationSystem3DEXT` (item 4 above) only
+  wrap `cna`'s Avatar-specific `SkinnedModelEXT`/`.skinnedmodel.json` data model -- the
+  *other*, separate skinned-playback path `cna` provides (a real `Model` whose `Tag` holds a
+  `SkinningData`, animated via `AnimationPlayer`, mirroring the classic XNA "Skinned Model
+  Sample") had no ECS component/system pair at all, even though it's the path `cna`'s own
+  glTF/CNJ import tools (`cna_tool_gltf_to_cnj`, the runtime `GltfModelTypeReader`) actually
+  populate for a skinned asset. Added:
+  - `ModelAnimationComponentEXT` (`include/CNA/Extended/World3DEXT/ModelAnimationComponentEXT.hpp`):
+    a non-owning `Model*` + an owned `AnimationPlayer` (constructed from the model's own
+    `SkinningData`, so -- unlike every other component here -- it has no default constructor)
+    + a `ClipNameEXT` string the system resolves by name each frame. No separate `EffectEXT`
+    field: `cna`'s glTF/CNJ importer already assigns a real `SkinnedEffect`/`SkinnedPbrEffect`
+    to every skinned `ModelMeshPart` at load time.
+  - `ModelAnimationSystem3DEXT` (an `EntityUpdateSystem`): each frame, starts `ClipNameEXT`
+    from the beginning if it names a clip other than the one currently playing (a hard cut,
+    no blending -- not needed by iron-shadows' first-pass scope), otherwise just advances
+    `AnimationPlayer::Update()`.
+  - `RenderSystem3DEXT::Draw()` extended with a third branch: for a `ModelAnimationComponentEXT`,
+    walks the model's own meshes/effects (`getEffectsPropertyMutable()`), pushes
+    `PlayerEXT.GetSkinTransforms()` onto every `SkinnedEffect`/`SkinnedPbrEffect` found via
+    `SetBoneTransforms()`, then calls the *existing* `Model::Draw(world, view, projection)` --
+    unlike `SkinnedModelComponentEXT`'s hand-rolled draw loop (`SkinnedModelEXT` has no
+    `Draw()` of its own), a real `Model` already knows how to draw itself once bone
+    transforms are set on its effects.
+  - Tests: `ModelAnimationSystem3DEXTTests.cpp` (clip start/switch/hard-cut/unknown-name
+    behavior, verified against `AnimationPlayer`'s real bone-transform math, not mocked) and
+    a new `RenderSystem3DEXTTest.ModelAnimationComponent_PosesAndDraws` case in
+    `RenderSystem3DEXTTests.cpp` (real pixel-level render, `AnyPixelNotBlack`, following the
+    same headless-GraphicsDevice idiom as every other real-render test here). Both reuse
+    `kSkinnedAnimatedGltf` -- copied verbatim from `cna`'s own
+    `RuntimeGltfModelTests.cpp` fixture (a 2-bone skinned/textured/animated triangle with
+    deliberately reversed `skin.joints` order) rather than authoring a new, unverified glTF
+    encoding of the same concept. Full suite re-run clean: 2367 tests, only 1 unrelated
+    pre-existing failure (`TexturePackerFileReaderTests.ReadFromPathParsesDocument`, passes
+    in isolation -- a parallel-run test-isolation flake, not caused by this change).
+  - Deliberately out of scope for this addition (left for whichever consumer needs it next):
+    animation blending/crossfade (neither this path nor `AnimationSystem3DEXT`'s Avatar path
+    has any), and a `ComputeModelBoundsEXT`-style bounds helper specific to this component
+    (the existing one already works unchanged since it just merges `ModelMesh` bounds, not
+    anything skin-specific).
+
 One long autonomous session (owner authorized, unavailable for hours), which ended up
 completing the entire remaining plan. Order: Phases 4-5, then Phase 6 (Serialization) +
 Phase 9 (ECS) in parallel, then Phase 7's Tilemaps core + the bulk of Phase 8 (Particles) in

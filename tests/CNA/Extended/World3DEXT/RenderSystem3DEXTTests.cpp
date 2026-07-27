@@ -19,12 +19,16 @@
 #include "CNA/Extended/ECS/World.hpp"
 #include "CNA/Extended/ECS/WorldBuilder.hpp"
 #include "CNA/Extended/World3DEXT/Camera3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/ModelAnimationComponentEXT.hpp"
+#include "CNA/Extended/World3DEXT/ModelAnimationSystem3DEXT.hpp"
 #include "CNA/Extended/World3DEXT/ModelComponentEXT.hpp"
 #include "CNA/Extended/World3DEXT/Transform3ComponentEXT.hpp"
 #include "Microsoft/Xna/Framework/Color.hpp"
 #include "Microsoft/Xna/Framework/GameTime.hpp"
 #include "Microsoft/Xna/Framework/MathHelper.hpp"
 #include "Microsoft/Xna/Framework/Vector3.hpp"
+#include "Microsoft/Xna/Framework/Content/ContentManager.hpp"
+#include "Microsoft/Xna/Framework/Graphics/AnimationPlayer.hpp"
 #include "Microsoft/Xna/Framework/Graphics/BasicEffect.hpp"
 #include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
 #include "Microsoft/Xna/Framework/Graphics/IndexBuffer.hpp"
@@ -32,16 +36,21 @@
 #include "Microsoft/Xna/Framework/Graphics/ModelBone.hpp"
 #include "Microsoft/Xna/Framework/Graphics/ModelMesh.hpp"
 #include "Microsoft/Xna/Framework/Graphics/ModelMeshPart.hpp"
+#include "Microsoft/Xna/Framework/Graphics/ModelMeshPartCollection.hpp"
 #include "Microsoft/Xna/Framework/Graphics/RasterizerState.hpp"
 #include "Microsoft/Xna/Framework/Graphics/RenderTarget2D.hpp"
+#include "Microsoft/Xna/Framework/Graphics/SkinnedEffect.hpp"
 #include "Microsoft/Xna/Framework/Graphics/VertexPositionColor.hpp"
 #include "Microsoft/Xna/Framework/Graphics/Viewport.hpp"
 #include "System/TimeSpan.hpp"
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace CNA::Extended::World3DEXT
@@ -163,6 +172,87 @@ namespace CNA::Extended::World3DEXT
             return std::any_of(pixels.begin(), pixels.end(),
                                 [](const Color& p) { return p.getRProperty() > 0 || p.getGProperty() > 0 || p.getBProperty() > 0; });
         }
+
+        // Tests-only scratch content root; mirrors ModelAnimationSystem3DEXTTests.cpp's own copy.
+        class ScratchDir
+        {
+        public:
+            ScratchDir()
+                : dir_(std::filesystem::temp_directory_path()
+                       / ("cna_extended_render_anim_test_" + std::to_string(reinterpret_cast<std::uintptr_t>(this))))
+            {
+                std::filesystem::create_directories(dir_);
+            }
+            ~ScratchDir()
+            {
+                std::error_code ec;
+                std::filesystem::remove_all(dir_, ec);
+            }
+            ScratchDir(const ScratchDir&) = delete;
+            ScratchDir& operator=(const ScratchDir&) = delete;
+
+            [[nodiscard]] const std::filesystem::path& path() const { return dir_; }
+
+        private:
+            std::filesystem::path dir_;
+        };
+
+        void WriteFile(const std::filesystem::path& path, const std::string& text)
+        {
+            std::ofstream f(path, std::ios::binary);
+            f << text;
+        }
+
+        // A camera-facing, 2-unit-tall skinned+textured+animated triangle: verbatim copy of
+        // ModelAnimationSystem3DEXTTests.cpp's own kSkinnedAnimatedGltf (see that file's header
+        // comment for provenance) -- reused here rather than a third copy of the same concept.
+        const char* kSkinnedAnimatedGltf = R"GLTF({
+  "asset": { "version": "2.0" },
+  "scene": 0,
+  "scenes": [ { "nodes": [0, 2] } ],
+  "nodes": [
+    { "name": "ParentBone", "children": [1] },
+    { "name": "ChildBone" },
+    { "name": "MeshNode", "mesh": 0, "skin": 0 }
+  ],
+  "meshes": [ { "primitives": [ { "attributes": {
+      "POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2, "JOINTS_0": 3, "WEIGHTS_0": 4
+  }, "material": 0 } ] } ],
+  "materials": [ { "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } } } ],
+  "textures": [ { "source": 0 } ],
+  "images": [ { "bufferView": 8, "mimeType": "image/png" } ],
+  "skins": [ { "joints": [1, 0], "inverseBindMatrices": 5 } ],
+  "animations": [ {
+    "name": "Wave",
+    "samplers": [ { "input": 6, "output": 7, "interpolation": "LINEAR" } ],
+    "channels": [ { "sampler": 0, "target": { "node": 1, "path": "translation" } } ]
+  } ],
+  "buffers": [ {
+    "byteLength": 397,
+    "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AQAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAACAPwAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAIlQTkcNChoKAAAADUlIRFIAAAABAAAAAQgCAAAAkHdT3gAAAAxJREFUeJxj+M/AAAADAQEAyf6S7wAAAABJRU5ErkJggg=="
+  } ],
+  "bufferViews": [
+    { "buffer": 0, "byteOffset": 0,   "byteLength": 36 },
+    { "buffer": 0, "byteOffset": 36,  "byteLength": 36 },
+    { "buffer": 0, "byteOffset": 72,  "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 96,  "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 120, "byteLength": 48 },
+    { "buffer": 0, "byteOffset": 168, "byteLength": 128 },
+    { "buffer": 0, "byteOffset": 296, "byteLength": 8 },
+    { "buffer": 0, "byteOffset": 304, "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 328, "byteLength": 69 }
+  ],
+  "accessors": [
+    { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0,0,0], "max": [1,1,0] },
+    { "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3" },
+    { "bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2" },
+    { "bufferView": 3, "componentType": 5123, "count": 3, "type": "VEC4" },
+    { "bufferView": 4, "componentType": 5126, "count": 3, "type": "VEC4" },
+    { "bufferView": 5, "componentType": 5126, "count": 2, "type": "MAT4" },
+    { "bufferView": 6, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [0.0], "max": [1.0] },
+    { "bufferView": 7, "componentType": 5126, "count": 2, "type": "VEC3" }
+  ]
+})GLTF";
     }
 
     TEST_F(RenderSystem3DEXTTest, VisibleEntity_IsDrawn)
@@ -220,5 +310,60 @@ namespace CNA::Extended::World3DEXT
         (void)width;
 
         EXPECT_FALSE(AnyPixelNotBlack(pixels));
+    }
+
+    TEST_F(RenderSystem3DEXTTest, ModelAnimationComponent_PosesAndDraws)
+    {
+        // The fixture's triangle sits within [0,1]x[0,1]x{0} -- move the camera in close and
+        // center it on the triangle's own midpoint rather than the world origin (unlike
+        // TestTriangleModel's 3-unit-wide triangle, which the default SetUp() camera already
+        // frames well).
+        camera.setPositionProperty(Vector3(0.5f, 0.5f, 5.0f));
+        camera.setTargetProperty(Vector3(0.5f, 0.5f, 0.0f));
+
+        ScratchDir contentRoot;
+        WriteFile(contentRoot.path() / "skinned.gltf", kSkinnedAnimatedGltf);
+        Microsoft::Xna::Framework::Content::ContentManager cm(nullptr, contentRoot.path().string());
+        cm.setGraphicsDevice(graphicsDevice);
+        Model model = cm.Load<Model>("skinned");
+        auto* skinningData =
+            static_cast<Microsoft::Xna::Framework::Graphics::SkinningData*>(model.getTagProperty());
+        ASSERT_NE(skinningData, nullptr);
+
+        // A fresh SkinnedEffect is unlit by default (real XNA behavior) -- without this, the
+        // render below would stay black regardless of whether posing/drawing worked at all.
+        // Matches AnimationSystem3DEXTTests.cpp's own identical real-render lighting recipe.
+        auto* skinnedFx = dynamic_cast<Microsoft::Xna::Framework::Graphics::SkinnedEffect*>(
+            model.getMeshesProperty()[0]->getMeshPartsProperty()[0]->getEffectProperty());
+        ASSERT_NE(skinnedFx, nullptr);
+        skinnedFx->setAmbientLightColorProperty(Vector3::One);
+        skinnedFx->EnableDefaultLighting();
+        skinnedFx->getDirectionalLight0Property().setEnabledProperty(true);
+        skinnedFx->getDirectionalLight0Property().setDirectionProperty(Vector3(0.0f, 0.0f, -1.0f));
+        skinnedFx->getDirectionalLight0Property().setDiffuseColorProperty(Vector3::One);
+
+        WorldBuilder builder;
+        builder.AddSystem(std::make_unique<ModelAnimationSystem3DEXT>());
+        builder.AddSystem(std::make_unique<RenderSystem3DEXT>(graphicsDevice, camera));
+        const std::unique_ptr<World> world = builder.Build();
+        world->Initialize();
+
+        ECS::Entity& entity = world->CreateEntity();
+        ModelAnimationComponentEXT animComponent(*skinningData);
+        animComponent.ModelEXT = &model;
+        animComponent.ClipNameEXT = "Wave";
+        animComponent.BoundsEXT = Microsoft::Xna::Framework::BoundingSphere(Vector3(0.5f, 0.5f, 0.0f), 2.0f);
+        entity.Attach(&animComponent);
+
+        GameTime gameTime(TimeSpan::Zero, TimeSpan::FromSeconds(0.5));
+        world->Update(gameTime); // ModelAnimationSystem3DEXT starts "Wave" and advances it 0.5s
+
+        // Halfway through the clip, the child bone (skin index 1) should have moved: proves
+        // RenderSystem3DEXT's draw branch below is exercising a genuinely posed (not bind-pose)
+        // skeleton, not just an unrelated static mesh.
+        EXPECT_GT(animComponent.PlayerEXT.GetWorldTransforms()[1].getTranslationProperty().X, 0.5f);
+
+        const auto [pixels, width] = RenderToPixels(*world, gameTime);
+        EXPECT_TRUE(AnyPixelNotBlack(pixels));
     }
 }

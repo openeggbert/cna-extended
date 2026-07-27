@@ -4,16 +4,19 @@
 
 #include "CNA/Extended/ECS/Entity.hpp"
 #include "CNA/Extended/World3DEXT/Camera3DEXT.hpp"
+#include "CNA/Extended/World3DEXT/ModelAnimationComponentEXT.hpp"
 #include "CNA/Extended/World3DEXT/ModelComponentEXT.hpp"
 #include "CNA/Extended/World3DEXT/SkinnedModelComponentEXT.hpp"
 #include "CNA/Extended/World3DEXT/Transform3ComponentEXT.hpp"
 #include "Microsoft/Xna/Framework/BoundingFrustum.hpp"
 #include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
 #include "Microsoft/Xna/Framework/Graphics/Model.hpp"
+#include "Microsoft/Xna/Framework/Graphics/ModelMesh.hpp"
 #include "Microsoft/Xna/Framework/Graphics/ModelMeshPart.hpp"
 #include "Microsoft/Xna/Framework/Graphics/PrimitiveType.hpp"
 #include "Microsoft/Xna/Framework/Graphics/SkinnedEffect.hpp"
 #include "Microsoft/Xna/Framework/Graphics/SkinnedModelEXT.hpp"
+#include "Microsoft/Xna/Framework/Graphics/SkinnedPbrEffect.hpp"
 
 #include <typeindex>
 
@@ -26,12 +29,17 @@ namespace CNA::Extended::World3DEXT
     using Microsoft::Xna::Framework::BoundingSphere;
     using Microsoft::Xna::Framework::GameTime;
     using Microsoft::Xna::Framework::Matrix;
+    using Microsoft::Xna::Framework::Graphics::Effect;
     using Microsoft::Xna::Framework::Graphics::GraphicsDevice;
+    using Microsoft::Xna::Framework::Graphics::ModelMesh;
     using Microsoft::Xna::Framework::Graphics::PrimitiveType;
+    using Microsoft::Xna::Framework::Graphics::SkinnedEffect;
+    using Microsoft::Xna::Framework::Graphics::SkinnedPbrEffect;
 
     RenderSystem3DEXT::RenderSystem3DEXT(GraphicsDevice& graphicsDevice, Camera3DEXT& camera)
-        : EntityDrawSystem(AspectBuilder().One(
-              {std::type_index(typeid(ModelComponentEXT)), std::type_index(typeid(SkinnedModelComponentEXT))})),
+        : EntityDrawSystem(AspectBuilder().One({std::type_index(typeid(ModelComponentEXT)),
+                                                 std::type_index(typeid(SkinnedModelComponentEXT)),
+                                                 std::type_index(typeid(ModelAnimationComponentEXT))})),
           graphicsDevice_(&graphicsDevice), camera_(&camera)
     {
     }
@@ -105,6 +113,33 @@ namespace CNA::Extended::World3DEXT
                                 part.Part->getStartIndexProperty(),
                                 part.Part->getPrimitiveCountProperty());
                         }
+                    }
+                }
+            }
+
+            if (ModelAnimationComponentEXT* animComponent = entity->Get<ModelAnimationComponentEXT>())
+            {
+                if (animComponent->ModelEXT != nullptr)
+                {
+                    const BoundingSphere worldBounds = animComponent->BoundsEXT.Transform(world);
+                    if (frustum.Intersects(worldBounds))
+                    {
+                        const std::vector<Matrix>& skinTransforms = animComponent->PlayerEXT.GetSkinTransforms();
+                        for (ModelMesh* mesh : animComponent->ModelEXT->getMeshesProperty())
+                        {
+                            for (Effect* effect : mesh->getEffectsPropertyMutable())
+                            {
+                                if (auto* skinnedEffect = dynamic_cast<SkinnedEffect*>(effect))
+                                {
+                                    skinnedEffect->SetBoneTransforms(skinTransforms);
+                                }
+                                else if (auto* skinnedPbrEffect = dynamic_cast<SkinnedPbrEffect*>(effect))
+                                {
+                                    skinnedPbrEffect->SetBoneTransforms(skinTransforms);
+                                }
+                            }
+                        }
+                        animComponent->ModelEXT->Draw(world, view, projection);
                     }
                 }
             }
