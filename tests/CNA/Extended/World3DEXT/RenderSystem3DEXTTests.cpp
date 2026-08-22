@@ -31,6 +31,7 @@
 #include "Microsoft/Xna/Framework/Graphics/AnimationPlayer.hpp"
 #include "Microsoft/Xna/Framework/Graphics/BasicEffect.hpp"
 #include "Microsoft/Xna/Framework/Graphics/GraphicsDevice.hpp"
+#include "Microsoft/Xna/Framework/Graphics/IEffectLights.hpp"
 #include "Microsoft/Xna/Framework/Graphics/IndexBuffer.hpp"
 #include "Microsoft/Xna/Framework/Graphics/Model.hpp"
 #include "Microsoft/Xna/Framework/Graphics/ModelBone.hpp"
@@ -39,7 +40,6 @@
 #include "Microsoft/Xna/Framework/Graphics/ModelMeshPartCollection.hpp"
 #include "Microsoft/Xna/Framework/Graphics/RasterizerState.hpp"
 #include "Microsoft/Xna/Framework/Graphics/RenderTarget2D.hpp"
-#include "Microsoft/Xna/Framework/Graphics/SkinnedEffect.hpp"
 #include "Microsoft/Xna/Framework/Graphics/VertexPositionColor.hpp"
 #include "Microsoft/Xna/Framework/Graphics/Viewport.hpp"
 #include "System/TimeSpan.hpp"
@@ -330,17 +330,18 @@ namespace CNA::Extended::World3DEXT
             static_cast<Microsoft::Xna::Framework::Graphics::SkinningData*>(model.getTagProperty());
         ASSERT_NE(skinningData, nullptr);
 
-        // A fresh SkinnedEffect is unlit by default (real XNA behavior) -- without this, the
-        // render below would stay black regardless of whether posing/drawing worked at all.
-        // Matches AnimationSystem3DEXTTests.cpp's own identical real-render lighting recipe.
-        auto* skinnedFx = dynamic_cast<Microsoft::Xna::Framework::Graphics::SkinnedEffect*>(
+        // A fresh skinned effect is unlit by default (real XNA behavior). Modern cnanext
+        // selects SkinnedPbrEffect for glTF metallic-roughness materials, while legacy
+        // content may still select SkinnedEffect; both expose the lighting contract used
+        // here.
+        auto* skinnedLights = dynamic_cast<Microsoft::Xna::Framework::Graphics::IEffectLights*>(
             model.getMeshesProperty()[0]->getMeshPartsProperty()[0]->getEffectProperty());
-        ASSERT_NE(skinnedFx, nullptr);
-        skinnedFx->setAmbientLightColorProperty(Vector3::One);
-        skinnedFx->EnableDefaultLighting();
-        skinnedFx->getDirectionalLight0Property().setEnabledProperty(true);
-        skinnedFx->getDirectionalLight0Property().setDirectionProperty(Vector3(0.0f, 0.0f, -1.0f));
-        skinnedFx->getDirectionalLight0Property().setDiffuseColorProperty(Vector3::One);
+        ASSERT_NE(skinnedLights, nullptr);
+        skinnedLights->setAmbientLightColorProperty(Vector3::One);
+        skinnedLights->EnableDefaultLighting();
+        skinnedLights->getDirectionalLight0Property().setEnabledProperty(true);
+        skinnedLights->getDirectionalLight0Property().setDirectionProperty(Vector3(0.0f, 0.0f, -1.0f));
+        skinnedLights->getDirectionalLight0Property().setDiffuseColorProperty(Vector3::One);
 
         WorldBuilder builder;
         builder.AddSystem(std::make_unique<ModelAnimationSystem3DEXT>());

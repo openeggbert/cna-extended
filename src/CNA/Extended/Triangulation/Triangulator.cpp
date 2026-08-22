@@ -106,7 +106,7 @@ namespace CNA::Extended::Triangulation
         FindEarVertices();
 
         // Find the hole vertex with the largest X value.
-        Vertex rightMostHoleVertex = holePolygon[0];
+        Vertex rightMostHoleVertex = holePolygon.getItem(0);
         for (const Vertex& v : holePolygon)
         {
             if (v.Position.X > rightMostHoleVertex.Position.X)
@@ -197,7 +197,7 @@ namespace CNA::Extended::Triangulation
 
         for (intcs i = mIndex; i <= mIndex + holePolygon.getCountProperty(); i++)
         {
-            polygonVertices_.AddAfter(polygonVertices_[injectPoint++], holePolygon[i]);
+            polygonVertices_.AddAfter(polygonVertices_[injectPoint++], holePolygon.getItem(i));
         }
         polygonVertices_.AddAfter(polygonVertices_[injectPoint], P);
 

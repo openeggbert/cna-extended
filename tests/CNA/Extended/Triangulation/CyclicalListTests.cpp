@@ -18,8 +18,8 @@ namespace CNA::Extended::Triangulation
         list.Add(20);
         list.Add(30);
 
-        EXPECT_EQ(list[3], 10);
-        EXPECT_EQ(list[4], 20);
+        EXPECT_EQ(list.getItem(3), 10);
+        EXPECT_EQ(list.getItem(4), 20);
     }
 
     TEST(CyclicalListTests, IndexerWrapsNegative)
@@ -29,8 +29,8 @@ namespace CNA::Extended::Triangulation
         list.Add(20);
         list.Add(30);
 
-        EXPECT_EQ(list[-1], 30);
-        EXPECT_EQ(list[-2], 20);
+        EXPECT_EQ(list.getItem(-1), 30);
+        EXPECT_EQ(list.getItem(-2), 20);
     }
 
     TEST(CyclicalListTests, RemoveAtRemovesTheCyclicallyIndexedItem)
@@ -80,5 +80,19 @@ namespace CNA::Extended::Triangulation
         EXPECT_EQ(list.getCountProperty(), 3);
         EXPECT_EQ(list[0], 1);
         EXPECT_EQ(list[2], 3);
+    }
+
+    TEST(CyclicalListTests, TrackedIndexerAndExplicitAccessorsUseWrappedSlot)
+    {
+        CyclicalList<int> list;
+        list.Add(10);
+        list.Add(20);
+        list.Add(30);
+
+        list[3] = 40;
+        EXPECT_EQ(list.getItem(0), 40);
+
+        list.setItem(-1, 50);
+        EXPECT_EQ(list.getItem(2), 50);
     }
 }

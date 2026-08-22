@@ -1,8 +1,8 @@
 # cna-extended
 
 `cna-extended` is a C++23 port of [MonoGame.Extended](https://github.com/craftworkgames/MonoGame.Extended)
-for [`cna`](../cna) (a C++23 port of XNA 4.0 / FNA), built on top of
-[`sharp-runtime`](../sharp-runtime) (a C++23 reimplementation of the relevant .NET BCL
+for [`cnanext`](../cnanext) (a modular C++23 port of XNA 4.0 / FNA), built on top of
+[`sharp-runtimenext`](../sharp-runtimenext) (a modular C++23 reimplementation of the relevant .NET BCL
 surface). It is a sibling library in the same family as [`easy-3d`](../easy-3d).
 
 MonoGame.Extended is "a set of utilities... that makes it easier to make games" on top of
@@ -23,7 +23,7 @@ independent audit's follow-up fixes (`plan3d.md`'s Phase 10) done, 2D/3D parity 
 particles plugin architecture) done, and Phase 12 (sphere-wireframe debug draw, a
 tilemap-collision broadphase shortcut, a JSON tilemap file reader, multi-page bitmap-font
 text, and per-chunk tilemap render batching) done. Current test count:
-2363/2363 passing (see `NEXT.md` for the most up-to-date figure, since this number moves as
+2371/2371 passing (see `NEXT.md` for the most up-to-date figure, since this number moves as
 work continues).
 
 ## Modules
@@ -110,33 +110,37 @@ See `examples/` for a fuller, graphics-backed sample (loading and rendering cont
 
 ## Building
 
-Depends on `../cna` and `../sharp-runtime` as sibling checkouts, following the same
-CMake dependency pattern as `easy-3d` (see `plan.md` §4): if a `CNA` target already
-exists in the parent build it's reused, otherwise it can be built standalone via an
-opt-in flag (`CNA_EXTENDED_LINK_CNA=ON`, builds the real `cna`/`sharp-runtime` backend),
-or a headers-only fallback is used for compile-checking (the default).
+Depends on the modular `../cnanext` and `../sharp-runtimenext` sibling checkouts. The
+normal standalone configuration adds them automatically; a parent build that already
+provides CNA's modular targets is reused. `cna-extended` links only the CNA modules it
+uses directly (`Core`, `Math`, `GraphicsCore`, `Input`, `Content`, and `Runtime`) and
+their declared dependency closure, instead of the all-modules `CNA` umbrella. It does
+the same for Sharp Runtime, avoiding unrelated networking, HTTP, WebSocket, XML LINQ,
+timer, and other modules.
 
 Linked config (needed for anything that actually touches `GraphicsDevice`/`SpriteBatch`,
 including running the test suite's rendering-backed tests):
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=ON
-cmake --build build -j$(nproc)
-ctest --test-dir build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel 2
+ctest --test-dir build -j2 --output-on-failure
 ```
 
 Headers-only config (compile-checking only, no `cna`/`sharp-runtime` build, no test
 execution against real `GraphicsDevice`-backed code):
 
 ```sh
-cmake -S . -B build-headers -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=OFF
-cmake --build build-headers -j$(nproc)
+cmake -S . -B build-modular -DCMAKE_BUILD_TYPE=Debug -DCNA_EXTENDED_LINK_CNA=OFF
+cmake --build build-modular --parallel 2
 ```
 
-Other relevant CMake options (see `CMakeLists.txt` for the full list): `CNA_EXTENDED_BUILD_EXAMPLES`
-and `CNA_EXTENDED_BUILD_TESTS` (both `ON` by default) toggle `examples/`/`tests/`, and
-`CNA_EXTENDED_CNA_BACKEND` (default `EASY_GL`; also `SDL_RENDERER`, `BGFX`, `VULKAN`)
-selects which `cna` graphics backend gets built when `CNA_EXTENDED_LINK_CNA=ON`.
+Other relevant CMake options (see `CMakeLists.txt` for the full list):
+`CNA_EXTENDED_BUILD_EXAMPLES` and `CNA_EXTENDED_BUILD_TESTS` (both `ON` by default)
+toggle `examples/`/`tests/`. A standalone linked build defaults to the host-independent
+combination `CNA_EXTENDED_CNA_RENDERER=SOFTWARE`,
+`CNA_EXTENDED_CNA_PLATFORM=HEADLESS`, and `CNA_EXTENDED_CNA_AUDIO_PLATFORM=NULL`; each
+axis can be overridden for an application's real window, GPU, and audio backend.
 
 Both configurations are kept warning-free under `-Wall -Wextra -Werror`
 (`/W4 /WX` on MSVC).

@@ -17,49 +17,108 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(CNA_EXTENDED_BUILD_EXAMPLES "Build cna-extended examples" ON)
 option(CNA_EXTENDED_BUILD_TESTS "Build cna-extended tests" ON)
 
-# Most of cna-extended (Graphics, Tilemaps, Particles, Screens, ECS drawing
-# systems, ...) needs real CNA functionality (SpriteBatch, GraphicsDevice,
-# Texture2D, ...), not just its headers. Building CNA ourselves is opt-in and
-# OFF by default because it pulls in heavy deps (SHARP_RUNTIME, SDL3, a
-# graphics backend, ...). A parent project that already defines the `CNA`
-# target is detected and linked automatically regardless of this option.
-option(CNA_EXTENDED_LINK_CNA "When building standalone, build CNA from CNA_EXTENDED_CNA_DIR and link it" OFF)
+# Most of cna-extended needs compiled CNA symbols. A parent project may provide
+# CNA's modular targets first; otherwise a standalone build adds cnanext and
+# selects only the dependency modules listed below. The headers-only mode is
+# retained for API compile checks, but the linked modular build is the useful
+# default.
+option(CNA_EXTENDED_LINK_CNA
+    "When building standalone, add cnanext and link the CNA modules cna-extended uses"
+    ON)
 
-# CNA requires exactly one graphics backend. Ignored when the parent project
-# provides the CNA target (it already chose a backend).
-set(CNA_EXTENDED_CNA_BACKEND "EASY_GL"
-    CACHE STRING "CNA backend to enable when cna-extended builds CNA itself: SDL_RENDERER | EASY_GL | BGFX | VULKAN")
-set_property(CACHE CNA_EXTENDED_CNA_BACKEND PROPERTY STRINGS SDL_RENDERER EASY_GL BGFX VULKAN)
+# cnanext requires one renderer, platform and audio implementation even when a
+# consumer links a subset of the framework modules. The dependency defaults are
+# deliberately host-independent and do not pull a windowing, GPU, or sound
+# backend into a cna-extended build. The CPU software renderer is used instead
+# of the no-op headless renderer because rendering tests inspect backbuffer
+# pixels. Applications that need a visible window can select e.g.
+# OPENGLES3/SDL3/SDL3.
+set(CNA_EXTENDED_CNA_RENDERER "SOFTWARE"
+    CACHE STRING "cnanext renderer used by a standalone cna-extended build")
+set_property(CACHE CNA_EXTENDED_CNA_RENDERER PROPERTY STRINGS
+    SOFTWARE HEADLESS SDL_RENDERER OPENGLES2 OPENGLES3 OPENGL33 BGFX VULKAN)
+set(CNA_EXTENDED_CNA_PLATFORM "HEADLESS"
+    CACHE STRING "cnanext platform used by a standalone cna-extended build")
+set_property(CACHE CNA_EXTENDED_CNA_PLATFORM PROPERTY STRINGS HEADLESS SDL3 SDL2 TERMINAL)
+set(CNA_EXTENDED_CNA_AUDIO_PLATFORM "NULL"
+    CACHE STRING "cnanext audio platform used by a standalone cna-extended build")
+set_property(CACHE CNA_EXTENDED_CNA_AUDIO_PLATFORM PROPERTY STRINGS NULL SDL3 SDL2)
+
+# Direct CNA module ownership, derived from every Microsoft/Xna and CNA header
+# included by include/ and src/. Their PUBLIC dependency closure supplies the
+# platform, audio, and media implementation modules required by Runtime and
+# Content; the CNA umbrella would additionally pull Devices, CNAEXT, Storage,
+# GamerServices, and Net, none of which cna-extended uses.
+set(CNA_EXTENDED_CNA_MODULE_TARGETS
+    CNA::Core
+    CNA::Math
+    CNA::GraphicsCore
+    CNA::Input
+    CNA::Content
+    CNA::Runtime
+)
+
+# Direct Sharp Runtime ownership, derived from every System and SharpRuntime
+# header included by include/ and src/. These are the only Sharp Runtime targets
+# linked to CNA_EXTENDED itself.
+set(CNA_EXTENDED_SHARP_RUNTIME_TARGETS
+    SharpRuntime::Core.Base
+    SharpRuntime::Collections.Core
+    SharpRuntime::IO
+    SharpRuntime::IO.Compression
+    SharpRuntime::Text
+    SharpRuntime::Text.Json
+    SharpRuntime::Threading.Tasks
+    SharpRuntime::Xml
+)
+
+# cnanext's selected module closure additionally declares the components below
+# (notably Runtime for Audio and the narrow renderer contract). Setting the
+# complete union before adding sharp-runtimenext prevents its standalone `All`
+# default from enabling unrelated networking, HTTP, XML LINQ, timers, etc.
+set(CNA_EXTENDED_SHARP_RUNTIME_COMPONENTS
+    Core.Base
+    IO
+    Collections.Core
+    Collections.ObjectModel
+    Runtime
+    Threading
+    Text
+    Globalization
+    Storage
+    Security.Cryptography
+    IO.Compression
+    Text.Json
+    Threading.Tasks
+    Xml
+)
 
 # ---------------------------------------------------------------------------
-# Locate CNA (companion runtime, expected at ../cna)
+# Locate CNA (modular companion runtime, expected at ../cnanext)
 # ---------------------------------------------------------------------------
-set(CNA_EXTENDED_CNA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../cna"
-    CACHE PATH "Path to the CNA repository (provides headers under <dir>/include).")
+set(CNA_EXTENDED_CNA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../cnanext"
+    CACHE PATH "Path to the modular cnanext repository")
 
-if(EXISTS "${CNA_EXTENDED_CNA_DIR}/include")
-    set(CNA_EXTENDED_CNA_INCLUDE_DIR "${CNA_EXTENDED_CNA_DIR}/include")
-    message(STATUS "cna-extended: using CNA headers from ${CNA_EXTENDED_CNA_INCLUDE_DIR}")
+if(EXISTS "${CNA_EXTENDED_CNA_DIR}/modules/CMakeLists.txt")
+    message(STATUS "cna-extended: using modular CNA from ${CNA_EXTENDED_CNA_DIR}")
 else()
     message(WARNING
-        "cna-extended: CNA headers not found at '${CNA_EXTENDED_CNA_DIR}/include'. "
-        "Set -DCNA_EXTENDED_CNA_DIR=/path/to/cna. cna-extended will not compile "
-        "until CNA's <Microsoft/Xna/Framework/*.hpp> headers are visible.")
+        "cna-extended: modular CNA not found at '${CNA_EXTENDED_CNA_DIR}'. "
+        "Set -DCNA_EXTENDED_CNA_DIR=/path/to/cnanext.")
 endif()
 
 # ---------------------------------------------------------------------------
-# Locate sharp-runtime (companion BCL runtime, expected at ../sharp-runtime)
+# Locate sharp-runtime (modular companion BCL, expected at ../sharp-runtimenext)
 # ---------------------------------------------------------------------------
-set(CNA_EXTENDED_SHARP_RUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sharp-runtime"
-    CACHE PATH "Path to the sharp-runtime repository (provides headers under <dir>/include).")
+set(CNA_EXTENDED_SHARP_RUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sharp-runtimenext"
+    CACHE PATH "Path to the modular sharp-runtimenext repository")
 
-if(EXISTS "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/include")
-    set(CNA_EXTENDED_SHARP_RUNTIME_INCLUDE_DIR "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/include")
-    message(STATUS "cna-extended: using sharp-runtime headers from ${CNA_EXTENDED_SHARP_RUNTIME_INCLUDE_DIR}")
+if(EXISTS "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/cmake/SharpRuntimeModules.cmake")
+    message(STATUS "cna-extended: using modular Sharp Runtime from ${CNA_EXTENDED_SHARP_RUNTIME_DIR}")
 else()
     message(WARNING
-        "cna-extended: sharp-runtime headers not found at '${CNA_EXTENDED_SHARP_RUNTIME_DIR}/include'. "
-        "Set -DCNA_EXTENDED_SHARP_RUNTIME_DIR=/path/to/sharp-runtime.")
+        "cna-extended: modular Sharp Runtime not found at '${CNA_EXTENDED_SHARP_RUNTIME_DIR}'. "
+        "Set -DCNA_EXTENDED_SHARP_RUNTIME_DIR=/path/to/sharp-runtimenext.")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -85,80 +144,113 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
-# Resolve CNA linkage
+# Resolve modular CNA / Sharp Runtime linkage
 # ---------------------------------------------------------------------------
-# cna-extended ends up linked against CNA in one of three ways (same pattern
-# easy-3d uses):
-#   (1) A parent project (e.g. a game using both CNA and cna-extended) already
-#       defined the `CNA` target before add_subdirectory(cna-extended). We
-#       detect and link it.
-#   (2) Standalone build with -DCNA_EXTENDED_LINK_CNA=ON: we add_subdirectory
-#       (../cna) ourselves (selecting a backend, with CNA's own demos/tests
-#       disabled).
-#   (3) Otherwise: headers only. cna-extended still compiles for
-#       compile-checking; the consuming application links CNA itself. Most
-#       real functionality (anything touching GraphicsDevice/SpriteBatch/
-#       Texture2D) will not *link* in this mode, only compile.
 set(_cna_extended_have_cna_target OFF)
 
-if(TARGET CNA)
-    # (1) Provided by the parent project — the integration path for games.
+# A source-tree parent may already have enabled only CNA's own Sharp Runtime
+# closure. Extend that selection by exactly cna-extended's direct components
+# before validating the modular targets.
+if(TARGET CNA::Core AND COMMAND sharp_runtime_enable_components)
+    sharp_runtime_enable_components(${CNA_EXTENDED_SHARP_RUNTIME_COMPONENTS})
+endif()
+
+if(TARGET CNA::Core)
+    # Provided by a parent project. Do not link the parent's CNA umbrella: it
+    # intentionally aggregates every framework extension module.
     set(_cna_extended_have_cna_target ON)
-    message(STATUS "cna-extended: linking the 'CNA' target provided by the parent project.")
+    message(STATUS "cna-extended: using modular CNA targets provided by the parent project")
 elseif(CNA_EXTENDED_LINK_CNA)
-    # (2) Build CNA ourselves from CNA_EXTENDED_CNA_DIR.
     if(NOT EXISTS "${CNA_EXTENDED_CNA_DIR}/CMakeLists.txt")
         message(FATAL_ERROR
             "cna-extended: CNA_EXTENDED_LINK_CNA=ON but no CNA CMake project at "
-            "'${CNA_EXTENDED_CNA_DIR}'. Set -DCNA_EXTENDED_CNA_DIR=/path/to/cna.")
+            "'${CNA_EXTENDED_CNA_DIR}'. Set -DCNA_EXTENDED_CNA_DIR=/path/to/cnanext.")
     endif()
-    # Keep CNA's own examples/tests out of our build.
+    if(NOT EXISTS "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "cna-extended: CNA_EXTENDED_LINK_CNA=ON but no Sharp Runtime CMake project at "
+            "'${CNA_EXTENDED_SHARP_RUNTIME_DIR}'. "
+            "Set -DCNA_EXTENDED_SHARP_RUNTIME_DIR=/path/to/sharp-runtimenext.")
+    endif()
+
+    # Keep optional CNA surfaces out and select the smallest host-independent
+    # implementation axes suitable for cna-extended's tests and consumers.
     set(CNA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(CNA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    # Select exactly one CNA graphics backend (CNA fails to configure otherwise).
-    if(CNA_EXTENDED_CNA_BACKEND STREQUAL "SDL_RENDERER")
-        set(CNA_BACKEND_SDL_RENDERER ON CACHE BOOL "" FORCE)
-    elseif(CNA_EXTENDED_CNA_BACKEND STREQUAL "EASY_GL")
-        set(CNA_BACKEND_EASY_GL ON CACHE BOOL "" FORCE)
-    elseif(CNA_EXTENDED_CNA_BACKEND STREQUAL "BGFX")
-        set(CNA_BACKEND_BGFX ON CACHE BOOL "" FORCE)
-    elseif(CNA_EXTENDED_CNA_BACKEND STREQUAL "VULKAN")
-        set(CNA_BACKEND_VULKAN ON CACHE BOOL "" FORCE)
-    else()
-        message(FATAL_ERROR
-            "cna-extended: unknown CNA_EXTENDED_CNA_BACKEND '${CNA_EXTENDED_CNA_BACKEND}' "
-            "(use SDL_RENDERER, EASY_GL, BGFX or VULKAN).")
-    endif()
-    message(STATUS "cna-extended: building CNA from '${CNA_EXTENDED_CNA_DIR}' (backend: ${CNA_EXTENDED_CNA_BACKEND}).")
-    add_subdirectory("${CNA_EXTENDED_CNA_DIR}" "${CMAKE_BINARY_DIR}/_cna")
+    set(CNA_BUILD_C_API OFF CACHE BOOL "" FORCE)
+    set(CNA_CNAEXT OFF CACHE BOOL "" FORCE)
+    set(CNA_DEVICES OFF CACHE BOOL "" FORCE)
+    set(CNA_ENABLE_NET OFF CACHE BOOL "" FORCE)
+    set(CNA_ENABLE_DRACO OFF CACHE BOOL "" FORCE)
+    set(CNA_GRAPHICS_RENDERER "${CNA_EXTENDED_CNA_RENDERER}" CACHE STRING "" FORCE)
+    set(CNA_PLATFORM "${CNA_EXTENDED_CNA_PLATFORM}" CACHE STRING "" FORCE)
+    set(CNA_AUDIO_PLATFORM "${CNA_EXTENDED_CNA_AUDIO_PLATFORM}" CACHE STRING "" FORCE)
+    set(CNA_SHARP_RUNTIME_ROOT "${CNA_EXTENDED_SHARP_RUNTIME_DIR}" CACHE PATH "" FORCE)
+    set(SHARP_RUNTIME_COMPONENTS "${CNA_EXTENDED_SHARP_RUNTIME_COMPONENTS}"
+        CACHE STRING "Sharp Runtime components required by cna-extended and its CNA module closure" FORCE)
+    set(SHARP_RUNTIME_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+    message(STATUS
+        "cna-extended: adding modular CNA from '${CNA_EXTENDED_CNA_DIR}' "
+        "(renderer: ${CNA_EXTENDED_CNA_RENDERER}, platform: ${CNA_EXTENDED_CNA_PLATFORM}, "
+        "audio: ${CNA_EXTENDED_CNA_AUDIO_PLATFORM})")
+    add_subdirectory("${CNA_EXTENDED_CNA_DIR}" "${CMAKE_BINARY_DIR}/_cna" EXCLUDE_FROM_ALL)
     set(_cna_extended_have_cna_target ON)
 endif()
 
 if(_cna_extended_have_cna_target)
-    # CNA propagates its PUBLIC include dirs (the Microsoft/Xna headers) and,
-    # transitively, SHARP_RUNTIME's.
-    target_link_libraries(CNA_EXTENDED PUBLIC CNA)
+    foreach(_required_target IN LISTS
+            CNA_EXTENDED_CNA_MODULE_TARGETS
+            CNA_EXTENDED_SHARP_RUNTIME_TARGETS)
+        if(NOT TARGET ${_required_target})
+            message(FATAL_ERROR
+                "cna-extended: required modular dependency target '${_required_target}' is missing. "
+                "When dependencies come from a parent, enable the cna-extended Sharp Runtime "
+                "component selection before adding cna-extended.")
+        endif()
+    endforeach()
+
+    target_link_libraries(CNA_EXTENDED PUBLIC
+        ${CNA_EXTENDED_CNA_MODULE_TARGETS}
+        ${CNA_EXTENDED_SHARP_RUNTIME_TARGETS}
+    )
     target_compile_definitions(CNA_EXTENDED PUBLIC CNA_EXTENDED_HAS_CNA_LINK)
 else()
-    # (3) Headers-only: compile against CNA + sharp-runtime headers; the
-    # consumer links CNA (and therefore SHARP_RUNTIME) later.
-    if(CNA_EXTENDED_CNA_INCLUDE_DIR)
-        target_include_directories(CNA_EXTENDED PUBLIC "${CNA_EXTENDED_CNA_INCLUDE_DIR}")
+    # Headers-only compile checking still follows the modular boundaries. This
+    # is the public-header closure of the six direct CNA modules above.
+    set(_cna_extended_cna_header_modules
+        core math platform graphics input audio media content runtime)
+    foreach(_module IN LISTS _cna_extended_cna_header_modules)
+        target_include_directories(CNA_EXTENDED PUBLIC
+            "${CNA_EXTENDED_CNA_DIR}/modules/${_module}/include")
+    endforeach()
+
+    # Public-header closure of the eight directly used Sharp Runtime targets.
+    set(_cna_extended_sharp_header_modules
+        core uri time-zone buffers collections io io-compression text text-json
+        threading threading-tasks xml)
+    foreach(_module IN LISTS _cna_extended_sharp_header_modules)
+        target_include_directories(CNA_EXTENDED PUBLIC
+            "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/modules/${_module}/include")
+    endforeach()
+    target_include_directories(CNA_EXTENDED SYSTEM PUBLIC
+        "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/vendor")
+
+    # CNA::BuildFlags normally publishes these definitions. Headers-only mode
+    # deliberately does not create that target, so reproduce its API-selection
+    # surface without pulling any implementation archive into the build.
+    if(CNA_EXTENDED_CNA_RENDERER MATCHES "^(OPENGLES2|OPENGLES3|OPENGL33)$")
+        target_compile_definitions(CNA_EXTENDED PUBLIC
+            XNA5
+            CNA_RENDERER_EASYGL
+            "CNA_GL_PROFILE_${CNA_EXTENDED_CNA_RENDERER}")
+    else()
+        target_compile_definitions(CNA_EXTENDED PUBLIC
+            XNA5
+            "CNA_RENDERER_${CNA_EXTENDED_CNA_RENDERER}")
     endif()
-    if(CNA_EXTENDED_SHARP_RUNTIME_INCLUDE_DIR)
-        target_include_directories(CNA_EXTENDED PUBLIC "${CNA_EXTENDED_SHARP_RUNTIME_INCLUDE_DIR}")
-        # sharp-runtime's own CMakeLists.txt exposes its vendored single-header/two-file
-        # libraries (nlohmann/json.hpp, tinyxml2/tinyxml2.h, ...) via
-        # `target_include_directories(SHARP_RUNTIME SYSTEM PUBLIC .../vendor)` -- only
-        # reachable when SHARP_RUNTIME is actually built as a target (linked mode). Headers-
-        # only mode bypasses that target entirely, so it has to add the same vendor dir
-        # itself or any sharp-runtime header pulling in a vendored dependency (e.g.
-        # System/Xml/XmlDocument.hpp -> tinyxml2/tinyxml2.h) fails to compile here even
-        # though it compiles fine in linked mode.
-        if(EXISTS "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/vendor")
-            target_include_directories(CNA_EXTENDED SYSTEM PUBLIC "${CNA_EXTENDED_SHARP_RUNTIME_DIR}/vendor")
-        endif()
-    endif()
+    message(STATUS
+        "cna-extended: modular headers-only compile check; CNA and Sharp Runtime archives are not linked")
 endif()
 
 # Whether targets that actually run CNA-backed functionality (examples/tests

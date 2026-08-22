@@ -56,13 +56,19 @@ namespace CNA::Extended::Triangulation
         bool Remove(const T& item) { return items_.Remove(item); }
 
         /** @brief Gets the item at @p index, wrapping cyclically if out of range. */
-        [[nodiscard]] const T& operator[](intcs index) const { return items_[WrapIndex(index)]; }
+        [[nodiscard]] const T& operator[](intcs index) const { return getItem(index); }
 
-        /** @brief Gets or sets the item at @p index, wrapping cyclically if out of range. */
-        T& operator[](intcs index) { return items_[WrapIndex(index)]; }
+        /** @brief Explicit read accessor for the cyclically wrapped item. */
+        [[nodiscard]] const T& getItem(intcs index) const { return items_.getItem(WrapIndex(index)); }
+
+        /** @brief Gets or sets the item at @p index through List<T>'s tracked proxy. */
+        System::Collections::detail::ElementReference<T> operator[](intcs index) { return items_[WrapIndex(index)]; }
+
+        /** @brief Explicit write accessor for the cyclically wrapped item. */
+        void setItem(intcs index, const T& value) { items_.setItem(WrapIndex(index), value); }
 
         /** @brief Removes the item at @p index (wrapping cyclically if out of range), matching upstream's `Remove(this[index])`. */
-        void RemoveAt(intcs index) { Remove((*this)[index]); }
+        void RemoveAt(intcs index) { Remove(getItem(index)); }
 
         /** @brief Finds the (non-cyclical) index of @p item, or -1 if not found. Matches upstream: CyclicalList does NOT override IndexOf. */
         [[nodiscard]] intcs IndexOf(const T& item) const { return items_.IndexOf(item); }

@@ -146,7 +146,7 @@ namespace CNA::Extended::Collections
             EXPECT_GE(deque.getCapacityProperty(), count);
             for (int index = 0; index < deque.getCountProperty(); index++)
             {
-                EXPECT_EQ(deque[index].Value, deque.getCountProperty() - 1 - index);
+                EXPECT_EQ(deque.getItem(index).Value, deque.getCountProperty() - 1 - index);
             }
         }
     }
@@ -164,7 +164,7 @@ namespace CNA::Extended::Collections
             EXPECT_GE(deque.getCapacityProperty(), count);
             for (int index = 0; index < deque.getCountProperty(); index++)
             {
-                EXPECT_EQ(deque[index].Value, index);
+                EXPECT_EQ(deque.getItem(index).Value, index);
             }
         }
     }
@@ -483,7 +483,7 @@ namespace CNA::Extended::Collections
         const std::vector<int> expected = {0, 2, 3, 4, 5, 6};
         for (std::size_t i = 0; i < expected.size(); i++)
         {
-            EXPECT_EQ(deque[static_cast<intcs>(i)].Value, expected[i]);
+            EXPECT_EQ(deque.getItem(static_cast<intcs>(i)).Value, expected[i]);
         }
     }
 
@@ -512,7 +512,7 @@ namespace CNA::Extended::Collections
         const std::vector<int> expected = {1, 2, 3, 3, 5, 0};
         for (std::size_t i = 0; i < expected.size(); i++)
         {
-            EXPECT_EQ(deque[static_cast<intcs>(i)].Value, expected[i]);
+            EXPECT_EQ(deque.getItem(static_cast<intcs>(i)).Value, expected[i]);
         }
     }
 
@@ -538,9 +538,9 @@ namespace CNA::Extended::Collections
         // NOT the mathematically-correct {20, 40, 50} -- element 50 is lost/orphaned (its
         // physical slot is shifted out of the new logical range) and a stale default-constructed
         // element appears instead. Matches upstream's actual (buggy) output.
-        EXPECT_EQ(deque[0].Value, 20);
-        EXPECT_EQ(deque[1].Value, 40);
-        EXPECT_EQ(deque[2].Value, 0)
+        EXPECT_EQ(deque.getItem(0).Value, 20);
+        EXPECT_EQ(deque.getItem(1).Value, 40);
+        EXPECT_EQ(deque.getItem(2).Value, 0)
             << "If this starts failing, upstream's RemoveAt wraparound bug may have been fixed and this port's fidelity note should be revisited.";
     }
 
@@ -574,7 +574,7 @@ namespace CNA::Extended::Collections
         System::Collections::Generic::ICollection<TestDequeElement>& asICollection = deque;
         asICollection.Add(TestDequeElement{7});
         EXPECT_EQ(deque.getCountProperty(), 1);
-        EXPECT_EQ(deque[0].Value, 7);
+        EXPECT_EQ(deque.getItem(0).Value, 7);
     }
 
     TEST(DequeTests, GetEnumeratorMatchesRangeBasedForIteration)
@@ -590,5 +590,18 @@ namespace CNA::Extended::Collections
         }
         EXPECT_EQ(expected, 3);
         delete enumerator;
+    }
+
+    TEST(DequeTests, IListTrackedIndexerAndExplicitAccessorsUseTheSameSlot)
+    {
+        Deque<TestDequeElement> deque(MakeElements(2));
+        System::Collections::Generic::IList<TestDequeElement>& asIList = deque;
+
+        EXPECT_EQ(asIList.getItem(0).Value, 0);
+        asIList[0] = TestDequeElement{7};
+        EXPECT_EQ(deque.getItem(0).Value, 7);
+
+        asIList.setItem(1, TestDequeElement{9});
+        EXPECT_EQ(deque.getItem(1).Value, 9);
     }
 }

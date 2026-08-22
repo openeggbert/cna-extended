@@ -197,6 +197,15 @@ namespace CNA::Extended::Collections
          */
         [[nodiscard]] const T& operator[](const intcs index) const override
         {
+            return getItem(index);
+        }
+
+        /**
+         * @brief Gets the element at the specified logical index without mutating the Deque.
+         * @throws std::out_of_range if @p index is negative or >= Count.
+         */
+        [[nodiscard]] const T& getItem(const intcs index) const override
+        {
             const intcs arrayIndex = GetArrayIndex(index);
             if (arrayIndex == -1)
             {
@@ -205,15 +214,29 @@ namespace CNA::Extended::Collections
             return items_[static_cast<std::size_t>(arrayIndex)];
         }
 
-        /** @brief Gets or sets the element at the specified logical index. @throws std::out_of_range if @p index is negative or >= Count. */
-        T& operator[](const intcs index) override
+        /**
+         * @brief Gets or sets the element at the specified logical index through Sharp
+         * Runtime's tracked IList proxy.
+         * @throws std::out_of_range if @p index is negative or >= Count.
+         */
+        System::Collections::detail::ElementReference<T> operator[](const intcs index) override
         {
             const intcs arrayIndex = GetArrayIndex(index);
             if (arrayIndex == -1)
             {
                 throw std::out_of_range("Index was out of range. Must be non-negative and less than the size of the collection.");
             }
-            return items_[static_cast<std::size_t>(arrayIndex)];
+            return {&items_[static_cast<std::size_t>(arrayIndex)], &mutationCounter_};
+        }
+
+        /**
+         * @brief Replaces the element at the specified logical index through the same tracked
+         * write path as the mutable indexer.
+         * @throws std::out_of_range if @p index is negative or >= Count.
+         */
+        void setItem(const intcs index, const T& value) override
+        {
+            operator[](index) = value;
         }
 
         /** @brief Gets the number of elements contained in this Deque. */
@@ -707,5 +730,9 @@ namespace CNA::Extended::Collections
         intcs frontArrayIndex_ = 0;
         intcs count_ = 0;
         std::function<intcs(intcs)> resizeFunction_ = &DefaultResizeFunction;
+        // Deque's upstream iterator deliberately tolerates front removal and therefore does
+        // not consume this counter. It is still required by IList<T>'s tracked mutable
+        // indexer so indexed writes cannot escape through an untracked mutable reference.
+        System::Collections::detail::MutationCounter mutationCounter_;
     };
 }
